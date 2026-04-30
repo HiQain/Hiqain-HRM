@@ -1,0 +1,130 @@
+import { useEffect } from "react";
+import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { queryClient } from "@/lib/queryClient";
+import { AppShell } from "@/components/AppShell";
+import { LoginPage } from "@/pages/LoginPage";
+import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
+import { AdminDashboard } from "@/pages/admin/AdminDashboard";
+import { EmployeesPage } from "@/pages/admin/EmployeesPage";
+import { EmployeeDetailPage } from "@/pages/admin/EmployeeDetailPage";
+import { AdminAttendancePage } from "@/pages/admin/AttendancePage";
+import { AdminAttendanceCalendarPage } from "@/pages/admin/AttendanceCalendarPage";
+import { AdminLeavesPage } from "@/pages/admin/LeavesPage";
+import { AdminRequestsPage } from "@/pages/admin/RequestsPage";
+import { AdminPayslipsPage } from "@/pages/admin/PayslipsPage";
+import { AdminSalaryPage } from "@/pages/admin/SalaryPage";
+import { AdminSettingsPage } from "@/pages/admin/SettingsPage";
+import { EmployeeDashboard } from "@/pages/employee/EmployeeDashboard";
+import { EmployeeProfilePage } from "@/pages/employee/EmployeeProfilePage";
+import { MyAttendancePage } from "@/pages/employee/MyAttendancePage";
+import { MyLeavesPage } from "@/pages/employee/MyLeavesPage";
+import { MyRequestsPage } from "@/pages/employee/MyRequestsPage";
+import { MyPayslipsPage } from "@/pages/employee/MyPayslipsPage";
+import { MySalaryPage } from "@/pages/employee/MySalaryPage";
+import { MySettingsPage } from "@/pages/employee/MySettingsPage";
+import { FeedPage } from "@/pages/FeedPage";
+import { CelebrationPopup } from "@/components/CelebrationPopup";
+
+function FullScreenLoader() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-muted/30">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    </div>
+  );
+}
+
+function AuthGate() {
+  const { data: user, isLoading, isError } = useGetMe({
+    query: {
+      queryKey: getGetMeQueryKey(),
+      retry: false,
+      refetchOnMount: true,
+    },
+  });
+  const [location, setLocation] = useLocation();
+
+  // When unauthenticated, ensure URL is at /
+  useEffect(() => {
+    if (!isLoading && (isError || !user) && location !== "/") {
+      setLocation("/");
+    }
+  }, [isLoading, isError, user, location, setLocation]);
+
+  if (isLoading) return <FullScreenLoader />;
+
+  if (isError || !user) {
+    return <LoginPage />;
+  }
+
+  if (user.mustChangePassword) {
+    return <ChangePasswordPage mustChange />;
+  }
+
+  return (
+    <AppShell user={user}>
+      <CelebrationPopup />
+      {user.role !== "employee" ? (
+        <Switch>
+          <Route path="/" component={() => <Redirect to="/admin" />} />
+          <Route path="/admin" component={AdminDashboard} />
+          <Route path="/admin/employees" component={EmployeesPage} />
+          <Route path="/admin/employees/:id" component={EmployeeDetailPage} />
+          <Route path="/admin/attendance" component={AdminAttendancePage} />
+          <Route
+            path="/admin/attendance-calendar"
+            component={AdminAttendanceCalendarPage}
+          />
+          <Route path="/admin/leaves" component={AdminLeavesPage} />
+          <Route path="/admin/requests" component={AdminRequestsPage} />
+          <Route path="/admin/payslips" component={AdminPayslipsPage} />
+          <Route path="/admin/salary" component={AdminSalaryPage} />
+          <Route path="/admin/feed" component={FeedPage} />
+          <Route path="/admin/settings" component={AdminSettingsPage} />
+          <Route
+            path="/change-password"
+            component={() => <ChangePasswordPage mustChange={false} />}
+          />
+          <Route component={() => <Redirect to="/admin" />} />
+        </Switch>
+      ) : (
+        <Switch>
+          <Route path="/" component={() => <Redirect to="/employee" />} />
+          <Route path="/employee" component={EmployeeDashboard} />
+          <Route path="/employee/profile" component={EmployeeProfilePage} />
+          <Route path="/employee/attendance" component={MyAttendancePage} />
+          <Route path="/employee/leaves" component={MyLeavesPage} />
+          <Route path="/employee/requests" component={MyRequestsPage} />
+          <Route path="/employee/payslips" component={MyPayslipsPage} />
+          <Route path="/employee/salary" component={MySalaryPage} />
+          <Route path="/employee/settings" component={MySettingsPage} />
+          <Route path="/employee/feed" component={FeedPage} />
+          <Route
+            path="/change-password"
+            component={() => <ChangePasswordPage mustChange={false} />}
+          />
+          <Route component={() => <Redirect to="/employee" />} />
+        </Switch>
+      )}
+    </AppShell>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <AuthGate />
+        </WouterRouter>
+        <Toaster richColors position="top-right" />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;

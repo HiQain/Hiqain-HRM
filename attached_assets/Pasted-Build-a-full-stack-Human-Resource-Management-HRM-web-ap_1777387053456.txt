@@ -1,0 +1,198 @@
+Build a full-stack Human Resource Management (HRM) web application with a clean, modern, and user-friendly UI.
+
+Tech stack:
+- Frontend: React (or Next.js)
+- Backend: Node.js (Express)
+- Database: MongoDB
+- Authentication: JWT-based
+
+-----------------------------------
+CORE FEATURES
+-----------------------------------
+
+1. Authentication System
+- Admin login:
+  Email: admin@designspartans.com
+  Password: password
+- Admin can create employees with email + password
+- On first login, employee must be forced to change password
+- Secure authentication (JWT + protected routes)
+
+-----------------------------------
+
+2. Employee Management (Admin Panel)
+Accessible at: /admin
+
+Admin can:
+- Add / Edit / Delete employees
+- Set:
+  - Name
+  - Email
+  - Password (temporary)
+  - Joining Date
+  - Probation period (in months)
+  - Office timing (start/end)
+  - Grace period (minutes)
+
+System should automatically calculate:
+- Probation end date
+- Work duration (since joining)
+- Anniversary date
+- Display birthday
+
+-----------------------------------
+
+3. Employee Profile (Journey Tracking)
+
+Each employee should have a complete timeline:
+
+- Joining date
+- Probation start & end
+- Work duration
+- Salary history:
+  - Bonus (date + amount)
+  - Loan (date + amount)
+  - Increment (date + amount)
+- Education details
+- Personal info (DOB, etc.)
+
+Display this as a clean timeline / journey UI.
+
+-----------------------------------
+
+4. Attendance System
+
+- Daily check-in / check-out
+- Track:
+  - Total working hours
+  - Late check-ins
+  - Grace period usage
+- If employee completes required hours, mark as full day
+- If late beyond grace → mark late
+
+-----------------------------------
+
+5. Leave Management
+
+Leave types:
+- Sick Leave
+- Casual Leave
+- Annual Leave
+
+Features:
+- Employee can apply leave from portal
+- Admin can approve/reject
+- If approved → auto mark leave in attendance
+- Track leave history
+
+-----------------------------------
+
+6. Attendance Status
+
+System should auto mark:
+- Present
+- Late
+- Absent
+- On Leave
+
+-----------------------------------
+
+7. Salary Management & Payslip System
+
+Admin can define salary structure for each employee:
+- Basic Salary
+- Allowances (e.g. medical, travel, etc.)
+- Deductions
+
+Admin can manage:
+- Bonus (amount + date + reason)
+- Loan (amount + date + recovery plan)
+- Increment (amount or percentage + date)
+
+Salary should be calculated based on:
+- Total working days
+- Present days
+- Absent days
+- Leaves (paid / unpaid)
+- Late count (optional deduction rule)
+
+Rules:
+- Deduct salary for absences
+- Paid leaves should not deduct salary
+
+-----------------------------------
+
+8. Payslip Generation
+
+Generate monthly payslips for each employee:
+
+Payslip must include:
+- Employee details (name, email)
+- Month & year
+- Total working days
+- Present / absent / leaves
+- Basic salary
+- Allowances
+- Bonus
+- Loan deductions
+- Other deductions
+- Net salary
+
+Features:
+- Employee can view payslip
+- Employee can download payslip as PDF
+- Admin can generate payslips for any employee/month
+
+-----------------------------------
+
+9. Dashboard
+
+Admin Dashboard:
+- Total employees
+- Attendance summary
+- Leaves overview
+
+Employee Dashboard:
+- Today’s attendance
+- Leave balance
+- Quick actions (check-in, apply leave)
+
+-----------------------------------
+
+10. UI / UX REQUIREMENTS
+
+- Very clean and modern design
+- Mobile responsive
+- Easy navigation
+- Clear separation between admin and employee views
+- Use cards, tables, and timeline components
+- Payslip should have professional layout
+
+-----------------------------------
+
+11. ADDITIONAL REQUIREMENTS
+
+- Use proper folder structure
+- Use REST APIs
+- Add basic validation
+- Handle loading and error states
+- Use reusable components
+
+-----------------------------------
+
+12. PRIORITY
+
+Focus on:
+- Clean architecture
+- Working flows (not just UI)
+- User-friendly experience
+- Accurate salary calculations
+
+-----------------------------------
+
+OUTPUT
+
+Provide:
+- Full working code (frontend + backend)
+- Clear setup instructions
+- Sample data for testing

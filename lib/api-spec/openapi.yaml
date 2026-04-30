@@ -1,0 +1,2228 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: HR Management System API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: auth
+  - name: employees
+  - name: attendance
+  - name: leaves
+  - name: remote-work
+  - name: salary
+  - name: payslips
+  - name: dashboard
+  - name: requests
+  - name: uploads
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Log out
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change current user's password (also clears the must-change flag)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /employees:
+    get:
+      operationId: listEmployees
+      tags: [employees]
+      summary: List all employees (admin only)
+      responses:
+        "200":
+          description: Employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [employees]
+      summary: Create a new employee (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+
+  /employees/bulk:
+    post:
+      operationId: bulkCreateEmployees
+      tags: [employees]
+      summary: Bulk create employees from CSV-parsed rows (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkCreateEmployeesRequest"
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCreateEmployeesResponse"
+
+  /users/mentionable:
+    get:
+      operationId: listMentionableMembers
+      tags: [employees]
+      summary: List members that can be mentioned (employees + admin members with profiles).
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MentionableMember"
+
+  /employees/{id}:
+    get:
+      operationId: getEmployee
+      tags: [employees]
+      summary: Get employee details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeDetail"
+    patch:
+      operationId: updateEmployee
+      tags: [employees]
+      summary: Update employee (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmployeeRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+    delete:
+      operationId: deleteEmployee
+      tags: [employees]
+      summary: Delete employee (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /employees/{id}/journey:
+    get:
+      operationId: getEmployeeJourney
+      tags: [employees]
+      summary: Get employee's complete journey timeline
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Journey timeline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeJourney"
+
+  /employees/{id}/salary-events:
+    post:
+      operationId: createSalaryEvent
+      tags: [salary]
+      summary: Add a bonus, loan, or increment for an employee (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSalaryEventRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalaryEvent"
+
+  /employees/{id}/salary-events/{eventId}:
+    patch:
+      operationId: updateSalaryEvent
+      tags: [salary]
+      summary: Update an existing salary event (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSalaryEventRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalaryEvent"
+    delete:
+      operationId: deleteSalaryEvent
+      tags: [salary]
+      summary: Delete a salary event (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /attendance/check-in:
+    post:
+      operationId: checkIn
+      tags: [attendance]
+      summary: Check in for the current day
+      responses:
+        "200":
+          description: Checked in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceRecord"
+
+  /attendance/check-out:
+    post:
+      operationId: checkOut
+      tags: [attendance]
+      summary: Check out for the current day
+      responses:
+        "200":
+          description: Checked out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceRecord"
+
+  /attendance/today:
+    get:
+      operationId: getTodayAttendance
+      tags: [attendance]
+      summary: Get today's attendance for the current user
+      responses:
+        "200":
+          description: Today's attendance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TodayAttendance"
+
+  /attendance/me:
+    get:
+      operationId: getMyAttendance
+      tags: [attendance]
+      summary: Get the current user's attendance history
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema: { type: string, description: "YYYY-MM" }
+      responses:
+        "200":
+          description: Attendance history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceRecord"
+
+  /attendance/employee/{id}:
+    get:
+      operationId: getEmployeeAttendance
+      tags: [attendance]
+      summary: Get an employee's attendance history (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: month
+          in: query
+          required: false
+          schema: { type: string, description: "YYYY-MM" }
+      responses:
+        "200":
+          description: Attendance history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceRecord"
+
+  /attendance/today-summary:
+    get:
+      operationId: getTodayAttendanceSummary
+      tags: [attendance, dashboard]
+      summary: Get attendance summary for all employees on a date (admin). Defaults to today.
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema: { type: string, description: "YYYY-MM-DD; defaults to today" }
+      responses:
+        "200":
+          description: Attendance summary for the date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceSummary"
+
+  /attendance/calendar:
+    get:
+      operationId: getAttendanceCalendar
+      tags: [attendance]
+      summary: Get an employee's attendance for a month formatted for the calendar (admin only)
+      parameters:
+        - name: employeeId
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: month
+          in: query
+          required: false
+          schema: { type: string, description: "YYYY-MM" }
+      responses:
+        "200":
+          description: Calendar data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceCalendar"
+
+  /attendance/override:
+    post:
+      operationId: overrideAttendance
+      tags: [attendance]
+      summary: Manually set attendance status for an employee on a date (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceOverrideRequest"
+      responses:
+        "200":
+          description: Updated record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceRecord"
+
+  /attendance/{id}/excuse:
+    post:
+      operationId: setAttendanceExcused
+      tags: [attendance]
+      summary: Mark a late/half-day attendance row as excused or not excused (admin/HR only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAttendanceExcusedRequest"
+      responses:
+        "200":
+          description: Updated record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceRecord"
+
+  /attendance/employee/{id}/lates:
+    get:
+      operationId: getEmployeeLateRecords
+      tags: [attendance]
+      summary: List an employee's late attendance rows in a month (admin/HR only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: month
+          in: query
+          required: false
+          schema: { type: string, description: "YYYY-MM; defaults to current month" }
+      responses:
+        "200":
+          description: Late attendance rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceRecord"
+
+  /remote-work:
+    get:
+      operationId: listRemoteWorkRequests
+      tags: [remote-work]
+      summary: List remote work requests (admin sees all, employee sees own)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        "200":
+          description: Remote work requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RemoteWorkRequest"
+    post:
+      operationId: createRemoteWorkRequest
+      tags: [remote-work]
+      summary: Submit a remote work request (employee only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRemoteWorkRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteWorkRequest"
+
+  /remote-work/{id}:
+    patch:
+      operationId: updateRemoteWork
+      tags: [remote-work]
+      summary: Update a pending remote work request (owner only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRemoteWorkRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteWorkRequest"
+    delete:
+      operationId: deleteRemoteWork
+      tags: [remote-work]
+      summary: Cancel a pending remote work request (owner only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /remote-work/{id}/approve:
+    post:
+      operationId: approveRemoteWork
+      tags: [remote-work]
+      summary: Approve a remote work request (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteWorkRequest"
+
+  /remote-work/{id}/reject:
+    post:
+      operationId: rejectRemoteWork
+      tags: [remote-work]
+      summary: Reject a remote work request (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteWorkRequest"
+
+  /leaves:
+    get:
+      operationId: listLeaves
+      tags: [leaves]
+      summary: List leave requests (admin sees all, employee sees own)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        "200":
+          description: Leave requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaveRequest"
+    post:
+      operationId: applyLeave
+      tags: [leaves]
+      summary: Apply for a leave
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLeaveRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaveRequest"
+
+  /leaves/{id}:
+    patch:
+      operationId: updateLeave
+      tags: [leaves]
+      summary: Update a pending leave request (owner only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeaveRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaveRequest"
+    delete:
+      operationId: deleteLeave
+      tags: [leaves]
+      summary: Cancel a pending leave request (owner only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /leaves/{id}/approve:
+    post:
+      operationId: approveLeave
+      tags: [leaves]
+      summary: Approve a leave (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaveRequest"
+
+  /leaves/{id}/reject:
+    post:
+      operationId: rejectLeave
+      tags: [leaves]
+      summary: Reject a leave (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaveRequest"
+
+  /leaves/balance:
+    get:
+      operationId: getMyLeaveBalance
+      tags: [leaves]
+      summary: Get current user's leave balance
+      responses:
+        "200":
+          description: Leave balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaveBalance"
+
+  /payslips/generate:
+    post:
+      operationId: generatePayslip
+      tags: [payslips]
+      summary: Generate a payslip for an employee for a specific month (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeneratePayslipRequest"
+      responses:
+        "201":
+          description: Payslip generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payslip"
+
+  /payslips/me:
+    get:
+      operationId: getMyPayslips
+      tags: [payslips]
+      summary: Get the current user's payslips
+      responses:
+        "200":
+          description: Payslips
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payslip"
+
+  /payslips/employee/{id}:
+    get:
+      operationId: getEmployeePayslips
+      tags: [payslips]
+      summary: Get an employee's payslips (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Payslips
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payslip"
+
+  /payslips/{id}:
+    get:
+      operationId: getPayslip
+      tags: [payslips]
+      summary: Get a single payslip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Payslip
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payslip"
+
+  /dashboard/admin:
+    get:
+      operationId: getAdminDashboard
+      tags: [dashboard]
+      summary: Admin dashboard stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDashboard"
+
+  /dashboard/employee:
+    get:
+      operationId: getEmployeeDashboard
+      tags: [dashboard]
+      summary: Employee dashboard stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeDashboard"
+
+  /feed:
+    get:
+      operationId: getFeed
+      tags: [dashboard]
+      summary: Today and upcoming birthdays/anniversaries
+      responses:
+        "200":
+          description: Feed data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedResponse"
+
+  /news:
+    get:
+      operationId: listNewsPosts
+      tags: [dashboard]
+      summary: List news / announcement posts (newest first)
+      responses:
+        "200":
+          description: News posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NewsPost"
+    post:
+      operationId: createNewsPost
+      tags: [dashboard]
+      summary: Create a news post (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNewsPostRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsPost"
+  /news/{id}:
+    delete:
+      operationId: deleteNewsPost
+      tags: [dashboard]
+      summary: Delete a news post (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /requests:
+    get:
+      operationId: listGeneralRequests
+      tags: [requests]
+      summary: List general requests. Admin sees all, employee sees own.
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [half_day, loan, increment, remote_work, late, resignation, other]
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        "200":
+          description: Requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GeneralRequest"
+    post:
+      operationId: createGeneralRequest
+      tags: [requests]
+      summary: Submit a general request (employee only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGeneralRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneralRequest"
+
+  /requests/{id}:
+    patch:
+      operationId: updateGeneralRequest
+      tags: [requests]
+      summary: Update a pending general request (owner only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGeneralRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneralRequest"
+    delete:
+      operationId: deleteGeneralRequest
+      tags: [requests]
+      summary: Cancel a pending general request (owner only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /requests/{id}/approve:
+    post:
+      operationId: approveGeneralRequest
+      tags: [requests]
+      summary: Approve a general request (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveLoanRequest"
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneralRequest"
+
+  /loans:
+    get:
+      operationId: listLoans
+      tags: [loans]
+      summary: List all loans (admin/HR only)
+      responses:
+        "200":
+          description: Loans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Loan"
+
+  /loans/me:
+    get:
+      operationId: getMyLoans
+      tags: [loans]
+      summary: Get current user's loans
+      responses:
+        "200":
+          description: Loans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Loan"
+
+  /loans/eligibility:
+    get:
+      operationId: getMyLoanEligibility
+      tags: [loans]
+      summary: Get current user's loan eligibility
+      responses:
+        "200":
+          description: Loan eligibility
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanEligibility"
+
+  /loans/employee/{id}:
+    get:
+      operationId: getEmployeeLoans
+      tags: [loans]
+      summary: Get loans for an employee (admin/HR or self)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Loans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Loan"
+
+  /loans/{id}/cancel:
+    post:
+      operationId: cancelLoan
+      tags: [loans]
+      summary: Cancel an active loan (admin/HR only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+
+  /requests/{id}/reject:
+    post:
+      operationId: rejectGeneralRequest
+      tags: [requests]
+      summary: Reject a general request (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneralRequest"
+
+  /employees/{id}/salary-components:
+    get:
+      operationId: listSalaryComponents
+      tags: [salary]
+      summary: List salary components for an employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalaryComponent"
+    post:
+      operationId: createSalaryComponent
+      tags: [salary]
+      summary: Add a salary component (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSalaryComponentRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalaryComponent"
+
+  /employees/{id}/salary-components/{componentId}:
+    delete:
+      operationId: deleteSalaryComponent
+      tags: [salary]
+      summary: Delete a salary component (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: componentId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get global app settings
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update global app settings (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+
+  /uploads:
+    post:
+      operationId: uploadAttachment
+      tags: [uploads]
+      summary: Upload a file attachment (returns a public URL).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
+
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    AuthUser:
+      type: object
+      required: [id, email, name, role, mustChangePassword]
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [admin, hr, employee] }
+        mustChangePassword: { type: boolean }
+        employeeId: { type: integer, nullable: true }
+
+    AuthResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+
+    ChangePasswordRequest:
+      type: object
+      required: [newPassword]
+      properties:
+        currentPassword: { type: string, nullable: true }
+        newPassword: { type: string, minLength: 6 }
+
+    Employee:
+      type: object
+      required:
+        - id
+        - name
+        - email
+        - joiningDate
+        - probationMonths
+        - probationEndDate
+        - officeStartTime
+        - officeEndTime
+        - gracePeriodMinutes
+        - basicSalary
+        - positionType
+        - casualLeaveQuota
+        - sickLeaveQuota
+        - annualLeaveQuota
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string, nullable: true }
+        position: { type: string, nullable: true }
+        department: { type: string, nullable: true }
+        positionType: { type: string, enum: [onsite, remote] }
+        joiningDate: { type: string, format: date }
+        probationMonths: { type: integer }
+        probationEndDate: { type: string, format: date }
+        officeStartTime: { type: string, description: "HH:mm" }
+        officeEndTime: { type: string, description: "HH:mm" }
+        gracePeriodMinutes: { type: integer }
+        basicSalary: { type: number }
+        allowances: { type: number }
+        casualLeaveQuota: { type: integer }
+        sickLeaveQuota: { type: integer }
+        annualLeaveQuota: { type: integer }
+        dateOfBirth: { type: string, format: date, nullable: true }
+        education: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        avatarUrl: { type: string, nullable: true }
+        employeeCode: { type: string, nullable: true }
+        leftDate: { type: string, format: date, nullable: true }
+        emergencyContact: { type: string, nullable: true }
+        cnic: { type: string, nullable: true }
+        lastQualification: { type: string, nullable: true }
+        previousCompany: { type: string, nullable: true }
+        lastPay: { type: number, nullable: true }
+        benefits: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        immediateFamily: { type: string, nullable: true }
+        employmentContractUrl: { type: string, nullable: true }
+        employmentContractName: { type: string, nullable: true }
+        providentFundPercent: { type: number, nullable: true }
+
+    EmployeeDetail:
+      allOf:
+        - $ref: "#/components/schemas/Employee"
+        - type: object
+          required: [workDurationMonths, anniversaryDate]
+          properties:
+            workDurationMonths: { type: integer }
+            anniversaryDate: { type: string, format: date }
+            salaryEvents:
+              type: array
+              items:
+                $ref: "#/components/schemas/SalaryEvent"
+
+    CreateEmployeeRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+        - joiningDate
+        - probationMonths
+        - officeStartTime
+        - officeEndTime
+        - gracePeriodMinutes
+        - basicSalary
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 6 }
+        role: { type: string, enum: [admin, hr, employee], nullable: true, description: "Defaults to employee. Admin members get full HRM rights; HR members get all admin rights except destructive deletes and creating other admins." }
+        phone: { type: string, nullable: true }
+        position: { type: string, nullable: true }
+        department: { type: string, nullable: true }
+        positionType: { type: string, enum: [onsite, remote], nullable: true }
+        joiningDate: { type: string, format: date }
+        probationMonths: { type: integer, minimum: 0 }
+        officeStartTime: { type: string }
+        officeEndTime: { type: string }
+        gracePeriodMinutes: { type: integer, minimum: 0 }
+        basicSalary: { type: number, minimum: 0 }
+        allowances: { type: number, nullable: true }
+        casualLeaveQuota: { type: integer, minimum: 0, nullable: true }
+        sickLeaveQuota: { type: integer, minimum: 0, nullable: true }
+        annualLeaveQuota: { type: integer, minimum: 0, nullable: true }
+        dateOfBirth: { type: string, format: date, nullable: true }
+        education: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        employeeCode: { type: string, nullable: true }
+        leftDate: { type: string, format: date, nullable: true }
+        emergencyContact: { type: string, nullable: true }
+        cnic: { type: string, nullable: true }
+        lastQualification: { type: string, nullable: true }
+        previousCompany: { type: string, nullable: true }
+        lastPay: { type: number, nullable: true }
+        benefits: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        immediateFamily: { type: string, nullable: true }
+
+    UpdateEmployeeRequest:
+      type: object
+      properties:
+        name: { type: string }
+        phone: { type: string, nullable: true }
+        position: { type: string, nullable: true }
+        department: { type: string, nullable: true }
+        positionType: { type: string, enum: [onsite, remote] }
+        joiningDate: { type: string, format: date }
+        probationMonths: { type: integer, minimum: 0 }
+        officeStartTime: { type: string }
+        officeEndTime: { type: string }
+        gracePeriodMinutes: { type: integer, minimum: 0 }
+        basicSalary: { type: number, minimum: 0 }
+        allowances: { type: number, nullable: true }
+        casualLeaveQuota: { type: integer, minimum: 0 }
+        sickLeaveQuota: { type: integer, minimum: 0 }
+        annualLeaveQuota: { type: integer, minimum: 0 }
+        dateOfBirth: { type: string, format: date, nullable: true }
+        education: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        employeeCode: { type: string, nullable: true }
+        leftDate: { type: string, format: date, nullable: true }
+        emergencyContact: { type: string, nullable: true }
+        cnic: { type: string, nullable: true }
+        lastQualification: { type: string, nullable: true }
+        previousCompany: { type: string, nullable: true }
+        lastPay: { type: number, nullable: true }
+        benefits: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        immediateFamily: { type: string, nullable: true }
+        avatarUrl: { type: string, nullable: true }
+        employmentContractUrl: { type: string, nullable: true }
+        employmentContractName: { type: string, nullable: true }
+        providentFundPercent: { type: number, nullable: true }
+
+    EmployeeJourney:
+      type: object
+      required: [employee, events]
+      properties:
+        employee:
+          $ref: "#/components/schemas/Employee"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/JourneyEvent"
+
+    JourneyEvent:
+      type: object
+      required: [date, type, title]
+      properties:
+        date: { type: string, format: date }
+        type: { type: string, enum: [joining, probation_start, probation_end, anniversary, birthday, bonus, loan, increment, commission, left, designation_change] }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        amount: { type: number, nullable: true }
+
+    SalaryEvent:
+      type: object
+      required: [id, employeeId, type, amount, date, amountMode]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        type: { type: string, enum: [bonus, loan, increment, commission] }
+        amount: { type: number }
+        amountMode: { type: string, enum: [fixed, percentage] }
+        percentValue: { type: number, nullable: true }
+        date: { type: string, format: date }
+        reason: { type: string, nullable: true }
+
+    CreateSalaryEventRequest:
+      type: object
+      required: [type, date]
+      properties:
+        type: { type: string, enum: [bonus, loan, increment, commission] }
+        amount: { type: number, nullable: true, description: "Required when amountMode is 'fixed' (or omitted)." }
+        amountMode: { type: string, enum: [fixed, percentage], nullable: true, description: "Defaults to 'fixed'. When 'percentage', percentValue is required and amount is computed from the employee's basic salary." }
+        percentValue: { type: number, nullable: true }
+        date: { type: string, format: date }
+        reason: { type: string, nullable: true }
+
+    UpdateSalaryEventRequest:
+      type: object
+      properties:
+        type: { type: string, enum: [bonus, loan, increment, commission] }
+        amount: { type: number }
+        amountMode: { type: string, enum: [fixed, percentage], nullable: true }
+        percentValue: { type: number, nullable: true }
+        date: { type: string, format: date }
+        reason: { type: string, nullable: true }
+
+    SalaryComponent:
+      type: object
+      required: [id, employeeId, label, kind, valueType, value, isDeduction]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        label: { type: string }
+        kind:
+          type: string
+          enum: [designation, commission, allowance, provident_fund, other]
+        valueType:
+          type: string
+          enum: [fixed, percentage]
+        value: { type: number }
+        isDeduction: { type: boolean }
+        sortOrder: { type: integer }
+
+    CreateSalaryComponentRequest:
+      type: object
+      required: [label, kind, valueType, value]
+      properties:
+        label: { type: string }
+        kind:
+          type: string
+          enum: [designation, commission, allowance, provident_fund, other]
+        valueType:
+          type: string
+          enum: [fixed, percentage]
+        value: { type: number }
+        isDeduction: { type: boolean }
+
+    PublicHoliday:
+      type: object
+      required: [date, name]
+      properties:
+        date: { type: string, format: date }
+        name: { type: string }
+        country:
+          type: string
+          enum: [us, pk, other]
+          description: "Country tag for filtering"
+
+    AppSettings:
+      type: object
+      required:
+        - companyName
+        - defaultCasualLeaveQuota
+        - defaultSickLeaveQuota
+        - defaultAnnualLeaveQuota
+        - defaultGracePeriodMinutes
+        - defaultProbationMonths
+        - defaultOfficeStartTime
+        - defaultOfficeEndTime
+        - weeklyOffDays
+        - publicHolidays
+        - proRatedQuotas
+        - weeklyHours
+        - monthlyHours
+        - attendancePolicy
+        - basicSalaryPercent
+        - allowancePercent
+        - providentFundEnabled
+        - defaultProvidentFundPercent
+        - companyPolicy
+        - companyPolicyFileUrl
+        - companyPolicyFileName
+        - attendancePolicyFileUrl
+        - attendancePolicyFileName
+        - dailyHours
+        - loanMinTenureMonths
+        - loanMaxSalaryMultiplier
+        - loanDefaultMonths
+        - lateGraceCount
+        - lateDeductionFraction
+        - lateAbsenceEvery
+      properties:
+        companyName: { type: string }
+        defaultCasualLeaveQuota: { type: integer }
+        defaultSickLeaveQuota: { type: integer }
+        defaultAnnualLeaveQuota: { type: integer }
+        defaultGracePeriodMinutes: { type: integer }
+        defaultProbationMonths: { type: integer }
+        defaultOfficeStartTime: { type: string }
+        defaultOfficeEndTime: { type: string }
+        weeklyOffDays:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 6 }
+        publicHolidays:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicHoliday"
+        proRatedQuotas: { type: boolean }
+        dailyHours: { type: number, description: "Computed from office start/end" }
+        weeklyHours: { type: integer, description: "Computed from daily hours x working days" }
+        monthlyHours: { type: integer, description: "Computed for current month using off days and holidays" }
+        attendancePolicy: { type: string }
+        attendancePolicyFileUrl: { type: string }
+        attendancePolicyFileName: { type: string }
+        basicSalaryPercent: { type: number }
+        allowancePercent: { type: number }
+        providentFundEnabled: { type: boolean }
+        defaultProvidentFundPercent: { type: number }
+        companyPolicy: { type: string }
+        companyPolicyFileUrl: { type: string }
+        companyPolicyFileName: { type: string }
+        loanMinTenureMonths: { type: integer }
+        loanMaxSalaryMultiplier: { type: number, description: "Max loan = monthly gross salary x this multiplier" }
+        loanDefaultMonths: { type: integer }
+        lateGraceCount: { type: integer, description: "Number of late instances forgiven before deduction starts" }
+        lateDeductionFraction: { type: number, description: "Legacy. Fraction of a day deducted per extra late instance (kept for back-compat)" }
+        lateAbsenceEvery: { type: integer, description: "Mark 1 absence per N extra late marks beyond the grace count" }
+
+    UpdateSettingsRequest:
+      type: object
+      properties:
+        companyName: { type: string }
+        defaultCasualLeaveQuota: { type: integer }
+        defaultSickLeaveQuota: { type: integer }
+        defaultAnnualLeaveQuota: { type: integer }
+        defaultGracePeriodMinutes: { type: integer }
+        defaultProbationMonths: { type: integer }
+        defaultOfficeStartTime: { type: string }
+        defaultOfficeEndTime: { type: string }
+        weeklyOffDays:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 6 }
+        publicHolidays:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicHoliday"
+        proRatedQuotas: { type: boolean }
+        attendancePolicy: { type: string }
+        attendancePolicyFileUrl: { type: string }
+        attendancePolicyFileName: { type: string }
+        basicSalaryPercent: { type: number }
+        allowancePercent: { type: number }
+        providentFundEnabled: { type: boolean }
+        defaultProvidentFundPercent: { type: number }
+        companyPolicy: { type: string }
+        companyPolicyFileUrl: { type: string }
+        companyPolicyFileName: { type: string }
+        propagateLeaveQuotas: { type: boolean, description: "If true, push new leave quotas to all existing employees" }
+        loanMinTenureMonths: { type: integer, minimum: 0 }
+        loanMaxSalaryMultiplier: { type: number, minimum: 0 }
+        loanDefaultMonths: { type: integer, minimum: 1 }
+        lateGraceCount: { type: integer, minimum: 0 }
+        lateDeductionFraction: { type: number, minimum: 0 }
+        lateAbsenceEvery: { type: integer, minimum: 1 }
+
+    AttendanceRecord:
+      type: object
+      required: [id, employeeId, date, status]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        date: { type: string, format: date }
+        checkInTime: { type: string, nullable: true, description: "ISO datetime" }
+        checkOutTime: { type: string, nullable: true, description: "ISO datetime" }
+        workedMinutes: { type: integer, nullable: true }
+        status:
+          type: string
+          enum: [present, late, absent, on_leave, half_day, remote_work]
+        isLate: { type: boolean }
+        excused: { type: boolean, description: "True when an approved request (late/half-day) means this row should not deduct from payroll" }
+        notes: { type: string, nullable: true }
+
+    TodayAttendance:
+      type: object
+      required: [hasCheckedIn, hasCheckedOut]
+      properties:
+        hasCheckedIn: { type: boolean }
+        hasCheckedOut: { type: boolean }
+        record:
+          oneOf:
+            - $ref: "#/components/schemas/AttendanceRecord"
+            - type: "null"
+
+    AttendanceSummary:
+      type: object
+      required:
+        - date
+        - total
+        - present
+        - late
+        - absent
+        - onLeave
+        - halfDay
+        - remoteWork
+      properties:
+        date: { type: string, format: date }
+        total: { type: integer }
+        present: { type: integer }
+        late: { type: integer }
+        absent: { type: integer }
+        onLeave: { type: integer }
+        halfDay: { type: integer }
+        remoteWork: { type: integer }
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendanceRecord"
+
+    AttendanceCalendarDay:
+      type: object
+      required: [date, status]
+      properties:
+        date: { type: string, format: date }
+        status:
+          type: string
+          enum: [present, late, absent, on_leave, half_day, remote_work, weekend, future, none]
+        record:
+          oneOf:
+            - $ref: "#/components/schemas/AttendanceRecord"
+            - type: "null"
+
+    AttendanceCalendar:
+      type: object
+      required: [employeeId, employeeName, month, days]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        month: { type: string, description: "YYYY-MM" }
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendanceCalendarDay"
+
+    AttendanceOverrideRequest:
+      type: object
+      required: [employeeId, date, status]
+      properties:
+        employeeId: { type: integer }
+        date: { type: string, format: date }
+        status:
+          type: string
+          enum: [present, late, absent, on_leave, half_day, remote_work]
+        notes: { type: string, nullable: true }
+
+    SetAttendanceExcusedRequest:
+      type: object
+      required: [excused]
+      properties:
+        excused: { type: boolean }
+
+    LeaveRequest:
+      type: object
+      required: [id, employeeId, type, startDate, endDate, days, status, reason, mentionedEmployeeIds, attachments]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        type: { type: string, enum: [sick, casual, annual] }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        days: { type: integer }
+        status: { type: string, enum: [pending, approved, rejected] }
+        reason: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentItem"
+        mentionedEmployeeIds:
+          type: array
+          items: { type: integer }
+        mentionedEmployees:
+          type: array
+          items:
+            $ref: "#/components/schemas/MentionedEmployee"
+        appliedAt: { type: string, description: "ISO datetime" }
+
+    CreateLeaveRequest:
+      type: object
+      required: [type, startDate, endDate, reason]
+      properties:
+        type: { type: string, enum: [sick, casual, annual] }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        reason: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentItem"
+        mentionedEmployeeIds:
+          type: array
+          items: { type: integer }
+
+    UpdateLeaveRequest:
+      type: object
+      properties:
+        type: { type: string, enum: [sick, casual, annual] }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        reason: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentItem"
+        mentionedEmployeeIds:
+          type: array
+          items: { type: integer }
+
+    AttachmentItem:
+      type: object
+      required: [url, name]
+      properties:
+        url: { type: string }
+        name: { type: string }
+
+    MentionedEmployee:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+
+    MentionableMember:
+      type: object
+      required: [id, name, email, role]
+      properties:
+        id: { type: integer, description: "Employee id (used for mentions)." }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [admin, hr, employee] }
+        position: { type: string, nullable: true }
+
+    BulkCreateEmployeesRequest:
+      type: object
+      required: [members]
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateEmployeeRequest"
+
+    BulkCreateEmployeesResponse:
+      type: object
+      required: [created, failed, errors]
+      properties:
+        created: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [row, message]
+            properties:
+              row: { type: integer }
+              email: { type: string, nullable: true }
+              message: { type: string }
+
+    LeaveBalance:
+      type: object
+      required: [sick, casual, annual, sickUsed, casualUsed, annualUsed]
+      properties:
+        sick: { type: integer }
+        casual: { type: integer }
+        annual: { type: integer }
+        sickUsed: { type: integer }
+        casualUsed: { type: integer }
+        annualUsed: { type: integer }
+
+    RemoteWorkRequest:
+      type: object
+      required: [id, employeeId, date, status, reason, appliedAt, mentionedEmployeeIds, attachments]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        date: { type: string, format: date }
+        reason: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentItem"
+        mentionedEmployeeIds:
+          type: array
+          items: { type: integer }
+        mentionedEmployees:
+          type: array
+          items:
+            $ref: "#/components/schemas/MentionedEmployee"
+        status: { type: string, enum: [pending, approved, rejected] }
+        appliedAt: { type: string, description: "ISO datetime" }
+        reviewedAt: { type: string, nullable: true }
+
+    CreateRemoteWorkRequest:
+      type: object
+      required: [date, reason]
+      properties:
+        date: { type: string, format: date }
+        reason: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentItem"
+        mentionedEmployeeIds:
+          type: array
+          items: { type: integer }
+
+    UpdateRemoteWorkRequest:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        reason: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentItem"
+        mentionedEmployeeIds:
+          type: array
+          items: { type: integer }
+
+    GeneralRequest:
+      type: object
+      required: [id, employeeId, type, date, reason, status, appliedAt, mentionedEmployeeIds, attachments]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        type: { type: string, enum: [half_day, loan, increment, remote_work, late, resignation, other] }
+        date: { type: string, format: date }
+        dateTo: { type: string, format: date, nullable: true }
+        amount: { type: number, nullable: true }
+        installmentMonths: { type: integer, nullable: true }
+        reason: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentItem"
+        mentionedEmployeeIds:
+          type: array
+          items: { type: integer }
+        mentionedEmployees:
+          type: array
+          items:
+            $ref: "#/components/schemas/MentionedEmployee"
+        status: { type: string, enum: [pending, approved, rejected] }
+        appliedAt: { type: string }
+        reviewedAt: { type: string, nullable: true }
+
+    CreateGeneralRequest:
+      type: object
+      required: [type, date, reason]
+      properties:
+        type: { type: string, enum: [half_day, loan, increment, remote_work, late, resignation, other] }
+        date: { type: string, format: date }
+        dateTo: { type: string, format: date, nullable: true }
+        amount: { type: number, nullable: true }
+        installmentMonths: { type: integer, nullable: true, minimum: 1 }
+        reason: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentItem"
+        mentionedEmployeeIds:
+          type: array
+          items: { type: integer }
+
+    UpdateGeneralRequest:
+      type: object
+      properties:
+        type: { type: string, enum: [half_day, loan, increment, remote_work, late, resignation, other] }
+        date: { type: string, format: date }
+        dateTo: { type: string, format: date, nullable: true }
+        amount: { type: number, nullable: true }
+        installmentMonths: { type: integer, nullable: true, minimum: 1 }
+        reason: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentItem"
+        mentionedEmployeeIds:
+          type: array
+          items: { type: integer }
+
+    UploadResponse:
+      type: object
+      required: [url, name]
+      properties:
+        url: { type: string }
+        name: { type: string }
+
+    GeneratePayslipRequest:
+      type: object
+      required: [employeeId, month, year]
+      properties:
+        employeeId: { type: integer }
+        month: { type: integer, minimum: 1, maximum: 12 }
+        year: { type: integer }
+        latePenaltyDays: { type: number, nullable: true, description: "Override number of late days to deduct (HR leverage)" }
+        bonus: { type: number, nullable: true, description: "Optional one-off bonus for this payslip" }
+        otherDeductions: { type: number, nullable: true, description: "Optional one-off other deductions" }
+
+    Payslip:
+      type: object
+      required:
+        - id
+        - employeeId
+        - employeeName
+        - employeeEmail
+        - month
+        - year
+        - totalWorkingDays
+        - presentDays
+        - absentDays
+        - paidLeaveDays
+        - unpaidLeaveDays
+        - lateCount
+        - basicSalary
+        - allowances
+        - bonus
+        - loanDeduction
+        - otherDeductions
+        - netSalary
+        - generatedAt
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        employeeEmail: { type: string }
+        employeePosition: { type: string }
+        month: { type: integer }
+        year: { type: integer }
+        totalWorkingDays: { type: integer }
+        presentDays: { type: integer }
+        absentDays: { type: integer }
+        paidLeaveDays: { type: integer }
+        unpaidLeaveDays: { type: integer }
+        lateCount: { type: integer }
+        latePenaltyDays: { type: number }
+        lateAbsenceDays: { type: number, description: "Effective late-derived absence days applied to this payslip (HR may override)" }
+        basicSalary: { type: number }
+        allowances: { type: number }
+        bonus: { type: number }
+        loanDeduction: { type: number }
+        otherDeductions: { type: number }
+        netSalary: { type: number }
+        generatedAt: { type: string }
+
+    Loan:
+      type: object
+      required: [id, employeeId, principalAmount, monthsToRepay, startMonth, startYear, status, totalPaid, remainingBalance, monthlyInstallment, createdAt]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        requestId: { type: integer, nullable: true }
+        principalAmount: { type: number }
+        monthsToRepay: { type: integer }
+        startMonth: { type: integer }
+        startYear: { type: integer }
+        status: { type: string, enum: [active, closed, cancelled] }
+        notes: { type: string, nullable: true }
+        totalPaid: { type: number }
+        remainingBalance: { type: number }
+        monthlyInstallment: { type: number }
+        createdAt: { type: string }
+        closedAt: { type: string, nullable: true }
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoanInstallment"
+
+    LoanInstallment:
+      type: object
+      required: [id, loanId, employeeId, month, year, amount, paidAt]
+      properties:
+        id: { type: integer }
+        loanId: { type: integer }
+        employeeId: { type: integer }
+        month: { type: integer }
+        year: { type: integer }
+        amount: { type: number }
+        payslipId: { type: integer, nullable: true }
+        paidAt: { type: string }
+
+    LoanEligibility:
+      type: object
+      required: [eligible, minTenureMonths, currentTenureMonths, maxAmount]
+      properties:
+        eligible: { type: boolean }
+        reason: { type: string }
+        minTenureMonths: { type: integer }
+        currentTenureMonths: { type: integer }
+        maxAmount: { type: number }
+        defaultMonths: { type: integer }
+        hasActiveLoan: { type: boolean }
+
+    ApproveLoanRequest:
+      type: object
+      properties:
+        installmentMonths: { type: integer, minimum: 1 }
+
+    AdminDashboard:
+      type: object
+      required:
+        - totalEmployees
+        - presentToday
+        - lateToday
+        - absentToday
+        - onLeaveToday
+        - pendingLeaveRequests
+        - pendingOtherRequests
+        - upcomingBirthdays
+        - upcomingAnniversaries
+        - recentSalaryEvents
+      properties:
+        totalEmployees: { type: integer }
+        presentToday: { type: integer }
+        lateToday: { type: integer }
+        absentToday: { type: integer }
+        onLeaveToday: { type: integer }
+        pendingLeaveRequests: { type: integer }
+        pendingOtherRequests: { type: integer }
+        upcomingBirthdays:
+          type: array
+          items:
+            $ref: "#/components/schemas/UpcomingEvent"
+        upcomingAnniversaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/UpcomingEvent"
+        recentSalaryEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalaryEvent"
+
+    UpcomingEvent:
+      type: object
+      required: [employeeId, employeeName, date]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        date: { type: string, format: date }
+        avatarUrl: { type: string, nullable: true }
+
+    EmployeeDashboard:
+      type: object
+      required:
+        - employee
+        - todayAttendance
+        - leaveBalance
+        - monthAttendance
+        - recentLeaves
+      properties:
+        employee:
+          $ref: "#/components/schemas/Employee"
+        todayAttendance:
+          $ref: "#/components/schemas/TodayAttendance"
+        leaveBalance:
+          $ref: "#/components/schemas/LeaveBalance"
+        monthAttendance:
+          type: object
+          required: [present, late, absent, onLeave, halfDay, remoteWork]
+          properties:
+            present: { type: integer }
+            late: { type: integer }
+            absent: { type: integer }
+            onLeave: { type: integer }
+            halfDay: { type: integer }
+            remoteWork: { type: integer }
+        recentLeaves:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaveRequest"
+
+    FeedItem:
+      type: object
+      required: [employeeId, employeeName, date, avatarUrl]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        date: { type: string, format: date }
+        avatarUrl: { type: string, nullable: true }
+        yearsCount: { type: integer }
+        age: { type: integer }
+
+    FeedResponse:
+      type: object
+      required: [today, todayBirthdays, todayAnniversaries, upcomingBirthdays, upcomingAnniversaries]
+      properties:
+        today: { type: string, format: date }
+        todayBirthdays:
+          type: array
+          items: { $ref: "#/components/schemas/FeedItem" }
+        todayAnniversaries:
+          type: array
+          items: { $ref: "#/components/schemas/FeedItem" }
+        upcomingBirthdays:
+          type: array
+          items: { $ref: "#/components/schemas/FeedItem" }
+        upcomingAnniversaries:
+          type: array
+          items: { $ref: "#/components/schemas/FeedItem" }
+    NewsPost:
+      type: object
+      required: [id, authorId, authorName, title, body, createdAt]
+      properties:
+        id: { type: integer }
+        authorId: { type: integer }
+        authorName: { type: string }
+        title: { type: string }
+        body: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    CreateNewsPostRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1 }
+        body: { type: string }
+        attachmentUrl: { type: string, nullable: true }
+        attachmentName: { type: string, nullable: true }

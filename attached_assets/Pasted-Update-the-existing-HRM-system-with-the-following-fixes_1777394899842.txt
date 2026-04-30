@@ -1,0 +1,150 @@
+Update the existing HRM system with the following fixes and feature additions. Do NOT rewrite the entire system — only extend and modify current implementation.
+
+-----------------------------------
+1. ATTENDANCE CALENDAR VIEW (ADMIN)
+-----------------------------------
+
+Add a Calendar View in Admin Panel (/admin/attendance-calendar):
+
+Requirements:
+- Show monthly calendar per employee
+- Each date must display attendance status:
+  - Present
+  - Absent
+  - Late
+  - Half Day
+  - Leave
+  - Remote Work
+
+Features:
+- Click on a date → show detailed attendance info
+- Filter by employee
+- Filter by month/year
+- Clean UI calendar design (responsive)
+
+-----------------------------------
+2. HALF DAY + REMOTE WORK FLOW
+-----------------------------------
+
+Enhance attendance system with new status types:
+
+Add:
+- Half Day
+- Remote Work
+
+Rules:
+- If working hours < required hours → mark Half Day automatically
+- Remote Work can be:
+  - Requested by employee
+  - Approved by admin
+- Once approved → attendance for that day = Remote Work
+
+Admin should be able to manually override attendance status.
+
+-----------------------------------
+3. REMOTE WORK REQUEST SYSTEM
+-----------------------------------
+
+Employee Side:
+- Employee can request Remote Work for a specific date
+- Must include reason
+
+Admin Side:
+- Admin can approve / reject request
+- If approved:
+  - Automatically update attendance to "Remote Work"
+
+Track:
+- Pending requests
+- Approved requests
+- Rejected requests
+
+-----------------------------------
+4. EMPLOYEE POSITION TYPE (REMOTE / ONSITE)
+-----------------------------------
+
+While creating or editing an employee, add field:
+
+Position Type:
+- Remote
+- Onsite
+
+Rules:
+- This affects attendance expectations
+- Remote employees can check-in from anywhere
+- Onsite employees follow office timing strictly
+
+-----------------------------------
+5. LEAVE ALLOCATION SYSTEM (ADMIN CONTROLLED)
+-----------------------------------
+
+Add leave quota management in Admin Panel.
+
+Admin must be able to define per employee:
+
+- Casual Leaves (e.g. 10 per year)
+- Sick Leaves (e.g. 8 per year)
+- Annual Leaves (e.g. 15 per year)
+
+System should:
+- Track used leaves per type
+- Track remaining leaves
+- Prevent exceeding quota unless manually approved by admin
+
+Employee leave request must deduct from correct leave type.
+
+-----------------------------------
+6. LEAVE REQUEST FLOW (ENHANCED)
+-----------------------------------
+
+Employee:
+- Apply leave with type (Casual / Sick / Annual)
+- Select date range
+- Add reason
+
+Admin:
+- Approve / Reject
+- On approval:
+  - Automatically mark attendance as "Leave"
+  - Deduct from respective leave quota
+
+-----------------------------------
+7. UI REQUIREMENTS
+-----------------------------------
+
+- Calendar view must be clean and intuitive
+- Use color coding for attendance status
+- Remote, Half Day, Leave should be visually distinct
+- Admin panel should remain simple and fast
+
+-----------------------------------
+8. BACKEND REQUIREMENTS
+-----------------------------------
+
+- Extend existing schemas only
+- Add new fields:
+  - positionType (remote/onsite)
+  - attendanceStatus enhancements
+  - remoteWorkRequests collection
+  - leaveQuota per employee
+
+- Ensure API consistency and validation
+
+-----------------------------------
+9. PRIORITY
+-----------------------------------
+
+Focus on:
+- Correct business logic
+- Accurate attendance tracking
+- Clean admin experience
+- No breaking existing features
+
+-----------------------------------
+OUTPUT
+-----------------------------------
+
+Return:
+- Updated code only (no full rewrite unless required)
+- Clear explanation of changes
+- API updates if needed

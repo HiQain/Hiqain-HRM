@@ -1,0 +1,179 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: oklch(var(--background));
+  --color-foreground: oklch(var(--foreground));
+  --color-border: oklch(var(--border));
+  --color-input: oklch(var(--input));
+  --color-ring: oklch(var(--ring));
+
+  --color-card: oklch(var(--card));
+  --color-card-foreground: oklch(var(--card-foreground));
+  --color-card-border: oklch(var(--card-border));
+
+  --color-popover: oklch(var(--popover));
+  --color-popover-foreground: oklch(var(--popover-foreground));
+  --color-popover-border: oklch(var(--popover-border));
+
+  --color-primary: oklch(var(--primary));
+  --color-primary-foreground: oklch(var(--primary-foreground));
+  --color-primary-border: oklch(var(--primary-border));
+
+  --color-secondary: oklch(var(--secondary));
+  --color-secondary-foreground: oklch(var(--secondary-foreground));
+  --color-secondary-border: oklch(var(--secondary-border));
+
+  --color-muted: oklch(var(--muted));
+  --color-muted-foreground: oklch(var(--muted-foreground));
+  --color-muted-border: oklch(var(--muted-border));
+
+  --color-accent: oklch(var(--accent));
+  --color-accent-foreground: oklch(var(--accent-foreground));
+  --color-accent-border: oklch(var(--accent-border));
+
+  --color-destructive: oklch(var(--destructive));
+  --color-destructive-foreground: oklch(var(--destructive-foreground));
+  --color-destructive-border: oklch(var(--destructive-border));
+
+  --color-sidebar: oklch(var(--sidebar));
+  --color-sidebar-foreground: oklch(var(--sidebar-foreground));
+  --color-sidebar-border: oklch(var(--sidebar-border));
+  --color-sidebar-primary: oklch(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: oklch(var(--sidebar-primary-foreground));
+  --color-sidebar-primary-border: oklch(var(--sidebar-primary-border));
+  --color-sidebar-accent: oklch(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: oklch(var(--sidebar-accent-foreground));
+  --color-sidebar-accent-border: oklch(var(--sidebar-accent-border));
+  --color-sidebar-ring: oklch(var(--sidebar-ring));
+
+  --font-sans: var(--app-font-sans);
+  --font-serif: var(--app-font-serif);
+  --font-mono: var(--app-font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --background: 0.99 0.01 250;
+  --foreground: 0.25 0.03 250;
+  
+  --card: 1 0 0;
+  --card-foreground: 0.25 0.03 250;
+  --card-border: 0.94 0.01 250;
+  
+  --popover: 1 0 0;
+  --popover-foreground: 0.25 0.03 250;
+  --popover-border: 0.94 0.01 250;
+  
+  --primary: 0.55 0.15 255;
+  --primary-foreground: 0.98 0.01 255;
+  --primary-border: 0.55 0.15 255;
+  
+  --secondary: 0.96 0.01 250;
+  --secondary-foreground: 0.35 0.03 250;
+  --secondary-border: 0.94 0.01 250;
+  
+  --muted: 0.96 0.01 250;
+  --muted-foreground: 0.55 0.02 250;
+  --muted-border: 0.94 0.01 250;
+  
+  --accent: 0.96 0.01 250;
+  --accent-foreground: 0.35 0.03 250;
+  --accent-border: 0.94 0.01 250;
+  
+  --destructive: 0.5 0.15 25;
+  --destructive-foreground: 0.98 0.01 25;
+  --destructive-border: 0.5 0.15 25;
+
+  --border: 0.92 0.01 250;
+  --input: 0.92 0.01 250;
+  --ring: 0.55 0.15 255;
+
+  --sidebar: 1 0 0;
+  --sidebar-foreground: 0.25 0.03 250;
+  --sidebar-border: 0.92 0.01 250;
+  --sidebar-primary: 0.55 0.15 255;
+  --sidebar-primary-foreground: 0.98 0.01 255;
+  --sidebar-accent: 0.96 0.01 250;
+  --sidebar-accent-foreground: 0.35 0.03 250;
+  --sidebar-ring: 0.55 0.15 255;
+
+  --app-font-sans: 'Inter', sans-serif;
+  --app-font-serif: Georgia, serif;
+  --app-font-mono: Menlo, monospace;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 0.14 0.02 250;
+  --foreground: 0.93 0.01 250;
+
+  --card: 0.18 0.02 250;
+  --card-foreground: 0.93 0.01 250;
+  --card-border: 0.25 0.02 250;
+
+  --popover: 0.18 0.02 250;
+  --popover-foreground: 0.93 0.01 250;
+  --popover-border: 0.25 0.02 250;
+
+  --primary: 0.65 0.15 255;
+  --primary-foreground: 0.1 0.01 255;
+  --primary-border: 0.65 0.15 255;
+
+  --secondary: 0.22 0.02 250;
+  --secondary-foreground: 0.85 0.01 250;
+  --secondary-border: 0.28 0.02 250;
+
+  --muted: 0.22 0.02 250;
+  --muted-foreground: 0.55 0.02 250;
+  --muted-border: 0.28 0.02 250;
+
+  --accent: 0.22 0.02 250;
+  --accent-foreground: 0.85 0.01 250;
+  --accent-border: 0.28 0.02 250;
+
+  --destructive: 0.55 0.18 25;
+  --destructive-foreground: 0.98 0.01 25;
+  --destructive-border: 0.55 0.18 25;
+
+  --border: 0.27 0.02 250;
+  --input: 0.27 0.02 250;
+  --ring: 0.65 0.15 255;
+
+  --sidebar: 0.16 0.02 250;
+  --sidebar-foreground: 0.93 0.01 250;
+  --sidebar-border: 0.25 0.02 250;
+  --sidebar-primary: 0.65 0.15 255;
+  --sidebar-primary-foreground: 0.1 0.01 255;
+  --sidebar-accent: 0.22 0.02 250;
+  --sidebar-accent-foreground: 0.85 0.01 250;
+  --sidebar-ring: 0.65 0.15 255;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+/* Rich text editor: empty placeholder */
+.rte-content[contenteditable="true"]:empty::before {
+  content: attr(data-placeholder);
+  color: oklch(var(--muted-foreground));
+  pointer-events: none;
+}
+
+/* Tighten prose spacing inside editor and viewer to keep cards compact */
+.rte-content.prose :where(p):first-child { margin-top: 0; }
+.rte-content.prose :where(p):last-child { margin-bottom: 0; }
+.rte-content.prose :where(ul, ol) { margin-top: 0.25rem; margin-bottom: 0.25rem; }
