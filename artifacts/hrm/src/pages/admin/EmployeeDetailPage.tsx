@@ -98,6 +98,7 @@ import {
   formatTime,
   ymdLocal,
 } from "@/lib/utils";
+import { getApiUrl } from "@/lib/api";
 
 export function EmployeeDetailPage() {
   const params = useParams<{ id: string }>();
@@ -1806,7 +1807,7 @@ function PayslipsTab({ id }: { id: number }) {
 function uploadFile(file: File): Promise<{ url: string; name: string }> {
   const fd = new FormData();
   fd.append("file", file);
-  return fetch(`${import.meta.env.BASE_URL}api/uploads`, {
+  return fetch(getApiUrl("/api/uploads"), {
     method: "POST",
     body: fd,
     credentials: "include",

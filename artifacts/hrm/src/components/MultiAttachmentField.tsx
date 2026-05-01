@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import type { Attachment } from "@/components/AttachmentField";
+import { getApiUrl } from "@/lib/api";
 
 export function MultiAttachmentField({
   value,
@@ -26,7 +27,7 @@ export function MultiAttachmentField({
       for (const file of Array.from(files)) {
         const fd = new FormData();
         fd.append("file", file);
-        const res = await fetch("/api/uploads", {
+        const res = await fetch(getApiUrl("/api/uploads"), {
           method: "POST",
           body: fd,
           credentials: "include",

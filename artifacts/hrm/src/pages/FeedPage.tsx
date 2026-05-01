@@ -26,12 +26,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { getApiUrl } from "@/lib/api";
 import { formatDateShort } from "@/lib/utils";
 
 function uploadFile(file: File): Promise<{ url: string; name: string }> {
   const fd = new FormData();
   fd.append("file", file);
-  return fetch(`${import.meta.env.BASE_URL}api/uploads`, {
+  return fetch(getApiUrl("/api/uploads"), {
     method: "POST",
     body: fd,
     credentials: "include",

@@ -29,6 +29,7 @@ import { JourneyTimeline } from "@/components/JourneyTimeline";
 import { FilePreview } from "@/components/FilePreview";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
+import { getApiUrl } from "@/lib/api";
 import { formatCurrency, formatDate, formatHMRange12 } from "@/lib/utils";
 
 export function EmployeeProfilePage() {
@@ -191,7 +192,7 @@ export function EmployeeProfilePage() {
 function selfUpload(file: File) {
   const fd = new FormData();
   fd.append("file", file);
-  return fetch(`${import.meta.env.BASE_URL}api/uploads`, {
+  return fetch(getApiUrl("/api/uploads"), {
     method: "POST",
     body: fd,
     credentials: "include",

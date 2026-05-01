@@ -3,6 +3,7 @@ import { Paperclip, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { getApiUrl } from "@/lib/api";
 
 export interface Attachment {
   url: string;
@@ -28,7 +29,7 @@ export function AttachmentField({
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/uploads", {
+      const res = await fetch(getApiUrl("/api/uploads"), {
         method: "POST",
         body: fd,
         credentials: "include",
