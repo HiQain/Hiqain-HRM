@@ -456,7 +456,13 @@ function RequestDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>
-                {type === "increment" ? "Effective date" : supportsDateRange ? "From" : "Date"}
+                {type === "loan"
+                  ? "Need by date"
+                  : type === "increment"
+                    ? "Effective date"
+                    : supportsDateRange
+                      ? "From"
+                      : "Date"}
               </Label>
               <DateField
                 required

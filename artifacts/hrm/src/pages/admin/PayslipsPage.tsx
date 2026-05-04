@@ -45,8 +45,6 @@ export function AdminPayslipsPage() {
   const [viewing, setViewing] = useState<any>(null);
   const [showOverrides, setShowOverrides] = useState(false);
   const [latePenaltyDaysStr, setLatePenaltyDaysStr] = useState("");
-  const [bonusStr, setBonusStr] = useState("");
-  const [otherDeductStr, setOtherDeductStr] = useState("");
 
   const { data: existing } = useGetEmployeePayslips(empId ?? 0, {
     query: {
@@ -74,14 +72,9 @@ export function AdminPayslipsPage() {
       month: number;
       year: number;
       latePenaltyDays?: number;
-      bonus?: number;
-      otherDeductions?: number;
     } = { employeeId: empId, month, year };
     if (latePenaltyDaysStr.trim() !== "")
       data.latePenaltyDays = Number(latePenaltyDaysStr);
-    if (bonusStr.trim() !== "") data.bonus = Number(bonusStr);
-    if (otherDeductStr.trim() !== "")
-      data.otherDeductions = Number(otherDeductStr);
 
     generate.mutate(
       { data },
@@ -93,8 +86,6 @@ export function AdminPayslipsPage() {
           });
           setViewing(p);
           setLatePenaltyDaysStr("");
-          setBonusStr("");
-          setOtherDeductStr("");
           setShowOverrides(false);
         },
         onError: () => toast.error("Could not generate payslip"),
@@ -173,9 +164,9 @@ export function AdminPayslipsPage() {
             </Button>
           </div>
           {showOverrides && (
-            <div className="grid gap-3 rounded-md border border-dashed border-border bg-muted/30 p-3 sm:grid-cols-3">
+            <div className="grid gap-3 rounded-md border border-dashed border-border bg-muted/30 p-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Late → absence days (HR leverage)</Label>
+                <Label className="text-xs">Late to absence days override</Label>
                 <Input
                   type="number"
                   min={0}
@@ -185,30 +176,8 @@ export function AdminPayslipsPage() {
                   placeholder="auto"
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Blank = auto from Settings (e.g. 9 lates → 3 absences). Type 0 to forgive all, or any number to mark fewer.
+                  Leave this blank to use the automatic policy from Settings. Enter `0` to forgive all late penalties or enter a smaller number to reduce them.
                 </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Extra bonus (PKR)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={bonusStr}
-                  onChange={(e) => setBonusStr(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Other deductions (PKR)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={otherDeductStr}
-                  onChange={(e) => setOtherDeductStr(e.target.value)}
-                  placeholder="0"
-                />
               </div>
             </div>
           )}

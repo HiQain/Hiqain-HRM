@@ -24,11 +24,9 @@ import {
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
-import { DateField } from "@/components/DateField";
 import { JourneyTimeline } from "@/components/JourneyTimeline";
 import { FilePreview } from "@/components/FilePreview";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Label } from "@/components/ui/label";
 import { getApiUrl } from "@/lib/api";
 import { formatCurrency, formatDate, formatHMRange12 } from "@/lib/utils";
 
@@ -179,7 +177,26 @@ export function EmployeeProfilePage() {
         )}
       </div>
 
-      <SelfAdditionalDetailsCard employeeId={employee.id} employee={employee} />
+      <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          CNIC document
+        </p>
+        {employee.cnicDocumentUrl ? (
+          <div className="mt-3">
+            <FilePreview
+              url={employee.cnicDocumentUrl}
+              name={employee.cnicDocumentName}
+              label="CNIC document"
+            />
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Your CNIC document will appear here once HR uploads it.
+          </p>
+        )}
+      </div>
+
+      <SelfAdditionalDetailsCard employee={employee} />
 
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <p className="mb-5 text-sm font-semibold">Your journey</p>
@@ -259,158 +276,38 @@ function SelfAvatarUploader({
   );
 }
 
-function SelfAdditionalDetailsCard({
-  employeeId,
-  employee,
-}: {
-  employeeId: number;
-  employee: any;
-}) {
-  const qc = useQueryClient();
-  const update = useUpdateEmployee();
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
-    phone: employee.phone ?? "",
-    address: employee.address ?? "",
-    cnic: employee.cnic ?? "",
-    emergencyContact: employee.emergencyContact ?? "",
-    lastQualification:
-      employee.lastQualification ?? employee.education ?? "",
-    dateOfBirth: employee.dateOfBirth ?? "",
-    immediateFamily: employee.immediateFamily ?? "",
-  });
-
-  const onSave = () => {
-    update.mutate(
-      {
-        id: employeeId,
-        data: {
-          phone: form.phone || null,
-          address: form.address || null,
-          cnic: form.cnic || null,
-          emergencyContact: form.emergencyContact || null,
-          lastQualification: form.lastQualification || null,
-          dateOfBirth: form.dateOfBirth || null,
-          immediateFamily: form.immediateFamily || null,
-        },
-      },
-      {
-        onSuccess: () => {
-          qc.invalidateQueries({
-            queryKey: getGetEmployeeQueryKey(employeeId),
-          });
-          toast.success("Details updated");
-          setEditing(false);
-        },
-        onError: () => toast.error("Could not update details"),
-      },
-    );
-  };
-
-  if (!editing) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Additional details
-          </p>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="text-xs font-medium text-primary hover:underline"
-          >
-            Edit
-          </button>
-        </div>
-        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-          <Detail label="Phone" value={employee.phone} />
-          <Detail label="Address" value={employee.address} />
-          <Detail label="CNIC" value={employee.cnic} />
-          <Detail label="Emergency contact" value={employee.emergencyContact} />
-          <Detail
-            label="Last qualification"
-            value={employee.lastQualification ?? employee.education}
-          />
-          <Detail
-            label="Date of birth"
-            value={employee.dateOfBirth ? formatDate(employee.dateOfBirth) : null}
-          />
-          <div className="sm:col-span-2">
-            <Detail label="Family members" value={employee.immediateFamily} />
-          </div>
-        </dl>
-      </div>
-    );
-  }
-
+function SelfAdditionalDetailsCard({ employee }: { employee: any }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Edit additional details
+          Additional details
         </p>
+        <span className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+          HR / Admin managed
+        </span>
       </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <Field
-          label="Phone"
-          value={form.phone}
-          onChange={(v) => setForm({ ...form, phone: v })}
+      <p className="mt-2 text-xs text-muted-foreground">
+        You can update only your profile photo from this side. All other profile
+        details are maintained by Admin or HR.
+      </p>
+      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+        <Detail label="Phone" value={employee.phone} />
+        <Detail label="Address" value={employee.address} />
+        <Detail label="CNIC" value={employee.cnic} />
+        <Detail label="Emergency contact" value={employee.emergencyContact} />
+        <Detail
+          label="Last qualification"
+          value={employee.lastQualification ?? employee.education}
         />
-        <Field
-          label="CNIC"
-          value={form.cnic}
-          onChange={(v) => setForm({ ...form, cnic: v })}
-        />
-        <Field
-          label="Emergency contact"
-          value={form.emergencyContact}
-          onChange={(v) => setForm({ ...form, emergencyContact: v })}
-        />
-        <Field
+        <Detail
           label="Date of birth"
-          type="date"
-          value={form.dateOfBirth}
-          onChange={(v) => setForm({ ...form, dateOfBirth: v })}
+          value={employee.dateOfBirth ? formatDate(employee.dateOfBirth) : null}
         />
         <div className="sm:col-span-2">
-          <Field
-            label="Address"
-            value={form.address}
-            onChange={(v) => setForm({ ...form, address: v })}
-          />
+          <Detail label="Family members" value={employee.immediateFamily} />
         </div>
-        <div className="sm:col-span-2">
-          <Field
-            label="Last qualification"
-            value={form.lastQualification}
-            onChange={(v) => setForm({ ...form, lastQualification: v })}
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <Field
-            label="Family members (e.g. Father: Ali Khan, Spouse: Sara)"
-            value={form.immediateFamily}
-            onChange={(v) => setForm({ ...form, immediateFamily: v })}
-          />
-        </div>
-      </div>
-      <div className="mt-4 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => setEditing(false)}
-          className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={update.isPending}
-          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          {update.isPending ? "Saving..." : "Save changes"}
-        </button>
-      </div>
+      </dl>
     </div>
   );
 }
@@ -420,36 +317,6 @@ function Detail({ label, value }: { label: string; value: string | null | undefi
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 text-sm">{value || "—"}</dd>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  type = "text",
-  onChange,
-}: {
-  label: string;
-  value: string;
-  type?: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div>
-      <Label className="text-xs">{label}</Label>
-      {type === "date" ? (
-        <div className="mt-1">
-          <DateField value={value} onChange={onChange} />
-        </div>
-      ) : (
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-      )}
     </div>
   );
 }

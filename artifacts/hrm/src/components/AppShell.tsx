@@ -35,7 +35,7 @@ type NavItem = { label: string; href: string; icon: typeof LayoutDashboard };
 
 const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { label: "Members", href: "/admin/employees", icon: Users },
+  { label: "Employees", href: "/admin/employees", icon: Users },
   { label: "Today's Attendance", href: "/admin/attendance", icon: CalendarCheck },
   {
     label: "Attendance Calendar",
@@ -53,7 +53,7 @@ const ADMIN_NAV: NavItem[] = [
 const EMP_NAV: NavItem[] = [
   { label: "Dashboard", href: "/employee", icon: LayoutDashboard },
   { label: "Profile", href: "/employee/profile", icon: UserCircle },
-  { label: "Today's Attendance", href: "/employee/attendance", icon: CalendarCheck },
+  { label: "Attendance", href: "/employee/attendance", icon: CalendarCheck },
   { label: "Leaves", href: "/employee/leaves", icon: ClipboardList },
   { label: "Requests", href: "/employee/requests", icon: FilePlus2 },
   { label: "Salary", href: "/employee/salary", icon: Wallet },
@@ -218,7 +218,7 @@ function SidebarRail({
   onToggleTheme,
   onExpand,
 }: {
-  user: { name: string; email: string; role: "admin" | "employee" };
+  user: { name: string; email: string; role: "admin" | "hr" | "employee" };
   nav: NavItem[];
   isActive: (href: string) => boolean;
   onLogout: () => void;
@@ -343,7 +343,7 @@ function SidebarInner({
   onToggleTheme,
   onCollapseDesktop,
 }: {
-  user: { name: string; email: string; role: "admin" | "employee" };
+  user: { name: string; email: string; role: "admin" | "hr" | "employee" };
   nav: NavItem[];
   isActive: (href: string) => boolean;
   onNavigate: () => void;

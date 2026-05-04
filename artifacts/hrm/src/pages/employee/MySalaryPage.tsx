@@ -4,10 +4,12 @@ import {
   useListSalaryComponents,
   useGetMyLoans,
   useGetMyLoanEligibility,
+  useGetMyPayslips,
   getGetEmployeeQueryKey,
   getListSalaryComponentsQueryKey,
   getGetMyLoansQueryKey,
   getGetMyLoanEligibilityQueryKey,
+  getGetMyPayslipsQueryKey,
 } from "@workspace/api-client-react";
 import { Wallet, Coins, Receipt, Landmark, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -21,7 +23,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency, formatDate, formatMonth } from "@/lib/utils";
+import { formatCurrency, formatMonth } from "@/lib/utils";
+import {
+  getDefaultAllowanceBreakdown,
+  getPakistanMonthlySalaryTax,
+  isManualTaxComponent,
+} from "@/lib/salary";
 
 export function MySalaryPage() {
   const { data: me } = useGetMe();
@@ -51,6 +58,9 @@ export function MySalaryPage() {
       enabled: employeeId > 0,
     },
   });
+  const { data: payslips } = useGetMyPayslips({
+    query: { queryKey: getGetMyPayslipsQueryKey(), enabled: employeeId > 0 },
+  });
 
   if (empLoading || !emp) {
     return (
@@ -61,8 +71,26 @@ export function MySalaryPage() {
     );
   }
 
-  const earnings = (components ?? []).filter((c) => !c.isDeduction);
-  const deductions = (components ?? []).filter((c) => c.isDeduction);
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const visibleComponents = (components ?? []).filter(
+    (component) => !isManualTaxComponent(component),
+  );
+  const defaultAllowanceRows = getDefaultAllowanceBreakdown(emp.allowances ?? 0);
+  const earnings = [
+    ...defaultAllowanceRows,
+    ...visibleComponents.filter((c) => !c.isDeduction),
+  ];
+  const deductions = visibleComponents.filter((c) => c.isDeduction);
+  const latestPayslip = payslips?.[0];
+  const defaultAllowances = emp.allowances ?? 0;
+  const totalSalary = emp.basicSalary + defaultAllowances;
+  const latestLatePenalty =
+    latestPayslip && latestPayslip.totalWorkingDays > 0
+      ? ((latestPayslip.basicSalary / latestPayslip.totalWorkingDays) *
+          (latestPayslip.lateAbsenceDays ?? 0))
+      : 0;
 
   const sumComponents = (rows: typeof earnings) => {
     let fixed = 0;
@@ -87,7 +115,12 @@ export function MySalaryPage() {
         description="Your current salary structure, active loans and eligibility for new loans."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard
+          icon={<Wallet className="h-4 w-4" />}
+          label="Total salary"
+          value={formatCurrency(totalSalary)}
+        />
         <StatCard
           icon={<Wallet className="h-4 w-4" />}
           label="Basic salary"
@@ -109,8 +142,8 @@ export function MySalaryPage() {
         />
         <StatCard
           icon={<Landmark className="h-4 w-4" />}
-          label="Joined"
-          value={formatDate(emp.joiningDate)}
+          label="Tax"
+          value={formatCurrency(getPakistanMonthlySalaryTax(totalSalary, currentMonth, currentYear))}
         />
       </div>
 
@@ -118,7 +151,7 @@ export function MySalaryPage() {
         <div className="border-b border-border p-4">
           <p className="text-sm font-semibold">Salary components</p>
           <p className="text-xs text-muted-foreground">
-            Configured by HR — these override the defaults above.
+            Default salary components are shown below.
           </p>
         </div>
         <ComponentTable
@@ -133,6 +166,89 @@ export function MySalaryPage() {
           totalsLabel="Total deductions"
           totals={dedSum}
         />
+        {!latestPayslip ? (
+          <div className="border-t border-border px-4 py-8 text-center text-sm text-muted-foreground">
+            Payroll breakdown will appear here after HR/Admin generates your payslip.
+          </div>
+        ) : (
+          <div className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-5">
+            <PayrollPreviewCard
+              label="Home rent"
+              value={formatCurrency(defaultAllowanceRows[0]?.value ?? 0)}
+            />
+            <PayrollPreviewCard
+              label="Utility bills"
+              value={formatCurrency(defaultAllowanceRows[1]?.value ?? 0)}
+            />
+            <PayrollPreviewCard
+              label="Payroll tax"
+              value={formatCurrency(
+                getPakistanMonthlySalaryTax(totalSalary, currentMonth, currentYear),
+              )}
+              tone="down"
+            />
+            <PayrollPreviewCard
+              label="PF deduction"
+              value={formatCurrency(
+                ((emp.providentFundPercent ?? 0) / 100) * emp.basicSalary,
+              )}
+              tone="down"
+            />
+            <PayrollPreviewCard
+              label="Late penalty"
+              value={formatCurrency(latestLatePenalty)}
+              hint={`${latestPayslip.lateAbsenceDays ?? 0} penalty day(s)`}
+              tone="down"
+            />
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-border bg-card shadow-sm">
+        <div className="border-b border-border p-4">
+          <p className="text-sm font-semibold">Latest salary snapshot</p>
+          <p className="text-xs text-muted-foreground">
+            Latest generated payslip from payroll.
+          </p>
+        </div>
+        {!latestPayslip ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            No payslip generated yet.
+          </div>
+        ) : (
+          <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              icon={<Landmark className="h-4 w-4" />}
+              label="Period"
+              value={formatMonth(latestPayslip.month, latestPayslip.year)}
+            />
+            <StatCard
+              icon={<Receipt className="h-4 w-4" />}
+              label="Tax"
+              value={formatCurrency(
+                getPakistanMonthlySalaryTax(
+                  latestPayslip.basicSalary +
+                    latestPayslip.allowances +
+                    latestPayslip.bonus,
+                  latestPayslip.month,
+                  latestPayslip.year,
+                ),
+              )}
+            />
+            <StatCard
+              icon={<Wallet className="h-4 w-4" />}
+              label="Total deductions"
+              value={formatCurrency(
+                latestPayslip.otherDeductions + latestPayslip.loanDeduction,
+              )}
+            />
+            <StatCard
+              icon={<Wallet className="h-4 w-4" />}
+              label="Net salary"
+              value={formatCurrency(latestPayslip.netSalary)}
+            />
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border border-border bg-card shadow-sm">
@@ -207,6 +323,34 @@ export function MySalaryPage() {
           </Table>
         )}
       </section>
+    </div>
+  );
+}
+
+function PayrollPreviewCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "down";
+}) {
+  const toneClass = tone === "down" ? "text-rose-600" : "text-foreground";
+
+  return (
+    <div className="flex min-h-[148px] flex-col rounded-xl border border-border bg-background/40 p-4">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <div className="mt-auto">
+        <p className={`text-lg font-semibold ${toneClass}`}>{value}</p>
+        {hint ? (
+          <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
+        ) : null}
+      </div>
     </div>
   );
 }

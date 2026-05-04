@@ -9,6 +9,8 @@ import {
 import { and, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { parseHHMM, ymd } from "../lib/dates";
+import { isPayrollOffDay, toHolidaySet } from "../lib/payroll";
+import { getSettings } from "./settings";
 
 const router: IRouter = Router();
 
@@ -162,6 +164,8 @@ router.post(
     const today = ymd(new Date());
     const now = new Date();
 
+    const settings = await getSettings();
+    const holidaySet = toHolidaySet(settings);
     const rows = await db
       .select()
       .from(attendanceTable)
@@ -565,6 +569,8 @@ router.get(
     const emp = empRows[0];
     if (!emp) return res.status(404).json({ message: "Employee not found" });
 
+    const settings = await getSettings();
+    const holidaySet = toHolidaySet(settings);
     const { start, end } = monthRange(req.query.month as string | undefined);
     const rows = await db
       .select()
@@ -577,6 +583,7 @@ router.get(
         ),
       );
     const lates = rows
+      .filter((r) => !isPayrollOffDay(r.date, settings, holidaySet))
       .filter((r) => r.isLate || r.status === "late")
       .sort((a, b) => (a.date < b.date ? -1 : 1))
       .map((r) => serializeRecord(r, emp.name));

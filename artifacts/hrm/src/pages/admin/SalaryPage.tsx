@@ -8,11 +8,16 @@ import {
   useGetEmployeePayslips,
   useGetEmployeeLateRecords,
   useSetAttendanceExcused,
+  useGetSettings,
+  useGeneratePayslip,
+  useCreateSalaryComponent,
+  useDeleteSalaryComponent,
   getGetEmployeeLateRecordsQueryKey,
   getGetEmployeePayslipsQueryKey,
   getGetEmployeeQueryKey,
   getListSalaryComponentsQueryKey,
   getGetEmployeeLoansQueryKey,
+  getGetSettingsQueryKey,
 } from "@workspace/api-client-react";
 import {
   Wallet,
@@ -24,6 +29,8 @@ import {
   XCircle,
   TrendingDown,
   TrendingUp,
+  Trash2,
+  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
@@ -49,6 +56,11 @@ import {
 } from "@/components/ui/table";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { formatCurrency, formatDate, formatMonth } from "@/lib/utils";
+import {
+  getDefaultAllowanceBreakdown,
+  getPakistanMonthlySalaryTax,
+  isManualTaxComponent,
+} from "@/lib/salary";
 
 export function AdminSalaryPage() {
   const { data: employees } = useListEmployees();
@@ -86,9 +98,13 @@ export function AdminSalaryPage() {
       },
     },
   );
+  const { data: settings } = useGetSettings({
+    query: { queryKey: getGetSettingsQueryKey() },
+  });
 
   const qc = useQueryClient();
   const setExcused = useSetAttendanceExcused();
+  const generate = useGeneratePayslip();
 
   const onToggleExcuse = (recordId: number, nextExcused: boolean) => {
     setExcused.mutate(
@@ -111,8 +127,15 @@ export function AdminSalaryPage() {
     );
   };
 
-  const earnings = (components ?? []).filter((c) => !c.isDeduction);
-  const deductions = (components ?? []).filter((c) => c.isDeduction);
+  const visibleComponents = (components ?? []).filter(
+    (component) => !isManualTaxComponent(component),
+  );
+  const defaultAllowanceRows = getDefaultAllowanceBreakdown(emp?.allowances ?? 0);
+  const earnings = [
+    ...defaultAllowanceRows,
+    ...visibleComponents.filter((c) => !c.isDeduction),
+  ];
+  const deductions = visibleComponents.filter((c) => c.isDeduction);
 
   const activeLoans = (loans ?? []).filter((l) => l.status === "active");
   const closedLoans = (loans ?? []).filter((l) => l.status !== "active");
@@ -121,15 +144,57 @@ export function AdminSalaryPage() {
     (p) => p.month === month && p.year === year,
   );
 
-  const totalLates = lateRecords?.length ?? 0;
-  const excusedLates = (lateRecords ?? []).filter((r) => r.excused).length;
+  const filteredLateRecords = useMemo(() => {
+    const weeklyOffDays = settings?.weeklyOffDays ?? [0, 6];
+    const holidaySet = new Set(
+      (settings?.publicHolidays ?? []).map((holiday) => holiday.date),
+    );
+    return (lateRecords ?? []).filter((record) => {
+      const date = new Date(`${record.date}T00:00:00`);
+      return !weeklyOffDays.includes(date.getDay()) && !holidaySet.has(record.date);
+    });
+  }, [lateRecords, settings?.publicHolidays, settings?.weeklyOffDays]);
+
+  const totalLates = filteredLateRecords.length;
+  const excusedLates = filteredLateRecords.filter((r) => r.excused).length;
   const countedLates = totalLates - excusedLates;
+  const defaultAllowances = emp?.allowances ?? 0;
+  const totalSalary = (emp?.basicSalary ?? 0) + defaultAllowances;
+  const currentTax = monthPayslip
+    ? getPakistanMonthlySalaryTax(
+        monthPayslip.basicSalary + monthPayslip.allowances + monthPayslip.bonus,
+        month,
+        year,
+      )
+    : getPakistanMonthlySalaryTax(totalSalary, month, year);
+  const monthPayslipLatePenalty =
+    monthPayslip && monthPayslip.totalWorkingDays > 0
+      ? ((monthPayslip.basicSalary / monthPayslip.totalWorkingDays) *
+          (monthPayslip.lateAbsenceDays ?? 0))
+      : 0;
+  const isFutureOrCurrent =
+    year > now.getFullYear() ||
+    (year === now.getFullYear() && month >= now.getMonth() + 1);
+
+  const onGeneratePayroll = () => {
+    if (!enabled || isFutureOrCurrent) return;
+    generate.mutate(
+      { data: { employeeId: id, month, year } },
+      {
+        onSuccess: () => {
+          toast.success(`Payroll generated for ${formatMonth(month, year)}`);
+          qc.invalidateQueries({ queryKey: getGetEmployeePayslipsQueryKey(id) });
+        },
+        onError: () => toast.error("Could not generate payroll"),
+      },
+    );
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Employee Salary"
-        description="Pick a member to review their full salary picture: structure, deductions, late count, loans and payroll history. Adjust late marks here to forgive them before generating the payslip."
+        description="Select an employee to review their salary structure, deductions, late count, loans, and payroll history. You can excuse late marks here before generating the payslip."
       />
 
       <div className="grid gap-3 rounded-xl border border-border bg-card p-5 shadow-sm sm:grid-cols-4">
@@ -207,7 +272,12 @@ export function AdminSalaryPage() {
                 {emp.positionType ?? "office"}
               </Badge>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <StatCard
+                icon={<Wallet className="h-4 w-4" />}
+                label="Total salary"
+                value={formatCurrency(totalSalary)}
+              />
               <StatCard
                 icon={<Wallet className="h-4 w-4" />}
                 label="Basic salary"
@@ -229,8 +299,8 @@ export function AdminSalaryPage() {
               />
               <StatCard
                 icon={<Landmark className="h-4 w-4" />}
-                label="Joined"
-                value={formatDate(emp.joiningDate)}
+                label="Tax"
+                value={formatCurrency(currentTax)}
               />
             </div>
           </section>
@@ -242,8 +312,8 @@ export function AdminSalaryPage() {
                   Late attendance · {formatMonth(month, year)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Excused lates are forgiven by payroll and will not count
-                  toward the late→absence penalty.
+                  Excused late marks are ignored by payroll and do not count
+                  toward the late-to-absence penalty.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -276,7 +346,7 @@ export function AdminSalaryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(lateRecords ?? []).map((r) => (
+                  {filteredLateRecords.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">
                         {formatDate(r.date)}
@@ -315,16 +385,40 @@ export function AdminSalaryPage() {
             )}
           </section>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 lg:grid-cols-2">
             <section className="rounded-xl border border-border bg-card shadow-sm">
               <div className="border-b border-border p-4">
                 <p className="text-sm font-semibold">Salary components</p>
                 <p className="text-xs text-muted-foreground">
-                  Configured by HR — these override the defaults above.
+                  Default salary components are shown below.
                 </p>
               </div>
               <ComponentTable title="Earnings" rows={earnings} />
               <ComponentTable title="Deductions" rows={deductions} />
+              <div className="border-t border-border px-4 py-5">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <MoneySummaryCard
+                    label="Home rent"
+                    value={formatCurrency(defaultAllowanceRows[0]?.value ?? 0)}
+                  />
+                  <MoneySummaryCard
+                    label="Utility bills"
+                    value={formatCurrency(defaultAllowanceRows[1]?.value ?? 0)}
+                  />
+                  <MoneySummaryCard
+                    label="Payroll tax"
+                    value={formatCurrency(currentTax)}
+                    tone="down"
+                  />
+                  <MoneySummaryCard
+                    label="PF deduction"
+                    value={formatCurrency(
+                      ((emp.providentFundPercent ?? 0) / 100) * emp.basicSalary,
+                    )}
+                    tone="down"
+                  />
+                </div>
+              </div>
             </section>
 
             <section className="rounded-xl border border-border bg-card shadow-sm">
@@ -391,7 +485,7 @@ export function AdminSalaryPage() {
                   Payroll for {formatMonth(month, year)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Generated payslip snapshot for the selected month.
+                  Once a payslip is generated, the payroll totals for that month are locked to that record.
                 </p>
               </div>
               {monthPayslip && (
@@ -400,13 +494,29 @@ export function AdminSalaryPage() {
                 </Badge>
               )}
             </div>
+            <div className="border-b border-border p-4">
+              <div className="flex items-end">
+                <Button
+                  onClick={onGeneratePayroll}
+                  disabled={!enabled || generate.isPending || isFutureOrCurrent}
+                  className="w-full md:w-auto"
+                >
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  {generate.isPending ? "Generating..." : "Generate payroll"}
+                </Button>
+              </div>
+            </div>
             {!monthPayslip ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                No payslip generated yet for this month. Use the Payslips tab to
-                generate one after adjusting late marks.
+              <div className="space-y-2 py-10 text-center text-sm text-muted-foreground">
+                <p>No payslip generated yet for this month.</p>
+                {isFutureOrCurrent && (
+                  <p className="text-amber-600">
+                    Payroll can only be generated for completed past months.
+                  </p>
+                )}
               </div>
             ) : (
-              <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
                 <PayrollStat
                   label="Working days"
                   value={String(monthPayslip.totalWorkingDays)}
@@ -415,14 +525,27 @@ export function AdminSalaryPage() {
                 <PayrollStat
                   label="Late penalty days"
                   value={String(monthPayslip.lateAbsenceDays ?? 0)}
-                  hint={`${monthPayslip.lateCount} lates recorded`}
+                  hint={`${monthPayslip.lateCount} lates recorded · ${formatCurrency(monthPayslipLatePenalty)}`}
                   tone={(monthPayslip.lateAbsenceDays ?? 0) > 0 ? "down" : undefined}
+                />
+                <PayrollStat
+                  label="Tax"
+                  value={formatCurrency(
+                    getPakistanMonthlySalaryTax(
+                      monthPayslip.basicSalary +
+                      monthPayslip.allowances +
+                      monthPayslip.bonus,
+                      month,
+                      year,
+                    ),
+                  )}
+                  tone="down"
                 />
                 <PayrollStat
                   label="Total deductions"
                   value={formatCurrency(
                     Number(monthPayslip.otherDeductions) +
-                      Number(monthPayslip.loanDeduction),
+                    Number(monthPayslip.loanDeduction),
                   )}
                   hint={`Loan ${formatCurrency(monthPayslip.loanDeduction)}`}
                   tone="down"
@@ -436,6 +559,11 @@ export function AdminSalaryPage() {
               </div>
             )}
           </section>
+
+          <ManageSalaryComponentsCard
+            employeeId={id}
+            defaultAllowanceRows={defaultAllowanceRows}
+          />
 
           <section className="rounded-xl border border-border bg-card shadow-sm">
             <div className="border-b border-border p-4">
@@ -498,6 +626,214 @@ export function AdminSalaryPage() {
   );
 }
 
+function ManageSalaryComponentsCard({
+  employeeId,
+  defaultAllowanceRows,
+}: {
+  employeeId: number;
+  defaultAllowanceRows: Array<{
+    id: number;
+    label: string;
+    kind: string;
+    valueType: string;
+    value: number;
+    isDeduction?: boolean;
+  }>;
+}) {
+  const qc = useQueryClient();
+  const { data: components } = useListSalaryComponents(employeeId, {
+    query: {
+      queryKey: getListSalaryComponentsQueryKey(employeeId),
+      enabled: employeeId > 0,
+    },
+  });
+  const create = useCreateSalaryComponent();
+  const remove = useDeleteSalaryComponent();
+  const [label, setLabel] = useState("");
+  const [kind, setKind] = useState<
+    "commission" | "allowance" | "provident_fund" | "other"
+  >("allowance");
+  const [valueType, setValueType] = useState<"fixed" | "percentage">("fixed");
+  const [value, setValue] = useState(0);
+  const [isDeduction, setIsDeduction] = useState(false);
+
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: getListSalaryComponentsQueryKey(employeeId) });
+
+  const resetForm = () => {
+    setLabel("");
+    setKind("allowance");
+    setValueType("fixed");
+    setValue(0);
+    setIsDeduction(false);
+  };
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!label.trim()) {
+      toast.error("Label is required");
+      return;
+    }
+
+    create.mutate(
+      {
+        id: employeeId,
+        data: {
+          label: label.trim(),
+          kind,
+          valueType,
+          value,
+          isDeduction,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Component added");
+          void invalidate();
+          resetForm();
+        },
+        onError: () => toast.error("Could not add component"),
+      },
+    );
+  };
+  const managedRows = [
+    ...defaultAllowanceRows,
+    ...((components ?? []).filter((component) => !component.isDeduction) as Array<
+      NonNullable<typeof components>[number]
+    >),
+  ];
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div>
+        <p className="text-sm font-semibold">Manage salary components</p>
+        <p className="text-xs text-muted-foreground">
+          Default salary components are listed below. You can still add extra earnings or deductions here.
+        </p>
+      </div>
+
+      <form onSubmit={onSubmit} className="mt-4 grid gap-3 lg:grid-cols-12">
+        <Input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Label"
+          className="lg:col-span-4"
+        />
+        <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
+          <SelectTrigger className="lg:col-span-2">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="allowance">Allowance</SelectItem>
+            <SelectItem value="commission">Bonus / Commission</SelectItem>
+            <SelectItem value="provident_fund">Provident Fund</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={valueType}
+          onValueChange={(v) => setValueType(v as typeof valueType)}
+        >
+          <SelectTrigger className="lg:col-span-2">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fixed">Fixed (PKR)</SelectItem>
+            <SelectItem value="percentage">% of basic</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          type="number"
+          min={0}
+          step="0.01"
+          value={value}
+          onChange={(e) => setValue(Number(e.target.value))}
+          className="lg:col-span-2"
+        />
+        <label className="flex items-center gap-2 text-xs text-muted-foreground lg:col-span-2">
+          <input
+            type="checkbox"
+            checked={isDeduction}
+            onChange={(e) => setIsDeduction(e.target.checked)}
+          />
+          Mark as deduction
+        </label>
+        <div className="lg:col-span-12">
+          <Button type="submit" disabled={create.isPending}>
+            {create.isPending ? "Adding..." : "Add component"}
+          </Button>
+        </div>
+      </form>
+
+      <div className="mt-4 divide-y divide-border rounded-lg border border-border">
+        {managedRows.length === 0 ? (
+          <div className="p-4 text-sm text-muted-foreground">
+            No components added yet.
+          </div>
+        ) : (
+          managedRows.map((component) => (
+            <div
+              key={component.id}
+              className="flex flex-wrap items-center justify-between gap-3 p-4"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {component.label}
+                  {isManualTaxComponent(component) && (
+                    <span className="ml-2 text-xs text-amber-600">
+                      legacy manual tax
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {humanizeSalaryKind(component.kind)} · {component.valueType} ·{" "}
+                  {component.isDeduction ? "deduction" : "earning"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm">
+                  {component.valueType === "percentage"
+                    ? `${component.value}%`
+                    : formatCurrency(component.value)}
+                </span>
+                {component.id > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-rose-600"
+                    disabled={remove.isPending}
+                    onClick={() =>
+                      remove.mutate(
+                        { id: employeeId, componentId: component.id },
+                        {
+                          onSuccess: () => {
+                            toast.success("Component removed");
+                            void invalidate();
+                          },
+                          onError: () => toast.error("Could not remove component"),
+                        },
+                      )
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function humanizeSalaryKind(kind: string) {
+  if (kind === "commission") return "bonus / commission";
+  if (kind === "provident_fund") return "provident fund";
+  return kind.replace("_", " ");
+}
+
 function StatCard({
   icon,
   label,
@@ -537,17 +873,51 @@ function PayrollStat({
         ? "text-rose-600"
         : "text-foreground";
   return (
-    <div className="rounded-lg border border-border bg-background/40 p-3">
+    <div className="min-h-[150px] rounded-xl border border-border bg-background/40 px-5 py-5">
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className={`mt-1 flex items-center gap-1 text-base font-semibold ${toneClass}`}>
+      <p className={`mt-3 flex items-center gap-2 text-[1.8rem] font-semibold leading-none ${toneClass}`}>
         {Icon && <Icon className="h-4 w-4" />}
         {value}
       </p>
       {hint && (
-        <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{hint}</p>
       )}
+    </div>
+  );
+}
+
+function MoneySummaryCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "up" | "down";
+}) {
+  const toneClass =
+    tone === "down"
+      ? "text-rose-600"
+      : tone === "up"
+        ? "text-emerald-600"
+        : "text-foreground";
+  const parts = value.replace(/\s+/g, " ").trim().split(" ");
+  const currency = parts[0] ?? "PKR";
+  const amount = parts.slice(1).join(" ") || value;
+
+  return (
+    <div className="rounded-2xl border border-border bg-gradient-to-b from-background to-muted/20 px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
+      <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </p>
+      <div className={`mt-6 overflow-hidden ${toneClass}`}>
+        <p className="text-sm font-semibold leading-none opacity-90">{currency}</p>
+        <p className="mt-2 whitespace-nowrap text-md font-bold leading-none tracking-[-0.03em]">
+          {amount}
+        </p>
+      </div>
     </div>
   );
 }
@@ -589,7 +959,7 @@ function ComponentTable({
                 <TableCell className="font-medium">{r.label}</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className="capitalize">
-                    {r.kind}
+                    {humanizeSalaryKind(r.kind)}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-mono">

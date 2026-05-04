@@ -25,12 +25,44 @@ type Payslip = {
   loanDeduction: number;
   otherDeductions: number;
   netSalary: number;
+  salaryBreakdown?: {
+    earnings: Array<{ label: string; amount: number }>;
+    deductions: Array<{ label: string; amount: number }>;
+  };
   generatedAt: string;
 };
 
 function empCode(id: number, code?: string | null) {
   if (code) return code;
   return `EMP-${String(id).padStart(3, "0")}`;
+}
+
+function getBreakdownRows(p: Payslip) {
+  const fallbackEarnings: Array<{ label: string; amount: number }> = [
+    { label: "Basic Salary", amount: p.basicSalary },
+    { label: "Allowances", amount: p.allowances },
+  ];
+  if (p.bonus > 0) fallbackEarnings.push({ label: "Bonus", amount: p.bonus });
+
+  const fallbackDeductions: Array<{ label: string; amount: number }> = [];
+  if (p.otherDeductions > 0) {
+    fallbackDeductions.push({
+      label: "Other Deductions",
+      amount: p.otherDeductions,
+    });
+  }
+  if (p.loanDeduction > 0) {
+    fallbackDeductions.push({ label: "Loan Deduction", amount: p.loanDeduction });
+  }
+
+  return {
+    earnings: p.salaryBreakdown?.earnings?.length
+      ? p.salaryBreakdown.earnings
+      : fallbackEarnings,
+    deductions: p.salaryBreakdown?.deductions?.length
+      ? p.salaryBreakdown.deductions
+      : fallbackDeductions,
+  };
 }
 
 function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
@@ -117,6 +149,8 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
   doc.line(margin - 10, y, w - margin + 10, y);
   y += 14;
 
+  const breakdown = getBreakdownRows(p);
+
   // Earnings / Deductions header
   const leftX = margin;
   const midX = w / 2;
@@ -135,26 +169,8 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
   // Earnings rows
   const totalAddition = p.basicSalary + p.allowances + p.bonus;
   const totalDeduction = p.otherDeductions + p.loanDeduction;
-
-  const earningsRows: Array<[string, number | null]> = [
-    ["BASIC SALARY", p.basicSalary],
-    ["UTILITIES", 0],
-    ["HOUSE RENT ALLOWANCE", p.allowances],
-    ["INTERNET ALLOWANCE", 0],
-    ["MOBILE ALLOWANCE", 0],
-    ["FUEL & MAINTENANCE ALLOWANCE", 0],
-    ["OVERTIME", 0],
-    ["BONUS", p.bonus],
-    ["COMMISSION", null],
-  ];
-
-  const deductionRows: Array<[string, number | null]> = [
-    ["ABSENCE", p.otherDeductions],
-    ["ADVANCE", 0],
-    ["LOAN", p.loanDeduction],
-    ["TAX", 0],
-    ["PROVIDENT FUND", null],
-  ];
+  const earningsRows = breakdown.earnings.map((row) => [row.label, row.amount] as const);
+  const deductionRows = breakdown.deductions.map((row) => [row.label, row.amount] as const);
 
   const maxRows = Math.max(earningsRows.length, deductionRows.length);
   const rowH = 18;
@@ -224,6 +240,14 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
 export function PayslipView({ payslip }: { payslip: Payslip }) {
   const totalAddition = payslip.basicSalary + payslip.allowances + payslip.bonus;
   const totalDeduction = payslip.otherDeductions + payslip.loanDeduction;
+  const breakdown = getBreakdownRows(payslip);
+  const rowCount = Math.max(breakdown.earnings.length, breakdown.deductions.length, 1);
+  const earningsRows = Array.from({ length: rowCount }, (_, index) =>
+    breakdown.earnings[index] ?? null,
+  );
+  const deductionRows = Array.from({ length: rowCount }, (_, index) =>
+    breakdown.deductions[index] ?? null,
+  );
 
   const handleDownload = () => {
     // Try to load logo as data URL for PDF
@@ -305,28 +329,23 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
         <div className="grid grid-cols-2 divide-x divide-border">
           {/* Left: Earnings */}
           <div className="divide-y divide-border/50">
-            <SlipRow label="BASIC SALARY" value={payslip.basicSalary} />
-            <SlipRow label="UTILITIES" value={0} />
-            <SlipRow label="HOUSE RENT ALLOWANCE" value={payslip.allowances} />
-            <SlipRow label="INTERNET ALLOWANCE" value={0} />
-            <SlipRow label="MOBILE ALLOWANCE" value={0} />
-            <SlipRow label="FUEL & MAINTENANCE ALLOWANCE" value={0} />
-            <SlipRow label="OVERTIME" value={0} />
-            <SlipRow label="BONUS" value={payslip.bonus} />
-            <SlipRow label="COMMISSION" value={null} />
+            {earningsRows.map((row, index) => (
+              <SlipRow
+                key={`earning-${index}`}
+                label={row?.label ?? ""}
+                value={row?.amount ?? null}
+              />
+            ))}
           </div>
           {/* Right: Deductions */}
           <div className="divide-y divide-border/50">
-            <SlipRow label="ABSENCE" value={payslip.otherDeductions} />
-            <SlipRow label="ADVANCE" value={0} />
-            <SlipRow label="LOAN" value={payslip.loanDeduction} />
-            <SlipRow label="TAX" value={0} />
-            <SlipRow label="PROVIDENT FUND" value={null} />
-            {/* Fill remaining rows to match height */}
-            <div className="px-4 py-2 min-h-[36px]" />
-            <div className="px-4 py-2 min-h-[36px]" />
-            <div className="px-4 py-2 min-h-[36px]" />
-            <div className="px-4 py-2 min-h-[36px]" />
+            {deductionRows.map((row, index) => (
+              <SlipRow
+                key={`deduction-${index}`}
+                label={row?.label ?? ""}
+                value={row?.amount ?? null}
+              />
+            ))}
           </div>
         </div>
 
@@ -363,7 +382,9 @@ function InfoCell({ label, value }: { label: string; value: string }) {
 function SlipRow({ label, value }: { label: string; value: number | null }) {
   return (
     <div className="flex items-center justify-between px-4 py-2 min-h-[36px] gap-2">
-      <span className="text-xs text-muted-foreground uppercase tracking-wide leading-tight">{label}</span>
+      <span className="text-xs text-muted-foreground uppercase tracking-wide leading-tight">
+        {label || "\u00A0"}
+      </span>
       {value !== null && (
         <span className="text-xs font-medium whitespace-nowrap">{formatCurrency(value)}</span>
       )}

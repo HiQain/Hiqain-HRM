@@ -29,6 +29,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { getApiUrl } from "@/lib/api";
 import { formatDateShort } from "@/lib/utils";
 
+function getAttachmentExtension(url?: string | null, name?: string | null) {
+  const source = name || url || "";
+  return source.split("?")[0]?.split("#")[0]?.split(".").pop()?.toLowerCase() ?? "";
+}
+
+function isImageAttachment(url?: string | null, name?: string | null) {
+  return ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(
+    getAttachmentExtension(url, name),
+  );
+}
+
 function uploadFile(file: File): Promise<{ url: string; name: string }> {
   const fd = new FormData();
   fd.append("file", file);
@@ -281,7 +292,7 @@ function NewsComposer() {
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Attachment (optional)</Label>
+          <Label className="text-xs">Attachment (optional) </Label>
           {attachment ? (
             <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
               <span className="truncate font-medium">{attachment.name}</span>
@@ -346,8 +357,8 @@ function NewsList({
     authorName: string;
     title: string;
     body: string;
-    attachmentUrl: string | null | undefined;
-    attachmentName: string | null | undefined;
+    attachmentUrl?: string | null;
+    attachmentName?: string | null;
     createdAt: string;
   }>;
   loading: boolean;
@@ -423,11 +434,22 @@ function NewsList({
             )}
             {p.attachmentUrl && (
               <div className="mt-3">
-                <FilePreview
-                  url={p.attachmentUrl}
-                  name={p.attachmentName ?? null}
-                  label="Attachment"
-                />
+                {isImageAttachment(p.attachmentUrl, p.attachmentName) && (
+                  <div className="mb-3 overflow-hidden rounded-xl border border-border bg-muted/20">
+                    <img
+                      src={p.attachmentUrl}
+                      alt={p.attachmentName ?? p.title}
+                      className="max-h-[26rem] w-full object-cover"
+                    />
+                  </div>
+                )}
+                {!isImageAttachment(p.attachmentUrl, p.attachmentName) && (
+                  <FilePreview
+                    url={p.attachmentUrl}
+                    name={p.attachmentName ?? null}
+                    label="Attachment"
+                  />
+                )}
               </div>
             )}
           </article>

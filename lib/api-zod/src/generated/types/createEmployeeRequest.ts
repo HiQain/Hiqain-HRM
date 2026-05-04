@@ -48,4 +48,6 @@ export interface CreateEmployeeRequest {
   benefits?: string | null;
   notes?: string | null;
   immediateFamily?: string | null;
+  cnicDocumentUrl?: string | null;
+  cnicDocumentName?: string | null;
 }

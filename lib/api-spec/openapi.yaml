@@ -1162,6 +1162,32 @@ paths:
                 $ref: "#/components/schemas/SalaryComponent"
 
   /employees/{id}/salary-components/{componentId}:
+    patch:
+      operationId: updateSalaryComponent
+      tags: [salary]
+      summary: Update a salary component (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: componentId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSalaryComponentRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalaryComponent"
     delete:
       operationId: deleteSalaryComponent
       tags: [salary]
@@ -1342,6 +1368,8 @@ components:
         immediateFamily: { type: string, nullable: true }
         employmentContractUrl: { type: string, nullable: true }
         employmentContractName: { type: string, nullable: true }
+        cnicDocumentUrl: { type: string, nullable: true }
+        cnicDocumentName: { type: string, nullable: true }
         providentFundPercent: { type: number, nullable: true }
 
     EmployeeDetail:
@@ -1401,6 +1429,8 @@ components:
         benefits: { type: string, nullable: true }
         notes: { type: string, nullable: true }
         immediateFamily: { type: string, nullable: true }
+        cnicDocumentUrl: { type: string, nullable: true }
+        cnicDocumentName: { type: string, nullable: true }
 
     UpdateEmployeeRequest:
       type: object
@@ -1436,6 +1466,8 @@ components:
         avatarUrl: { type: string, nullable: true }
         employmentContractUrl: { type: string, nullable: true }
         employmentContractName: { type: string, nullable: true }
+        cnicDocumentUrl: { type: string, nullable: true }
+        cnicDocumentName: { type: string, nullable: true }
         providentFundPercent: { type: number, nullable: true }
 
     EmployeeJourney:
@@ -1511,6 +1543,19 @@ components:
         sortOrder: { type: integer }
 
     CreateSalaryComponentRequest:
+      type: object
+      required: [label, kind, valueType, value]
+      properties:
+        label: { type: string }
+        kind:
+          type: string
+          enum: [designation, commission, allowance, provident_fund, other]
+        valueType:
+          type: string
+          enum: [fixed, percentage]
+        value: { type: number }
+        isDeduction: { type: boolean }
+    UpdateSalaryComponentRequest:
       type: object
       required: [label, kind, valueType, value]
       properties:

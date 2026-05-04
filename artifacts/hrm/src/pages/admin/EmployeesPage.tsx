@@ -69,6 +69,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PasswordField } from "@/components/PasswordField";
+
+function computeProRatedQuota(quota: number, joiningDate: string, enabled?: boolean) {
+  if (!enabled || !joiningDate) return quota;
+  const joining = new Date(`${joiningDate}T00:00:00`);
+  if (Number.isNaN(joining.getTime())) return quota;
+  const today = new Date();
+  if (joining.getFullYear() !== today.getFullYear()) return quota;
+  const monthsRemaining = 12 - joining.getMonth();
+  return Math.max(0, Math.round((quota * monthsRemaining) / 12));
+}
 
 export function EmployeesPage() {
   const { data: me } = useGetMe();
@@ -127,7 +138,7 @@ export function EmployeesPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Members"
+        title="Employees"
         description="Manage your team profiles, roles, and compensation."
         actions={
           <div className="flex gap-2">
@@ -141,7 +152,7 @@ export function EmployeesPage() {
             </Button>
             <Button onClick={() => setOpen(true)} className="gap-2">
               <Plus className="h-4 w-4" />
-              Add member
+              Add employee
             </Button>
           </div>
         }
@@ -288,7 +299,11 @@ export function EmployeesPage() {
         </div>
       )}
 
-      <NewEmployeeSheet open={open} onOpenChange={setOpen} />
+      <NewEmployeeSheet
+        open={open}
+        onOpenChange={setOpen}
+        departments={departments}
+      />
       <BulkUploadSheet open={bulkOpen} onOpenChange={setBulkOpen} />
 
       <AlertDialog
@@ -322,9 +337,11 @@ export function EmployeesPage() {
 function NewEmployeeSheet({
   open,
   onOpenChange,
+  departments,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  departments: string[];
 }) {
   const { data: me } = useGetMe();
   const { data: settings } = useGetSettings({
@@ -337,7 +354,7 @@ function NewEmployeeSheet({
     () => ({
       name: "",
       email: "",
-      password: "welcome123",
+      password: "password",
       role: "employee" as "admin" | "hr" | "employee",
       phone: "",
       position: "",
@@ -350,12 +367,33 @@ function NewEmployeeSheet({
       gracePeriodMinutes: settings?.defaultGracePeriodMinutes ?? 15,
       basicSalary: 100000,
       allowances: 0,
-      casualLeaveQuota: settings?.defaultCasualLeaveQuota ?? 6,
-      sickLeaveQuota: settings?.defaultSickLeaveQuota ?? 6,
-      annualLeaveQuota: settings?.defaultAnnualLeaveQuota ?? 12,
+      casualLeaveQuota: computeProRatedQuota(
+        settings?.defaultCasualLeaveQuota ?? 6,
+        new Date().toISOString().slice(0, 10),
+        settings?.proRatedQuotas,
+      ),
+      sickLeaveQuota: computeProRatedQuota(
+        settings?.defaultSickLeaveQuota ?? 6,
+        new Date().toISOString().slice(0, 10),
+        settings?.proRatedQuotas,
+      ),
+      annualLeaveQuota: computeProRatedQuota(
+        settings?.defaultAnnualLeaveQuota ?? 12,
+        new Date().toISOString().slice(0, 10),
+        settings?.proRatedQuotas,
+      ),
       dateOfBirth: "",
-      education: "",
+      lastQualification: "",
       address: "",
+      cnic: "",
+      emergencyContact: "",
+      previousCompany: "",
+      lastPay: "",
+      benefits: "",
+      notes: "",
+      immediateFamily: "",
+      cnicDocumentUrl: "",
+      cnicDocumentName: "",
     }),
     [settings],
   );
@@ -366,6 +404,41 @@ function NewEmployeeSheet({
       setForm(defaultForm);
     }
   }, [defaultForm, open]);
+
+  const joiningYear = useMemo(
+    () => Number(form.joiningDate.slice(0, 4)) || new Date().getFullYear(),
+    [form.joiningDate],
+  );
+  const pfPercent = Number(settings?.defaultProvidentFundPercent ?? 0);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm((current) => ({
+      ...current,
+      casualLeaveQuota: computeProRatedQuota(
+        settings?.defaultCasualLeaveQuota ?? 6,
+        current.joiningDate,
+        settings?.proRatedQuotas,
+      ),
+      sickLeaveQuota: computeProRatedQuota(
+        settings?.defaultSickLeaveQuota ?? 6,
+        current.joiningDate,
+        settings?.proRatedQuotas,
+      ),
+      annualLeaveQuota: computeProRatedQuota(
+        settings?.defaultAnnualLeaveQuota ?? 12,
+        current.joiningDate,
+        settings?.proRatedQuotas,
+      ),
+    }));
+  }, [
+    open,
+    form.joiningDate,
+    settings?.defaultCasualLeaveQuota,
+    settings?.defaultSickLeaveQuota,
+    settings?.defaultAnnualLeaveQuota,
+    settings?.proRatedQuotas,
+  ]);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -393,8 +466,17 @@ function NewEmployeeSheet({
           dateOfBirth: form.dateOfBirth
             ? (form.dateOfBirth as unknown as string)
             : undefined,
-          education: form.education || undefined,
+          lastQualification: form.lastQualification || undefined,
           address: form.address || undefined,
+          cnic: form.cnic || undefined,
+          emergencyContact: form.emergencyContact || undefined,
+          previousCompany: form.previousCompany || undefined,
+          lastPay: form.lastPay ? Number(form.lastPay) : undefined,
+          benefits: form.benefits || undefined,
+          notes: form.notes || undefined,
+          immediateFamily: form.immediateFamily || undefined,
+          cnicDocumentUrl: form.cnicDocumentUrl || undefined,
+          cnicDocumentName: form.cnicDocumentName || undefined,
         },
       },
       {
@@ -415,7 +497,7 @@ function NewEmployeeSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent className="w-full overflow-y-auto sm:max-w-5xl">
         <SheetHeader>
           <SheetTitle>Add a new employee</SheetTitle>
           <SheetDescription>
@@ -423,8 +505,54 @@ function NewEmployeeSheet({
             first sign-in.
           </SheetDescription>
         </SheetHeader>
-        <form onSubmit={onSubmit} className="mt-6 space-y-5 px-1">
-          <Section title="Identity">
+        <form onSubmit={onSubmit} className="mt-6 space-y-6 px-1">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="rounded-xl border border-border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Leave preview for {joiningYear}
+              </p>
+              <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Casual</p>
+                  <p className="font-semibold">{form.casualLeaveQuota} days</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Sick</p>
+                  <p className="font-semibold">{form.sickLeaveQuota} days</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Annual</p>
+                  <p className="font-semibold">{form.annualLeaveQuota} days</p>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Defaults current month aur joining date ke hisaab se calculate ho rahe hain.
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Default payroll setup
+              </p>
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Basic split</span>
+                  <span className="font-semibold">
+                    {settings?.basicSalaryPercent ?? 50}% basic / {settings?.allowancePercent ?? 50}% allowance
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Provident fund</span>
+                  <span className="font-semibold">
+                    {pfPercent > 0 ? `${pfPercent}% of basic` : "Disabled"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid items-start gap-6 xl:grid-cols-2">
+          <div className="space-y-6">
+          <Section title="Account details">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Full name" required>
                 <Input
@@ -441,24 +569,16 @@ function NewEmployeeSheet({
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                 />
               </Field>
-              <Field label="Phone">
-                <Input
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="+923XXXXXXXXX"
+              <Field label="Password" required>
+                <PasswordField
+                  required
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm({ ...form, password: e.target.value })
+                  }
+                  minLength={6}
                 />
               </Field>
-              <Field label="Date of birth">
-                <DateField
-                  value={form.dateOfBirth}
-                  onChange={(v) => setForm({ ...form, dateOfBirth: v })}
-                />
-              </Field>
-            </div>
-          </Section>
-
-          <Section title="Role">
-            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Account role" required>
                 <Select
                   value={form.role}
@@ -478,57 +598,17 @@ function NewEmployeeSheet({
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Position">
+              <Field label="Phone">
                 <Input
-                  value={form.position}
-                  onChange={(e) =>
-                    setForm({ ...form, position: e.target.value })
-                  }
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="+923XXXXXXXXX"
                 />
               </Field>
-              <Field label="Department">
-                <Input
-                  value={form.department}
-                  onChange={(e) =>
-                    setForm({ ...form, department: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Work location" required>
-                <Select
-                  value={form.positionType}
-                  onValueChange={(v) =>
-                    setForm({ ...form, positionType: v as "onsite" | "remote" })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="onsite">Onsite</SelectItem>
-                    <SelectItem value="remote">Remote</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Joining date" required>
+              <Field label="Date of birth">
                 <DateField
-                  required
-                  value={form.joiningDate}
-                  onChange={(v) => setForm({ ...form, joiningDate: v })}
-                />
-              </Field>
-              <Field label="Probation (months)" required>
-                <Input
-                  required
-                  type="number"
-                  min={0}
-                  value={form.probationMonths}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      probationMonths: Number(e.target.value),
-                    })
-                  }
+                  value={form.dateOfBirth}
+                  onChange={(v) => setForm({ ...form, dateOfBirth: v })}
                 />
               </Field>
             </div>
@@ -573,6 +653,188 @@ function NewEmployeeSheet({
             </div>
           </Section>
 
+          <Section title="Background">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Emergency contact">
+                <Input
+                  value={form.emergencyContact}
+                  onChange={(e) =>
+                    setForm({ ...form, emergencyContact: e.target.value })
+                  }
+                  placeholder="+923XXXXXXXXX"
+                />
+              </Field>
+              <Field label="Previous company">
+                <Input
+                  value={form.previousCompany}
+                  onChange={(e) =>
+                    setForm({ ...form, previousCompany: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Last pay (PKR)">
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.lastPay}
+                  onChange={(e) =>
+                    setForm({ ...form, lastPay: e.target.value })
+                  }
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Immediate family">
+                  <Input
+                    value={form.immediateFamily}
+                    onChange={(e) =>
+                      setForm({ ...form, immediateFamily: e.target.value })
+                    }
+                    placeholder="e.g. Spouse, 2 children"
+                  />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Benefits">
+                  <Input
+                    value={form.benefits}
+                    onChange={(e) =>
+                      setForm({ ...form, benefits: e.target.value })
+                    }
+                    placeholder="e.g. Health insurance, fuel allowance"
+                  />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Notes">
+                  <Input
+                    value={form.notes}
+                    onChange={(e) =>
+                      setForm({ ...form, notes: e.target.value })
+                    }
+                    placeholder="Optional internal note"
+                  />
+                </Field>
+              </div>
+            </div>
+          </Section>
+          </div>
+
+          <div className="space-y-6">
+          <Section title="Personal information">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Position">
+                <Input
+                  value={form.position}
+                  onChange={(e) =>
+                    setForm({ ...form, position: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Department">
+                <Input
+                  list="department-options"
+                  value={form.department}
+                  onChange={(e) =>
+                    setForm({ ...form, department: e.target.value })
+                  }
+                  placeholder="Select or type department"
+                />
+                {departments.length > 0 && (
+                  <datalist id="department-options">
+                    {departments.map((department) => (
+                      <option key={department} value={department} />
+                    ))}
+                  </datalist>
+                )}
+              </Field>
+              <Field label="CNIC">
+                <Input
+                  value={form.cnic}
+                  onChange={(e) => setForm({ ...form, cnic: e.target.value })}
+                  placeholder="XXXXX-XXXXXXX-X"
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="CNIC document">
+                  <SimpleUploadField
+                    fileUrl={form.cnicDocumentUrl}
+                    fileName={form.cnicDocumentName}
+                    onUploaded={(file) =>
+                      setForm((current) => ({
+                        ...current,
+                        cnicDocumentUrl: file.url,
+                        cnicDocumentName: file.name,
+                      }))
+                    }
+                    onClear={() =>
+                      setForm((current) => ({
+                        ...current,
+                        cnicDocumentUrl: "",
+                        cnicDocumentName: "",
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+              <Field label="Last qualification">
+                <Input
+                  value={form.lastQualification}
+                  onChange={(e) =>
+                    setForm({ ...form, lastQualification: e.target.value })
+                  }
+                  placeholder="e.g. BS Computer Science"
+                />
+              </Field>
+              <Field label="Work location" required>
+                <Select
+                  value={form.positionType}
+                  onValueChange={(v) =>
+                    setForm({ ...form, positionType: v as "onsite" | "remote" })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="onsite">Onsite</SelectItem>
+                    <SelectItem value="remote">Remote</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Joining date" required>
+                <DateField
+                  required
+                  value={form.joiningDate}
+                  onChange={(v) => setForm({ ...form, joiningDate: v })}
+                />
+              </Field>
+              <Field label="Probation (months)" required>
+                <Input
+                  required
+                  type="number"
+                  min={0}
+                  value={form.probationMonths}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      probationMonths: Number(e.target.value),
+                    })
+                  }
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Address">
+                  <Input
+                    value={form.address}
+                    onChange={(e) =>
+                      setForm({ ...form, address: e.target.value })
+                    }
+                  />
+                </Field>
+              </div>
+            </div>
+          </Section>
+
           <Section title="Compensation">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Basic salary (PKR)" required>
@@ -597,11 +859,8 @@ function NewEmployeeSheet({
                 />
               </Field>
             </div>
-          </Section>
-
-          <Section title="Leave quotas (days / year)">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Casual" required>
+            <div className="grid items-start gap-3 md:grid-cols-3">
+              <Field label="Casual leave" required>
                 <Input
                   required
                   type="number"
@@ -615,7 +874,7 @@ function NewEmployeeSheet({
                   }
                 />
               </Field>
-              <Field label="Sick" required>
+              <Field label="Sick leave" required>
                 <Input
                   required
                   type="number"
@@ -629,7 +888,7 @@ function NewEmployeeSheet({
                   }
                 />
               </Field>
-              <Field label="Annual" required>
+              <Field label="Annual leave" required>
                 <Input
                   required
                   type="number"
@@ -645,43 +904,8 @@ function NewEmployeeSheet({
               </Field>
             </div>
           </Section>
-
-          <Section title="Background">
-            <div className="grid gap-3">
-              <Field label="Education">
-                <Input
-                  value={form.education}
-                  onChange={(e) =>
-                    setForm({ ...form, education: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Address">
-                <Input
-                  value={form.address}
-                  onChange={(e) =>
-                    setForm({ ...form, address: e.target.value })
-                  }
-                />
-              </Field>
-            </div>
-          </Section>
-
-          <Section title="Account">
-            <Field label="Temporary password" required>
-              <Input
-                required
-                value={form.password}
-                onChange={(e) =>
-                  setForm({ ...form, password: e.target.value })
-                }
-                minLength={6}
-              />
-            </Field>
-            <p className="text-xs text-muted-foreground">
-              They'll be asked to change this on first sign-in.
-            </p>
-          </Section>
+          </div>
+          </div>
 
           <SheetFooter className="gap-2">
             <Button
@@ -881,7 +1105,7 @@ function BulkUploadSheet({
             errors: res.errors,
           });
           if (res.created > 0) {
-            toast.success(`Imported ${res.created} member(s)`);
+            toast.success(`Imported ${res.created} employee(s)`);
             qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
             qc.invalidateQueries({ queryKey: getGetAdminDashboardQueryKey() });
           }
@@ -981,7 +1205,7 @@ function BulkUploadSheet({
             <div className="rounded-lg border border-border bg-card p-3 text-sm">
               <p className="font-semibold">Upload finished</p>
               <p className="text-emerald-700">
-                {result.created} member(s) created
+                {result.created} employee(s) created
               </p>
               {result.errors.length > 0 && (
                 <div className="mt-2">
@@ -1030,8 +1254,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {title}
       </p>
       <div className="space-y-3">{children}</div>
@@ -1056,5 +1280,85 @@ function Field({
       </Label>
       {children}
     </div>
+  );
+}
+
+function SimpleUploadField({
+  fileUrl,
+  fileName,
+  onUploaded,
+  onClear,
+}: {
+  fileUrl: string;
+  fileName: string;
+  onUploaded: (file: { url: string; name: string }) => void;
+  onClear: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  const onPick = async (file: File) => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Upload failed");
+      const result = await response.json();
+      onUploaded(result);
+      toast.success("Document uploaded");
+    } catch {
+      toast.error("Could not upload document");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return fileUrl ? (
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
+      <a
+        href={fileUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="truncate font-medium text-primary hover:underline"
+      >
+        {fileName || "Document"}
+      </a>
+      <div className="flex items-center gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs hover:bg-muted">
+          {uploading ? "Uploading..." : "Replace"}
+          <input
+            type="file"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void onPick(file);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <Button type="button" variant="ghost" size="icon" onClick={onClear}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  ) : (
+    <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-3 py-3 text-xs text-muted-foreground hover:text-foreground">
+      {uploading ? "Uploading..." : "Click to upload PDF / image"}
+      <input
+        type="file"
+        className="hidden"
+        disabled={uploading}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void onPick(file);
+          e.target.value = "";
+        }}
+      />
+    </label>
   );
 }

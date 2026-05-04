@@ -20,11 +20,18 @@ import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RichTextView } from "@/components/RichTextEditor";
 import { FilePreview } from "@/components/FilePreview";
-import { formatHMRange12, formatDate } from "@/lib/utils";
+import { formatHMRange12, formatDateCalendar } from "@/lib/utils";
+import {
+  filterHolidays,
+  getHighlightedHoliday,
+  getMonthLabel,
+  sortHolidays,
+  type HolidayFilter,
+} from "@/lib/holidays";
 
 const WEEK_DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type Country = "us" | "pk" | "other";
+type Country = "us" | "pk";
 
 function parseTime(t: string): number {
   const [h, m] = t.split(":").map((n) => Number(n));
@@ -61,7 +68,7 @@ export function MySettingsPage() {
   const { data, isLoading } = useGetSettings({
     query: { queryKey: getGetSettingsQueryKey() },
   });
-  const [holidayFilter, setHolidayFilter] = useState<"us" | "pk">("us");
+  const [holidayFilter, setHolidayFilter] = useState<HolidayFilter>("all");
 
   // Use employee's own office hours if available, else fall back to defaults.
   const startTime =
@@ -92,7 +99,8 @@ export function MySettingsPage() {
 
   const holidays = useMemo(() => {
     if (!data) return [] as { date: string; name: string; country: "us" | "pk" }[];
-    return data.publicHolidays.map((h) => {
+    return sortHolidays(
+      data.publicHolidays.map((h) => {
       const raw = (h.country as Country) ?? "other";
       let country: "us" | "pk";
       if (raw === "us" || raw === "pk") {
@@ -109,11 +117,13 @@ export function MySettingsPage() {
         name: h.name,
         country,
       };
-    });
+        }),
+    );
   }, [data]);
 
   const counts = useMemo(
     () => ({
+      all: holidays.length,
       us: holidays.filter((h) => h.country === "us").length,
       pk: holidays.filter((h) => h.country === "pk").length,
     }),
@@ -121,23 +131,17 @@ export function MySettingsPage() {
   );
 
   const filteredHolidays = useMemo(
-    () => holidays.filter((h) => h.country === holidayFilter),
+    () => filterHolidays(holidays, holidayFilter),
     [holidays, holidayFilter],
   );
 
-  const upcomingHolidays = useMemo(
-    () =>
-      [...filteredHolidays]
-        .filter(
-          (h) => new Date(h.date) >= new Date(new Date().toDateString()),
-        )
-        .sort((a, b) => a.date.localeCompare(b.date)),
+  const allHolidays = useMemo(
+    () => sortHolidays(filteredHolidays),
     [filteredHolidays],
   );
-
-  const allHolidays = useMemo(
-    () => [...filteredHolidays].sort((a, b) => a.date.localeCompare(b.date)),
-    [filteredHolidays],
+  const highlightedHoliday = useMemo(
+    () => getHighlightedHoliday(allHolidays),
+    [allHolidays],
   );
 
   if (isLoading || !data) {
@@ -158,7 +162,7 @@ export function MySettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Company Settings"
+        title="Settings"
         description="Policies and company-wide rules set by your HR team."
       />
 
@@ -248,6 +252,11 @@ export function MySettingsPage() {
         <div className="space-y-3">
           <div className="inline-flex rounded-md border border-border bg-muted p-0.5 text-xs">
             <FilterTab
+              active={holidayFilter === "all"}
+              onClick={() => setHolidayFilter("all")}
+              label={`All (${counts.all})`}
+            />
+            <FilterTab
               active={holidayFilter === "us"}
               onClick={() => setHolidayFilter("us")}
               label={`US (${counts.us})`}
@@ -264,22 +273,7 @@ export function MySettingsPage() {
               No holidays in this view.
             </p>
           ) : (
-            <div className="space-y-4">
-              {upcomingHolidays.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Upcoming
-                  </p>
-                  <HolidayList items={upcomingHolidays} />
-                </div>
-              )}
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  All holidays
-                </p>
-                <HolidayList items={allHolidays} />
-              </div>
-            </div>
+            <HolidayList items={allHolidays} highlighted={highlightedHoliday} />
           )}
         </div>
       </Section>
@@ -289,26 +283,62 @@ export function MySettingsPage() {
 
 function HolidayList({
   items,
+  highlighted,
 }: {
   items: { date: string; name: string; country: Country }[];
+  highlighted?: { date: string; name: string; country: Country };
 }) {
+  const grouped = items.reduce<Record<string, typeof items>>((acc, item) => {
+    const key = getMonthLabel(item.date);
+    acc[key] = acc[key] ? [...acc[key]!, item] : [item];
+    return acc;
+  }, {});
+
   return (
-    <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-      {items.map((h) => (
-        <li
-          key={`${h.date}-${h.name}`}
-          className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
-        >
-          <div className="flex items-center gap-3">
-            <CountryBadge country={h.country} />
-            <span className="font-medium">{h.name}</span>
+    <div className="space-y-4">
+      {highlighted && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            Highlighted
+          </p>
+          <div className="mt-2 flex items-start gap-3 text-sm">
+            <div className="flex items-center gap-3">
+              <CountryBadge country={highlighted.country} />
+              <span className="font-medium">
+                {formatDateCalendar(highlighted.date)} - {highlighted.name}
+              </span>
+            </div>
           </div>
-          <span className="text-xs text-muted-foreground">
-            {formatDate(h.date)}
-          </span>
-        </li>
+        </div>
+      )}
+
+      {Object.entries(grouped).map(([month, monthItems]) => (
+        <div key={month} className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border bg-muted/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {month}
+          </div>
+          <ul className="divide-y divide-border">
+            {monthItems.map((h) => (
+              <li
+                key={`${h.date}-${h.name}`}
+                className={`flex items-start justify-between gap-3 px-4 py-3 text-sm ${
+                  highlighted?.date === h.date && highlighted?.name === h.name
+                    ? "bg-emerald-50/60"
+                    : ""
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <CountryBadge country={h.country} />
+                  <span className="font-medium">
+                    {formatDateCalendar(h.date)} - {h.name}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }
 

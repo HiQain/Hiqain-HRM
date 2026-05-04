@@ -28,9 +28,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Calendar,
-  Mail,
-  Phone,
-  MapPin,
   GraduationCap,
   Briefcase,
   ShieldCheck,
@@ -81,6 +78,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -252,7 +250,6 @@ function ProfileTab({ employee }: { employee: any }) {
     sickLeaveQuota: employee.sickLeaveQuota ?? 10,
     annualLeaveQuota: employee.annualLeaveQuota ?? 14,
     dateOfBirth: employee.dateOfBirth ?? "",
-    education: employee.education ?? "",
     address: employee.address ?? "",
     employeeCode: employee.employeeCode ?? "",
     leftDate: employee.leftDate ?? "",
@@ -264,6 +261,8 @@ function ProfileTab({ employee }: { employee: any }) {
     benefits: employee.benefits ?? "",
     notes: employee.notes ?? "",
     immediateFamily: employee.immediateFamily ?? "",
+    cnicDocumentUrl: employee.cnicDocumentUrl ?? "",
+    cnicDocumentName: employee.cnicDocumentName ?? "",
   });
 
   const onSubmit = (e: FormEvent) => {
@@ -290,7 +289,6 @@ function ProfileTab({ employee }: { employee: any }) {
           dateOfBirth: form.dateOfBirth
             ? (form.dateOfBirth as unknown as string)
             : undefined,
-          education: form.education || undefined,
           address: form.address || undefined,
           employeeCode: form.employeeCode || undefined,
           leftDate: form.leftDate ? (form.leftDate as unknown as string) : undefined,
@@ -302,6 +300,8 @@ function ProfileTab({ employee }: { employee: any }) {
           benefits: form.benefits || undefined,
           notes: form.notes || undefined,
           immediateFamily: form.immediateFamily || undefined,
+          cnicDocumentUrl: form.cnicDocumentUrl || undefined,
+          cnicDocumentName: form.cnicDocumentName || undefined,
         },
       },
       {
@@ -318,361 +318,366 @@ function ProfileTab({ employee }: { employee: any }) {
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-3">
-      <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contact</p>
-          <ul className="mt-3 space-y-3 text-sm">
-            <li className="flex items-center gap-3">
-              <Mail className="h-4 w-4 text-muted-foreground" /> {employee.email}
-            </li>
-            <li className="flex items-center gap-3">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              {employee.phone ?? "—"}
-            </li>
-            <li className="flex items-start gap-3">
-              <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-              <span>{employee.address ?? "—"}</span>
-            </li>
-          </ul>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Additional Info</p>
-          <ul className="mt-3 space-y-2 text-sm">
-            {employee.employeeCode && (
-              <li className="flex justify-between"><span className="text-muted-foreground">Emp Code</span><span className="font-medium">{employee.employeeCode}</span></li>
-            )}
-            {employee.cnic && (
-              <li className="flex justify-between"><span className="text-muted-foreground">CNIC</span><span className="font-medium">{employee.cnic}</span></li>
-            )}
-            {employee.emergencyContact && (
-              <li className="flex justify-between"><span className="text-muted-foreground">Emergency</span><span className="font-medium">{employee.emergencyContact}</span></li>
-            )}
-            {employee.lastQualification && (
-              <li className="flex justify-between"><span className="text-muted-foreground">Qualification</span><span className="font-medium">{employee.lastQualification}</span></li>
-            )}
-            {employee.previousCompany && (
-              <li className="flex justify-between"><span className="text-muted-foreground">Prev. Company</span><span className="font-medium">{employee.previousCompany}</span></li>
-            )}
-            {employee.leftDate && (
-              <li className="flex justify-between"><span className="text-muted-foreground">Left on</span><span className="font-medium">{employee.leftDate}</span></li>
-            )}
-          </ul>
-        </div>
-        {employee.notes && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
-            <p className="mt-1 text-sm text-muted-foreground">{employee.notes}</p>
-          </div>
-        )}
-      </div>
-
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm lg:col-span-2"
+        className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-sm"
       >
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Editable details
         </p>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-4">
           <AvatarUploader
             employeeId={employee.id}
             currentName={employee.name}
             currentUrl={employee.avatarUrl ?? null}
           />
-          <ContractUploader
-            employeeId={employee.id}
-            currentUrl={employee.employmentContractUrl ?? null}
-            currentName={employee.employmentContractName ?? null}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Provident Fund (% of basic, optional)</Label>
-          <Input
-            type="number"
-            min={0}
-            step="0.1"
-            defaultValue={employee.providentFundPercent ?? ""}
-            placeholder="e.g. 8.33"
-            onBlur={(e) => {
-              const v = e.target.value === "" ? null : Number(e.target.value);
-              update.mutate(
-                { id: employee.id, data: { providentFundPercent: v } },
-                {
-                  onSuccess: () => {
-                    toast.success("PF % saved");
-                    qc.invalidateQueries({
-                      queryKey: getGetEmployeeQueryKey(employee.id),
-                    });
-                  },
-                },
-              );
-            }}
-          />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Full name"
-          />
-          <Input
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            placeholder="+923XXXXXXXXX"
-          />
-          <Input
-            value={form.position}
-            onChange={(e) => setForm({ ...form, position: e.target.value })}
-            placeholder="Position"
-          />
-          <Input
-            value={form.department}
-            onChange={(e) => setForm({ ...form, department: e.target.value })}
-            placeholder="Department"
-          />
-          <div className="space-y-1.5">
-            <Label className="text-xs">Work location</Label>
-            <Select
-              value={form.positionType}
-              onValueChange={(v) =>
-                setForm({ ...form, positionType: v as "onsite" | "remote" })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="onsite">Onsite</SelectItem>
-                <SelectItem value="remote">Remote</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Joining date</Label>
-            <DateField
-              value={form.joiningDate}
-              onChange={(v) => setForm({ ...form, joiningDate: v })}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DocumentUploader
+              label="CNIC document"
+              uploadLabel="Uploading CNIC document..."
+              employeeId={employee.id}
+              currentUrl={form.cnicDocumentUrl || null}
+              currentName={form.cnicDocumentName || null}
+              payloadKeys={{
+                url: "cnicDocumentUrl",
+                name: "cnicDocumentName",
+              }}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Date of birth</Label>
-            <DateField
-              value={form.dateOfBirth}
-              onChange={(v) => setForm({ ...form, dateOfBirth: v })}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Probation (months)</Label>
-            <Input
-              type="number"
-              min={0}
-              value={form.probationMonths}
-              onChange={(e) =>
-                setForm({ ...form, probationMonths: Number(e.target.value) })
-              }
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Grace period (min)</Label>
-            <Input
-              type="number"
-              min={0}
-              value={form.gracePeriodMinutes}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  gracePeriodMinutes: Number(e.target.value),
-                })
-              }
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Office start</Label>
-            <Input
-              type="time"
-              value={form.officeStartTime}
-              onChange={(e) =>
-                setForm({ ...form, officeStartTime: e.target.value })
-              }
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Office end</Label>
-            <Input
-              type="time"
-              value={form.officeEndTime}
-              onChange={(e) =>
-                setForm({ ...form, officeEndTime: e.target.value })
-              }
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Basic salary (PKR)</Label>
-            <Input
-              type="number"
-              min={0}
-              value={form.basicSalary}
-              onChange={(e) =>
-                setForm({ ...form, basicSalary: Number(e.target.value) })
-              }
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Allowances (PKR)</Label>
-            <Input
-              type="number"
-              min={0}
-              value={form.allowances}
-              onChange={(e) =>
-                setForm({ ...form, allowances: Number(e.target.value) })
-              }
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Casual leave / year</Label>
-            <Input
-              type="number"
-              min={0}
-              value={form.casualLeaveQuota}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  casualLeaveQuota: Number(e.target.value),
-                })
-              }
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Sick leave / year</Label>
-            <Input
-              type="number"
-              min={0}
-              value={form.sickLeaveQuota}
-              onChange={(e) =>
-                setForm({ ...form, sickLeaveQuota: Number(e.target.value) })
-              }
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Annual leave / year</Label>
-            <Input
-              type="number"
-              min={0}
-              value={form.annualLeaveQuota}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  annualLeaveQuota: Number(e.target.value),
-                })
-              }
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Employee Code</Label>
-            <Input
-              value={form.employeeCode}
-              onChange={(e) => setForm({ ...form, employeeCode: e.target.value })}
-              placeholder="e.g. EMP-001"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Left Date</Label>
-            <DateField
-              value={form.leftDate}
-              onChange={(v) => setForm({ ...form, leftDate: v })}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">CNIC</Label>
-            <Input
-              value={form.cnic}
-              onChange={(e) => setForm({ ...form, cnic: e.target.value })}
-              placeholder="XXXXX-XXXXXXX-X"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Emergency Contact</Label>
-            <Input
-              value={form.emergencyContact}
-              onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })}
-              placeholder="+923XXXXXXXXX"
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs">Last Qualification</Label>
-            <Input
-              value={form.lastQualification}
-              onChange={(e) => setForm({ ...form, lastQualification: e.target.value })}
-              placeholder="e.g. BS Computer Science"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Previous Company</Label>
-            <Input
-              value={form.previousCompany}
-              onChange={(e) => setForm({ ...form, previousCompany: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Last Pay (PKR)</Label>
-            <Input
-              type="number"
-              min={0}
-              value={form.lastPay}
-              onChange={(e) => setForm({ ...form, lastPay: e.target.value })}
-              placeholder="e.g. 80000"
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs">Immediate Family</Label>
-            <Input
-              value={form.immediateFamily}
-              onChange={(e) => setForm({ ...form, immediateFamily: e.target.value })}
-              placeholder="e.g. Spouse, 2 children"
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs">Benefits</Label>
-            <Input
-              value={form.benefits}
-              onChange={(e) => setForm({ ...form, benefits: e.target.value })}
-              placeholder="e.g. Health insurance, fuel allowance"
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs">Education</Label>
-            <Input
-              value={form.education}
-              onChange={(e) =>
-                setForm({ ...form, education: e.target.value })
-              }
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs">Address</Label>
-            <Textarea
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              rows={2}
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs">Notes</Label>
-            <Textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              rows={2}
-              placeholder="Internal notes about this employee..."
+            <ContractUploader
+              employeeId={employee.id}
+              currentUrl={employee.employmentContractUrl ?? null}
+              currentName={employee.employmentContractName ?? null}
             />
           </div>
         </div>
+        <SectionBlock title="Account details">
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Full name">
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Phone">
+              <Input
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="+923XXXXXXXXX"
+              />
+            </FormField>
+            <FormField label="Position">
+              <Input
+                value={form.position}
+                onChange={(e) => setForm({ ...form, position: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Department">
+              <Input
+                value={form.department}
+                onChange={(e) => setForm({ ...form, department: e.target.value })}
+              />
+            </FormField>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock title="Work details">
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Work location">
+              <Select
+                value={form.positionType}
+                onValueChange={(v) =>
+                  setForm({ ...form, positionType: v as "onsite" | "remote" })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="onsite">Onsite</SelectItem>
+                  <SelectItem value="remote">Remote</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Joining date">
+              <DateField
+                value={form.joiningDate}
+                onChange={(v) => setForm({ ...form, joiningDate: v })}
+              />
+            </FormField>
+            <FormField label="Date of birth">
+              <DateField
+                value={form.dateOfBirth}
+                onChange={(v) => setForm({ ...form, dateOfBirth: v })}
+              />
+            </FormField>
+            <FormField label="Probation (months)">
+              <Input
+                type="number"
+                min={0}
+                value={form.probationMonths}
+                onChange={(e) =>
+                  setForm({ ...form, probationMonths: Number(e.target.value) })
+                }
+              />
+            </FormField>
+            <FormField label="Employee code">
+              <Input
+                value={form.employeeCode}
+                onChange={(e) =>
+                  setForm({ ...form, employeeCode: e.target.value })
+                }
+                placeholder="e.g. EMP-001"
+              />
+            </FormField>
+            <FormField label="Left date">
+              <DateField
+                value={form.leftDate}
+                onChange={(v) => setForm({ ...form, leftDate: v })}
+              />
+            </FormField>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock title="Schedule">
+          <div className="grid gap-3 md:grid-cols-3">
+            <FormField label="Grace period (min)">
+              <Input
+                type="number"
+                min={0}
+                value={form.gracePeriodMinutes}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    gracePeriodMinutes: Number(e.target.value),
+                  })
+                }
+              />
+            </FormField>
+            <FormField label="Office start">
+              <Input
+                type="time"
+                value={form.officeStartTime}
+                onChange={(e) =>
+                  setForm({ ...form, officeStartTime: e.target.value })
+                }
+              />
+            </FormField>
+            <FormField label="Office end">
+              <Input
+                type="time"
+                value={form.officeEndTime}
+                onChange={(e) =>
+                  setForm({ ...form, officeEndTime: e.target.value })
+                }
+              />
+            </FormField>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock title="Compensation">
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Basic salary (PKR)">
+              <Input
+                type="number"
+                min={0}
+                value={form.basicSalary}
+                onChange={(e) =>
+                  setForm({ ...form, basicSalary: Number(e.target.value) })
+                }
+              />
+            </FormField>
+            <FormField label="Allowances (PKR)">
+              <Input
+                type="number"
+                min={0}
+                value={form.allowances}
+                onChange={(e) =>
+                  setForm({ ...form, allowances: Number(e.target.value) })
+                }
+              />
+            </FormField>
+          </div>
+          <div className="mt-3 grid items-start gap-3 md:grid-cols-3">
+            <FormField label="Casual leave">
+              <Input
+                type="number"
+                min={0}
+                value={form.casualLeaveQuota}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    casualLeaveQuota: Number(e.target.value),
+                  })
+                }
+              />
+            </FormField>
+            <FormField label="Sick leave">
+              <Input
+                type="number"
+                min={0}
+                value={form.sickLeaveQuota}
+                onChange={(e) =>
+                  setForm({ ...form, sickLeaveQuota: Number(e.target.value) })
+                }
+              />
+            </FormField>
+            <FormField label="Annual leave">
+              <Input
+                type="number"
+                min={0}
+                value={form.annualLeaveQuota}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    annualLeaveQuota: Number(e.target.value),
+                  })
+                }
+              />
+            </FormField>
+          </div>
+          <div className="mt-3">
+            <FormField label="Provident Fund (% of basic, optional)">
+              <Input
+                type="number"
+                min={0}
+                step="0.1"
+                defaultValue={employee.providentFundPercent ?? ""}
+                placeholder="e.g. 8.33"
+                onBlur={(e) => {
+                  const v = e.target.value === "" ? null : Number(e.target.value);
+                  update.mutate(
+                    { id: employee.id, data: { providentFundPercent: v } },
+                    {
+                      onSuccess: () => {
+                        toast.success("PF % saved");
+                        qc.invalidateQueries({
+                          queryKey: getGetEmployeeQueryKey(employee.id),
+                        });
+                      },
+                    },
+                  );
+                }}
+              />
+            </FormField>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock title="Background">
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="CNIC">
+              <Input
+                value={form.cnic}
+                onChange={(e) => setForm({ ...form, cnic: e.target.value })}
+                placeholder="XXXXX-XXXXXXX-X"
+              />
+            </FormField>
+            <FormField label="Emergency contact">
+              <Input
+                value={form.emergencyContact}
+                onChange={(e) =>
+                  setForm({ ...form, emergencyContact: e.target.value })
+                }
+                placeholder="+923XXXXXXXXX"
+              />
+            </FormField>
+            <FormField label="Last qualification" className="md:col-span-2">
+              <Input
+                value={form.lastQualification}
+                onChange={(e) =>
+                  setForm({ ...form, lastQualification: e.target.value })
+                }
+                placeholder="e.g. BS Computer Science"
+              />
+            </FormField>
+            <FormField label="Previous company">
+              <Input
+                value={form.previousCompany}
+                onChange={(e) =>
+                  setForm({ ...form, previousCompany: e.target.value })
+                }
+              />
+            </FormField>
+            <FormField label="Last pay (PKR)">
+              <Input
+                type="number"
+                min={0}
+                value={form.lastPay}
+                onChange={(e) => setForm({ ...form, lastPay: e.target.value })}
+                placeholder="e.g. 80000"
+              />
+            </FormField>
+            <FormField label="Immediate family" className="md:col-span-2">
+              <Input
+                value={form.immediateFamily}
+                onChange={(e) =>
+                  setForm({ ...form, immediateFamily: e.target.value })
+                }
+                placeholder="e.g. Spouse, 2 children"
+              />
+            </FormField>
+            <FormField label="Benefits" className="md:col-span-2">
+              <Input
+                value={form.benefits}
+                onChange={(e) => setForm({ ...form, benefits: e.target.value })}
+                placeholder="e.g. Health insurance, fuel allowance"
+              />
+            </FormField>
+            <FormField label="Address" className="md:col-span-2">
+              <Textarea
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                rows={2}
+              />
+            </FormField>
+            <FormField label="Notes" className="md:col-span-2">
+              <Textarea
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                rows={2}
+                placeholder="Internal notes about this employee..."
+              />
+            </FormField>
+          </div>
+        </SectionBlock>
         <div className="flex justify-end">
           <Button type="submit" disabled={update.isPending}>
             {update.isPending ? "Saving..." : "Save changes"}
           </Button>
         </div>
       </form>
+  );
+}
+
+function SectionBlock({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-muted/20 p-4">
+      <p className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {title}
+      </p>
+      {children}
+    </section>
+  );
+}
+
+function FormField({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <Label className="text-xs">{label}</Label>
+      {children}
     </div>
   );
 }
@@ -1921,14 +1926,20 @@ function AvatarUploader({
   );
 }
 
-function ContractUploader({
+function DocumentUploader({
+  label,
+  uploadLabel,
   employeeId,
   currentUrl,
   currentName,
+  payloadKeys,
 }: {
+  label: string;
+  uploadLabel: string;
   employeeId: number;
   currentUrl: string | null;
   currentName: string | null;
+  payloadKeys: { url: string; name: string };
 }) {
   const qc = useQueryClient();
   const update = useUpdateEmployee();
@@ -1941,23 +1952,20 @@ function ContractUploader({
       update.mutate(
         {
           id: employeeId,
-          data: {
-            employmentContractUrl: url,
-            employmentContractName: name,
-          },
+          data: { [payloadKeys.url]: url, [payloadKeys.name]: name } as any,
         },
         {
           onSuccess: () => {
             qc.invalidateQueries({
               queryKey: getGetEmployeeQueryKey(employeeId),
             });
-            toast.success("Contract uploaded");
+            toast.success(`${label} uploaded`);
           },
           onError: (err) =>
             toast.error(
               err instanceof Error
-                ? `Could not save contract: ${err.message}`
-                : "Could not save contract",
+                ? `Could not save ${label.toLowerCase()}: ${err.message}`
+                : `Could not save ${label.toLowerCase()}`,
             ),
         },
       );
@@ -1972,14 +1980,14 @@ function ContractUploader({
     update.mutate(
       {
         id: employeeId,
-        data: { employmentContractUrl: null, employmentContractName: null },
+        data: { [payloadKeys.url]: null, [payloadKeys.name]: null } as any,
       },
       {
         onSuccess: () => {
           qc.invalidateQueries({
             queryKey: getGetEmployeeQueryKey(employeeId),
           });
-          toast.success("Contract removed");
+          toast.success(`${label} removed`);
         },
       },
     );
@@ -1987,10 +1995,19 @@ function ContractUploader({
 
   return (
     <div className="space-y-2">
-      <Label className="text-xs">Employment contract</Label>
+      <Label className="text-xs">{label}</Label>
       <div className="rounded-md border border-dashed border-border bg-muted/20 p-3">
+        {uploading && (
+          <div className="mb-3 space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{uploadLabel}</span>
+              <span>Please wait</span>
+            </div>
+            <Progress value={72} className="h-2" />
+          </div>
+        )}
         {currentUrl ? (
-          <div className="flex items-center justify-between gap-3">
+          <div className="space-y-3">
             <a
               href={currentUrl}
               target="_blank"
@@ -2000,7 +2017,7 @@ function ContractUploader({
               <FileText className="h-4 w-4 shrink-0" />
               <span className="truncate">{currentName || "Contract"}</span>
             </a>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-muted">
                 {uploading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2023,29 +2040,56 @@ function ContractUploader({
                 type="button"
                 onClick={onClear}
                 className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs text-muted-foreground hover:border-border hover:bg-card hover:text-rose-600"
-                aria-label="Remove contract"
+                aria-label={`Remove ${label}`}
               >
                 <X className="h-3.5 w-3.5" /> Remove
               </button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              PDF or Word, up to 10 MB.
+            </p>
           </div>
         ) : (
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md py-3 text-xs text-muted-foreground hover:text-foreground">
-            <Upload className="h-3.5 w-3.5" />
-            {uploading ? "Uploading..." : "Click to upload PDF / DOC"}
-            <input
-              type="file"
-              className="hidden"
-              disabled={uploading}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void onPick(f);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          <div className="space-y-3">
+            <label className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-muted">
+              {uploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              {uploading ? "Uploading..." : "Upload file"}
+              <input
+                type="file"
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onPick(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <p className="text-xs text-muted-foreground">
+              PDF or Word, up to 10 MB.
+            </p>
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+function ContractUploader(props: {
+  employeeId: number;
+  currentUrl: string | null;
+  currentName: string | null;
+}) {
+  return (
+    <DocumentUploader
+      label="Employment contract"
+      uploadLabel="Uploading employment contract..."
+      payloadKeys={{ url: "employmentContractUrl", name: "employmentContractName" }}
+      {...props}
+    />
   );
 }

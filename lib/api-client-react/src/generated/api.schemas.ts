@@ -95,6 +95,8 @@ export interface Employee {
   immediateFamily?: string | null;
   employmentContractUrl?: string | null;
   employmentContractName?: string | null;
+  cnicDocumentUrl?: string | null;
+  cnicDocumentName?: string | null;
   providentFundPercent?: number | null;
 }
 
@@ -195,6 +197,8 @@ export interface CreateEmployeeRequest {
   benefits?: string | null;
   notes?: string | null;
   immediateFamily?: string | null;
+  cnicDocumentUrl?: string | null;
+  cnicDocumentName?: string | null;
 }
 
 export type UpdateEmployeeRequestPositionType =
@@ -243,6 +247,8 @@ export interface UpdateEmployeeRequest {
   avatarUrl?: string | null;
   employmentContractUrl?: string | null;
   employmentContractName?: string | null;
+  cnicDocumentUrl?: string | null;
+  cnicDocumentName?: string | null;
   providentFundPercent?: number | null;
 }
 
@@ -390,6 +396,33 @@ export interface CreateSalaryComponentRequest {
   label: string;
   kind: CreateSalaryComponentRequestKind;
   valueType: CreateSalaryComponentRequestValueType;
+  value: number;
+  isDeduction?: boolean;
+}
+
+export type UpdateSalaryComponentRequestKind =
+  (typeof UpdateSalaryComponentRequestKind)[keyof typeof UpdateSalaryComponentRequestKind];
+
+export const UpdateSalaryComponentRequestKind = {
+  designation: "designation",
+  commission: "commission",
+  allowance: "allowance",
+  provident_fund: "provident_fund",
+  other: "other",
+} as const;
+
+export type UpdateSalaryComponentRequestValueType =
+  (typeof UpdateSalaryComponentRequestValueType)[keyof typeof UpdateSalaryComponentRequestValueType];
+
+export const UpdateSalaryComponentRequestValueType = {
+  fixed: "fixed",
+  percentage: "percentage",
+} as const;
+
+export interface UpdateSalaryComponentRequest {
+  label: string;
+  kind: UpdateSalaryComponentRequestKind;
+  valueType: UpdateSalaryComponentRequestValueType;
   value: number;
   isDeduction?: boolean;
 }
@@ -881,6 +914,16 @@ export interface GeneratePayslipRequest {
   otherDeductions?: number | null;
 }
 
+export interface PayslipBreakdownLine {
+  label: string;
+  amount: number;
+}
+
+export interface PayslipBreakdown {
+  earnings: PayslipBreakdownLine[];
+  deductions: PayslipBreakdownLine[];
+}
+
 export interface Payslip {
   id: number;
   employeeId: number;
@@ -904,6 +947,7 @@ export interface Payslip {
   loanDeduction: number;
   otherDeductions: number;
   netSalary: number;
+  salaryBreakdown?: PayslipBreakdown;
   generatedAt: string;
 }
 

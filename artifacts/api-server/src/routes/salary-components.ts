@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, salaryComponentsTable } from "@workspace/db";
 import { and, asc, eq } from "drizzle-orm";
-import { CreateSalaryComponentBody } from "@workspace/api-zod";
+import { CreateSalaryComponentBody, UpdateSalaryComponentBody } from "@workspace/api-zod";
 import { getUser, requireAuth } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -59,6 +59,41 @@ router.post(
       })
       .returning();
     res.status(201).json(serialize(inserted[0]!));
+  },
+);
+
+router.patch(
+  "/employees/:id/salary-components/:componentId",
+  requireAuth(["admin", "hr"]),
+  async (req, res) => {
+    const id = Number(req.params.id);
+    const componentId = Number(req.params.componentId);
+    const parsed = UpdateSalaryComponentBody.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid payload" });
+    }
+    const data = parsed.data;
+    const updated = await db
+      .update(salaryComponentsTable)
+      .set({
+        label: data.label,
+        kind: data.kind,
+        valueType: data.valueType,
+        value: String(data.value),
+        isDeduction: data.isDeduction ? 1 : 0,
+      })
+      .where(
+        and(
+          eq(salaryComponentsTable.id, componentId),
+          eq(salaryComponentsTable.employeeId, id),
+        ),
+      )
+      .returning();
+
+    if (!updated.length) {
+      return res.status(404).json({ message: "Salary component not found" });
+    }
+    res.json(serialize(updated[0]!));
   },
 );
 

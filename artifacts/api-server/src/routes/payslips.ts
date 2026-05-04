@@ -13,16 +13,167 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
-import { workingDaysInMonth, ymd } from "../lib/dates";
+import { ymd } from "../lib/dates";
+import {
+  computePakistanMonthlySalaryTax,
+  computePayrollWorkingDaysInMonth,
+  isPayrollOffDay,
+  toHolidaySet,
+} from "../lib/payroll";
 import { getSettings } from "./settings";
 
 const router: IRouter = Router();
+
+type PayslipBreakdownLine = {
+  label: string;
+  amount: number;
+};
+
+function roundAmount(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function resolveComponentValue(
+  component: typeof salaryComponentsTable.$inferSelect,
+  basicSalary: number,
+) {
+  return component.valueType === "percentage"
+    ? (Number(component.value) / 100) * basicSalary
+    : Number(component.value);
+}
+
+function isManualTaxComponent(label: string) {
+  return /\btax\b/i.test(label);
+}
+
+function buildPayslipBreakdown(
+  payslip: typeof payslipsTable.$inferSelect,
+  employee: typeof employeesTable.$inferSelect,
+  components: Array<typeof salaryComponentsTable.$inferSelect>,
+) {
+  const basicSalary = Number(payslip.basicSalary);
+  const defaultAllowances = Number(employee.allowances);
+  const homeRent = roundAmount(defaultAllowances / 2);
+  const utilityBills = roundAmount(defaultAllowances - homeRent);
+  const totalWorkingDays = Number(payslip.totalWorkingDays);
+  const absentDays = Number(payslip.absentDays);
+  const lateAbsenceDays = Number(payslip.lateAbsenceDays);
+  const perDay = totalWorkingDays > 0 ? basicSalary / totalWorkingDays : 0;
+
+  const earnings: PayslipBreakdownLine[] = [
+    { label: "Basic Salary", amount: basicSalary },
+  ];
+  if (homeRent > 0) earnings.push({ label: "Home Rent", amount: homeRent });
+  if (utilityBills > 0) {
+    earnings.push({ label: "Utility Bills", amount: utilityBills });
+  }
+
+  const deductions: PayslipBreakdownLine[] = [];
+  let commissionTotal = 0;
+  let componentDeductionTotal = 0;
+  let providentFundFromComponent = 0;
+
+  for (const component of components) {
+    const amount = roundAmount(resolveComponentValue(component, basicSalary));
+    if (amount <= 0) continue;
+
+    if (component.isDeduction === 1 && component.kind === "provident_fund") {
+      providentFundFromComponent += amount;
+      deductions.push({ label: component.label, amount });
+      continue;
+    }
+
+    if (component.isDeduction === 1) {
+      if (isManualTaxComponent(component.label)) continue;
+      componentDeductionTotal += amount;
+      deductions.push({ label: component.label, amount });
+      continue;
+    }
+
+    if (component.kind === "designation") continue;
+    earnings.push({ label: component.label, amount });
+    if (component.kind === "commission") {
+      commissionTotal += amount;
+    }
+  }
+
+  const additionalBonus = roundAmount(Number(payslip.bonus) - commissionTotal);
+  if (additionalBonus > 0) {
+    earnings.push({ label: "Additional Bonus", amount: additionalBonus });
+  }
+
+  const providentFundFromProfile =
+    providentFundFromComponent <= 0 && employee.providentFundPercent != null
+      ? roundAmount((Number(employee.providentFundPercent) / 100) * basicSalary)
+      : 0;
+  if (providentFundFromProfile > 0) {
+    deductions.push({ label: "Provident Fund", amount: providentFundFromProfile });
+  }
+
+  const recurringCommission = roundAmount(
+    components
+      .filter((component) => component.isDeduction === 0 && component.kind === "commission")
+      .reduce(
+        (sum, component) => sum + resolveComponentValue(component, basicSalary),
+        0,
+      ),
+  );
+  const payrollTax = roundAmount(
+    computePakistanMonthlySalaryTax(
+      basicSalary + Number(payslip.allowances) + recurringCommission,
+      payslip.month,
+      payslip.year,
+    ),
+  );
+  if (payrollTax > 0) {
+    deductions.push({ label: "Payroll Tax", amount: payrollTax });
+  }
+
+  const absenceDeduction = roundAmount(perDay * absentDays);
+  if (absenceDeduction > 0) {
+    deductions.push({ label: "Absence Deduction", amount: absenceDeduction });
+  }
+
+  const latePenaltyDeduction = roundAmount(perDay * lateAbsenceDays);
+  if (latePenaltyDeduction > 0) {
+    deductions.push({ label: "Late Penalty", amount: latePenaltyDeduction });
+  }
+
+  if (Number(payslip.loanDeduction) > 0) {
+    deductions.push({
+      label: "Loan Deduction",
+      amount: roundAmount(Number(payslip.loanDeduction)),
+    });
+  }
+
+  const manualOrResidualDeductions = roundAmount(
+    Number(payslip.otherDeductions) -
+      componentDeductionTotal -
+      providentFundFromComponent -
+      providentFundFromProfile -
+      payrollTax -
+      absenceDeduction -
+      latePenaltyDeduction,
+  );
+  if (manualOrResidualDeductions > 0) {
+    deductions.push({
+      label: "Other Deductions",
+      amount: manualOrResidualDeductions,
+    });
+  }
+
+  return { earnings, deductions };
+}
 
 function serialize(
   p: typeof payslipsTable.$inferSelect,
   name: string,
   email: string,
   position?: string | null,
+  breakdown?: {
+    earnings: PayslipBreakdownLine[];
+    deductions: PayslipBreakdownLine[];
+  },
 ) {
   return {
     id: p.id,
@@ -46,6 +197,7 @@ function serialize(
     loanDeduction: Number(p.loanDeduction),
     otherDeductions: Number(p.otherDeductions),
     netSalary: Number(p.netSalary),
+    salaryBreakdown: breakdown,
     generatedAt: p.generatedAt.toISOString(),
   };
 }
@@ -72,7 +224,8 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
   const endDate = new Date(Date.UTC(year, month, 0));
   const end = ymd(endDate);
-  const totalWorkingDays = workingDaysInMonth(year, month);
+  const holidaySet = toHolidaySet(settings);
+  const totalWorkingDays = computePayrollWorkingDaysInMonth(year, month, settings);
 
   const attRows = await db
     .select()
@@ -89,6 +242,7 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
   let late = 0;
   let onLeave = 0;
   for (const r of attRows) {
+    if (isPayrollOffDay(r.date, settings, holidaySet)) continue;
     // Approved late/half-day requests get marked excused: they don't count
     // as late, and half-day excused gets paid as a full present day.
     if (r.excused) {
@@ -155,34 +309,38 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
   };
 
   const basicSalary = baseDesignation;
-  let allowances = 0;
+  let allowances = Number(emp.allowances);
   let componentBonus = 0;
   let componentDeductions = 0;
-  let hasNonDesignationEarning = false;
-  let hasDeductionComponent = false;
+  let providentFundFromComponent = 0;
+  const isTaxComponent = (label: string) => /\btax\b/i.test(label);
 
   for (const c of components) {
     const v = evalComponent(c);
+    if (c.isDeduction === 1 && c.kind === "provident_fund") {
+      providentFundFromComponent += v;
+      continue;
+    }
     if (c.isDeduction === 1) {
+      if (isTaxComponent(c.label)) continue;
       componentDeductions += v;
-      hasDeductionComponent = true;
       continue;
     }
     if (c.kind === "designation") continue; // already in base
     if (c.kind === "commission") componentBonus += v;
     else allowances += v; // allowance / other
-    hasNonDesignationEarning = true;
-  }
-
-  if (!hasNonDesignationEarning && designationFixed === 0) {
-    allowances = Number(emp.allowances);
   }
 
   // PF from employee.providentFundPercent (if no PF component already set)
   const pfFromProfile =
-    !hasDeductionComponent && emp.providentFundPercent != null
+    providentFundFromComponent <= 0 && emp.providentFundPercent != null
       ? (Number(emp.providentFundPercent) / 100) * baseDesignation
       : 0;
+  const taxDeduction = computePakistanMonthlySalaryTax(
+    basicSalary + allowances + componentBonus,
+    month,
+    year,
+  );
 
   const bonus = eventBonus + componentBonus + Number(bodyBonus ?? 0);
 
@@ -267,7 +425,9 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
       (absenceDeduction +
         lateDeduction +
         componentDeductions +
+        providentFundFromComponent +
         pfFromProfile +
+        taxDeduction +
         Number(bodyOther ?? 0)) *
         100,
     ) / 100;
@@ -356,7 +516,13 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
     }
   }
 
-  const out = serialize(payslip, emp.name, email, emp.position);
+  const out = serialize(
+    payslip,
+    emp.name,
+    email,
+    emp.position,
+    buildPayslipBreakdown(payslip, emp, components),
+  );
   res.status(201).json(out);
 });
 
@@ -370,6 +536,10 @@ router.get("/payslips/me", requireAuth(["employee"]), async (req, res) => {
     .where(eq(employeesTable.id, user.employeeId))
     .limit(1);
   const emp = empRows[0]!;
+  const components = await db
+    .select()
+    .from(salaryComponentsTable)
+    .where(eq(salaryComponentsTable.employeeId, user.employeeId));
   const rows = await db
     .select()
     .from(payslipsTable)
@@ -377,7 +547,13 @@ router.get("/payslips/me", requireAuth(["employee"]), async (req, res) => {
     .orderBy(desc(payslipsTable.year), desc(payslipsTable.month));
   res.json(
     rows.map((p) =>
-      serialize(p, emp.employee.name, emp.email, emp.employee.position),
+      serialize(
+        p,
+        emp.employee.name,
+        emp.email,
+        emp.employee.position,
+        buildPayslipBreakdown(p, emp.employee, components),
+      ),
     ),
   );
 });
@@ -396,6 +572,10 @@ router.get(
     if (!empRows.length)
       return res.status(404).json({ message: "Employee not found" });
     const emp = empRows[0]!;
+    const components = await db
+      .select()
+      .from(salaryComponentsTable)
+      .where(eq(salaryComponentsTable.employeeId, id));
     const rows = await db
       .select()
       .from(payslipsTable)
@@ -403,7 +583,13 @@ router.get(
       .orderBy(desc(payslipsTable.year), desc(payslipsTable.month));
     res.json(
       rows.map((p) =>
-        serialize(p, emp.employee.name, emp.email, emp.employee.position),
+        serialize(
+          p,
+          emp.employee.name,
+          emp.email,
+          emp.employee.position,
+          buildPayslipBreakdown(p, emp.employee, components),
+        ),
       ),
     );
   },
@@ -429,7 +615,19 @@ router.get("/payslips/:id", requireAuth(), async (req, res) => {
   if (user.role === "employee" && user.employeeId !== row.p.employeeId) {
     return res.status(403).json({ message: "Forbidden" });
   }
-  res.json(serialize(row.p, row.employee.name, row.email, row.employee.position));
+  const components = await db
+    .select()
+    .from(salaryComponentsTable)
+    .where(eq(salaryComponentsTable.employeeId, row.p.employeeId));
+  res.json(
+    serialize(
+      row.p,
+      row.employee.name,
+      row.email,
+      row.employee.position,
+      buildPayslipBreakdown(row.p, row.employee, components),
+    ),
+  );
 });
 
 export default router;

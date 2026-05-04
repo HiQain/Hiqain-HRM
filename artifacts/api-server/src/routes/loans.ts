@@ -119,7 +119,7 @@ export async function computeLoanEligibility(employeeId: number) {
       hasActiveLoan: false,
     };
   }
-  const joinDate = new Date(emp.joinDate + "T00:00:00Z");
+  const joinDate = new Date(emp.joiningDate + "T00:00:00Z");
   const now = new Date();
   const tenureMonths =
     (now.getUTCFullYear() - joinDate.getUTCFullYear()) * 12 +

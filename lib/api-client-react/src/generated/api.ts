@@ -71,6 +71,7 @@ import type {
   UpdateGeneralRequest,
   UpdateLeaveRequest,
   UpdateRemoteWorkRequest,
+  UpdateSalaryComponentRequest,
   UpdateSalaryEventRequest,
   UpdateSettingsRequest,
   UploadAttachmentBody,
@@ -5365,6 +5366,121 @@ export const useCreateSalaryComponent = <
   TContext
 > => {
   return useMutation(getCreateSalaryComponentMutationOptions(options));
+};
+
+/**
+ * @summary Update a salary component (admin only)
+ */
+export const getUpdateSalaryComponentUrl = (
+  id: number,
+  componentId: number,
+) => {
+  return `/api/employees/${id}/salary-components/${componentId}`;
+};
+
+export const updateSalaryComponent = async (
+  id: number,
+  componentId: number,
+  updateSalaryComponentRequest: UpdateSalaryComponentRequest,
+  options?: RequestInit,
+): Promise<SalaryComponent> => {
+  return customFetch<SalaryComponent>(
+    getUpdateSalaryComponentUrl(id, componentId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateSalaryComponentRequest),
+    },
+  );
+};
+
+export const getUpdateSalaryComponentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSalaryComponent>>,
+    TError,
+    {
+      id: number;
+      componentId: number;
+      data: BodyType<UpdateSalaryComponentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSalaryComponent>>,
+  TError,
+  {
+    id: number;
+    componentId: number;
+    data: BodyType<UpdateSalaryComponentRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateSalaryComponent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSalaryComponent>>,
+    {
+      id: number;
+      componentId: number;
+      data: BodyType<UpdateSalaryComponentRequest>;
+    }
+  > = (props) => {
+    const { id, componentId, data } = props ?? {};
+
+    return updateSalaryComponent(id, componentId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSalaryComponentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSalaryComponent>>
+>;
+export type UpdateSalaryComponentMutationBody =
+  BodyType<UpdateSalaryComponentRequest>;
+export type UpdateSalaryComponentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a salary component (admin only)
+ */
+export const useUpdateSalaryComponent = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSalaryComponent>>,
+    TError,
+    {
+      id: number;
+      componentId: number;
+      data: BodyType<UpdateSalaryComponentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSalaryComponent>>,
+  TError,
+  {
+    id: number;
+    componentId: number;
+    data: BodyType<UpdateSalaryComponentRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateSalaryComponentMutationOptions(options));
 };
 
 /**

@@ -11,6 +11,67 @@ import { UpdateSettingsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+const DEFAULT_PUBLIC_HOLIDAYS_2026: Array<{
+  date: string;
+  name: string;
+  country: "us" | "pk";
+}> = [
+  { date: "2026-01-01", name: "New Year's Day", country: "us" },
+  { date: "2026-05-25", name: "Memorial Day", country: "us" },
+  { date: "2026-07-03", name: "Independence Day", country: "us" },
+  { date: "2026-09-07", name: "Labor Day", country: "us" },
+  { date: "2026-11-26", name: "Thanksgiving Day", country: "us" },
+  { date: "2026-12-24", name: "Christmas Day", country: "us" },
+  { date: "2026-12-25", name: "Christmas Day", country: "us" },
+  { date: "2026-12-31", name: "New Year's Eve", country: "us" },
+  {
+    date: "2026-03-21",
+    name: "Eid-ul-Fitr - Day 1 (subject to moon sighting)",
+    country: "pk",
+  },
+  {
+    date: "2026-03-22",
+    name: "Eid-ul-Fitr - Day 2 (subject to moon sighting)",
+    country: "pk",
+  },
+  {
+    date: "2026-03-23",
+    name: "Eid-ul-Fitr - Day 3 (subject to moon sighting)",
+    country: "pk",
+  },
+  {
+    date: "2026-05-27",
+    name: "Eid-ul-Adha - Day 1 (subject to moon sighting)",
+    country: "pk",
+  },
+  {
+    date: "2026-05-28",
+    name: "Eid-ul-Adha - Day 2 (subject to moon sighting)",
+    country: "pk",
+  },
+  {
+    date: "2026-05-29",
+    name: "Eid-ul-Adha - Day 3 (subject to moon sighting)",
+    country: "pk",
+  },
+  {
+    date: "2026-06-24",
+    name: "Muharram - 9th Muharram (subject to moon sighting)",
+    country: "pk",
+  },
+  {
+    date: "2026-06-25",
+    name: "Muharram - 10th Muharram (subject to moon sighting)",
+    country: "pk",
+  },
+];
+
+function toHolidayCountry(value: unknown): "us" | "pk" | "other" | undefined {
+  return value === "us" || value === "pk" || value === "other"
+    ? value
+    : undefined;
+}
+
 function parseTime(t: string): number {
   const [h, m] = t.split(":").map((n) => Number(n));
   return (h || 0) * 60 + (m || 0);
@@ -50,9 +111,16 @@ function serialize(s: AppSettings) {
   const workingDaysPerWeek = 7 - (s.weeklyOffDays?.length ?? 0);
   const weeklyHours = Math.round(dailyHours * workingDaysPerWeek);
   const today = new Date();
-  const holidaySet = new Set(
-    (s.publicHolidays ?? []).map((h) => h.date),
-  );
+  const savedPublicHolidays = (s.publicHolidays ?? []).map((h) => ({
+      date: h.date,
+      name: h.name,
+      country: toHolidayCountry((h as { country?: unknown }).country),
+    }));
+  const effectivePublicHolidays =
+    savedPublicHolidays.length > 0
+      ? savedPublicHolidays
+      : DEFAULT_PUBLIC_HOLIDAYS_2026;
+  const holidaySet = new Set(effectivePublicHolidays.map((h) => h.date));
   const monthlyWorkingDays = computeWorkingDaysInMonth(
     today.getFullYear(),
     today.getMonth(),
@@ -71,10 +139,10 @@ function serialize(s: AppSettings) {
     defaultOfficeStartTime: s.defaultOfficeStartTime,
     defaultOfficeEndTime: s.defaultOfficeEndTime,
     weeklyOffDays: s.weeklyOffDays ?? [0, 6],
-    publicHolidays: (s.publicHolidays ?? []).map((h) => ({
+    publicHolidays: effectivePublicHolidays.map((h) => ({
       date: h.date,
       name: h.name,
-      country: (h as { country?: string }).country ?? "other",
+      country: h.country ?? "other",
     })),
     proRatedQuotas: s.proRatedQuotas,
     dailyHours,
@@ -138,13 +206,13 @@ router.patch("/settings", requireAuth(["admin", "hr"]), async (req, res) => {
     updates.weeklyOffDays = data.weeklyOffDays;
   if (data.publicHolidays !== undefined)
     updates.publicHolidays = data.publicHolidays.map((h) => ({
-      date:
-        typeof h.date === "string"
-          ? h.date
-          : (h.date as Date).toISOString().slice(0, 10),
-      name: h.name,
-      country: h.country,
-    }));
+        date:
+          typeof h.date === "string"
+            ? h.date
+            : (h.date as Date).toISOString().slice(0, 10),
+        name: h.name,
+        country: h.country,
+      }));
   if (data.proRatedQuotas !== undefined)
     updates.proRatedQuotas = data.proRatedQuotas;
   if (data.attendancePolicy !== undefined)

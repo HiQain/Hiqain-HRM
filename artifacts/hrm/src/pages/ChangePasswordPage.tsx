@@ -7,8 +7,8 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordField } from "@/components/PasswordField";
 import { toast } from "sonner";
 
 export function ChangePasswordPage({
@@ -77,9 +77,8 @@ export function ChangePasswordPage({
             {!mustChange && (
               <div className="space-y-1.5">
                 <Label htmlFor="current">Current password</Label>
-                <Input
+                <PasswordField
                   id="current"
-                  type="password"
                   autoComplete="current-password"
                   required
                   value={currentPassword}
@@ -89,9 +88,8 @@ export function ChangePasswordPage({
             )}
             <div className="space-y-1.5">
               <Label htmlFor="new">New password</Label>
-              <Input
+              <PasswordField
                 id="new"
-                type="password"
                 autoComplete="new-password"
                 required
                 value={newPassword}
@@ -101,9 +99,8 @@ export function ChangePasswordPage({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="confirm">Confirm new password</Label>
-              <Input
+              <PasswordField
                 id="confirm"
-                type="password"
                 autoComplete="new-password"
                 required
                 value={confirm}

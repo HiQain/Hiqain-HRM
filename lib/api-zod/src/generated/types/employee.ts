@@ -45,5 +45,7 @@ export interface Employee {
   immediateFamily?: string | null;
   employmentContractUrl?: string | null;
   employmentContractName?: string | null;
+  cnicDocumentUrl?: string | null;
+  cnicDocumentName?: string | null;
   providentFundPercent?: number | null;
 }

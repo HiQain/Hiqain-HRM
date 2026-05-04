@@ -105,6 +105,8 @@ export const ListEmployeesResponseItem = zod.object({
   immediateFamily: zod.string().nullish(),
   employmentContractUrl: zod.string().nullish(),
   employmentContractName: zod.string().nullish(),
+  cnicDocumentUrl: zod.string().nullish(),
+  cnicDocumentName: zod.string().nullish(),
   providentFundPercent: zod.number().nullish(),
 });
 export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem);
@@ -172,6 +174,8 @@ export const CreateEmployeeBody = zod.object({
   benefits: zod.string().nullish(),
   notes: zod.string().nullish(),
   immediateFamily: zod.string().nullish(),
+  cnicDocumentUrl: zod.string().nullish(),
+  cnicDocumentName: zod.string().nullish(),
 });
 
 /**
@@ -245,6 +249,8 @@ export const BulkCreateEmployeesBody = zod.object({
       benefits: zod.string().nullish(),
       notes: zod.string().nullish(),
       immediateFamily: zod.string().nullish(),
+      cnicDocumentUrl: zod.string().nullish(),
+      cnicDocumentName: zod.string().nullish(),
     }),
   ),
 });
@@ -319,6 +325,8 @@ export const GetEmployeeResponse = zod
     immediateFamily: zod.string().nullish(),
     employmentContractUrl: zod.string().nullish(),
     employmentContractName: zod.string().nullish(),
+    cnicDocumentUrl: zod.string().nullish(),
+    cnicDocumentName: zod.string().nullish(),
     providentFundPercent: zod.number().nullish(),
   })
   .and(
@@ -408,6 +416,8 @@ export const UpdateEmployeeBody = zod.object({
   avatarUrl: zod.string().nullish(),
   employmentContractUrl: zod.string().nullish(),
   employmentContractName: zod.string().nullish(),
+  cnicDocumentUrl: zod.string().nullish(),
+  cnicDocumentName: zod.string().nullish(),
   providentFundPercent: zod.number().nullish(),
 });
 
@@ -447,6 +457,8 @@ export const UpdateEmployeeResponse = zod.object({
   immediateFamily: zod.string().nullish(),
   employmentContractUrl: zod.string().nullish(),
   employmentContractName: zod.string().nullish(),
+  cnicDocumentUrl: zod.string().nullish(),
+  cnicDocumentName: zod.string().nullish(),
   providentFundPercent: zod.number().nullish(),
 });
 
@@ -505,6 +517,8 @@ export const GetEmployeeJourneyResponse = zod.object({
     immediateFamily: zod.string().nullish(),
     employmentContractUrl: zod.string().nullish(),
     employmentContractName: zod.string().nullish(),
+    cnicDocumentUrl: zod.string().nullish(),
+    cnicDocumentName: zod.string().nullish(),
     providentFundPercent: zod.number().nullish(),
   }),
   events: zod.array(
@@ -1606,6 +1620,8 @@ export const GetEmployeeDashboardResponse = zod.object({
     immediateFamily: zod.string().nullish(),
     employmentContractUrl: zod.string().nullish(),
     employmentContractName: zod.string().nullish(),
+    cnicDocumentUrl: zod.string().nullish(),
+    cnicDocumentName: zod.string().nullish(),
     providentFundPercent: zod.number().nullish(),
   }),
   todayAttendance: zod.object({
@@ -2260,6 +2276,45 @@ export const CreateSalaryComponentBody = zod.object({
   valueType: zod.enum(["fixed", "percentage"]),
   value: zod.number(),
   isDeduction: zod.boolean().optional(),
+});
+
+/**
+ * @summary Update a salary component (admin only)
+ */
+export const UpdateSalaryComponentParams = zod.object({
+  id: zod.coerce.number(),
+  componentId: zod.coerce.number(),
+});
+
+export const UpdateSalaryComponentBody = zod.object({
+  label: zod.string(),
+  kind: zod.enum([
+    "designation",
+    "commission",
+    "allowance",
+    "provident_fund",
+    "other",
+  ]),
+  valueType: zod.enum(["fixed", "percentage"]),
+  value: zod.number(),
+  isDeduction: zod.boolean().optional(),
+});
+
+export const UpdateSalaryComponentResponse = zod.object({
+  id: zod.number(),
+  employeeId: zod.number(),
+  label: zod.string(),
+  kind: zod.enum([
+    "designation",
+    "commission",
+    "allowance",
+    "provident_fund",
+    "other",
+  ]),
+  valueType: zod.enum(["fixed", "percentage"]),
+  value: zod.number(),
+  isDeduction: zod.boolean(),
+  sortOrder: zod.number().optional(),
 });
 
 /**

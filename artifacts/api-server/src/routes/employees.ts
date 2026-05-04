@@ -68,6 +68,8 @@ function serializeEmployee(
     immediateFamily: e.immediateFamily,
     employmentContractUrl: e.employmentContractUrl,
     employmentContractName: e.employmentContractName,
+    cnicDocumentUrl: e.cnicDocumentUrl,
+    cnicDocumentName: e.cnicDocumentName,
     providentFundPercent:
       e.providentFundPercent != null ? Number(e.providentFundPercent) : null,
   };
@@ -181,6 +183,17 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res) => {
       education: data.education ?? null,
       address: data.address ?? null,
       employeeCode: (data as any).employeeCode ?? autoCode,
+      emergencyContact: (data as any).emergencyContact ?? null,
+      cnic: (data as any).cnic ?? null,
+      lastQualification: (data as any).lastQualification ?? null,
+      previousCompany: (data as any).previousCompany ?? null,
+      lastPay:
+        (data as any).lastPay != null ? String((data as any).lastPay) : null,
+      benefits: (data as any).benefits ?? null,
+      notes: (data as any).notes ?? null,
+      immediateFamily: (data as any).immediateFamily ?? null,
+      cnicDocumentUrl: (data as any).cnicDocumentUrl ?? null,
+      cnicDocumentName: (data as any).cnicDocumentName ?? null,
     })
     .returning();
   res.status(201).json(serializeEmployee(insertedEmp[0]!, email));
@@ -262,6 +275,17 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res) =>
         education: data.education ?? null,
         address: data.address ?? null,
         employeeCode: autoCode,
+        emergencyContact: (data as any).emergencyContact ?? null,
+        cnic: (data as any).cnic ?? null,
+        lastQualification: (data as any).lastQualification ?? null,
+        previousCompany: (data as any).previousCompany ?? null,
+        lastPay:
+          (data as any).lastPay != null ? String((data as any).lastPay) : null,
+        benefits: (data as any).benefits ?? null,
+        notes: (data as any).notes ?? null,
+        immediateFamily: (data as any).immediateFamily ?? null,
+        cnicDocumentUrl: (data as any).cnicDocumentUrl ?? null,
+        cnicDocumentName: (data as any).cnicDocumentName ?? null,
       });
       created += 1;
     } catch (err) {
@@ -347,13 +371,32 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
   });
 });
 
-router.patch("/employees/:id", requireAuth(["admin", "hr"]), async (req, res) => {
+router.patch("/employees/:id", requireAuth(), async (req, res) => {
   const id = Number(req.params.id);
   const parsed = UpdateEmployeeBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: "Invalid payload" });
   }
   const data = parsed.data;
+  const actor = getUser(req);
+
+  if (actor.role === "employee") {
+    if (actor.employeeId !== id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const payload = data as Record<string, unknown>;
+    const allowedKeys = Object.keys(payload).filter(
+      (key) => payload[key] !== undefined,
+    );
+    const avatarOnly =
+      allowedKeys.length > 0 &&
+      allowedKeys.every((key) => key === "avatarUrl");
+    if (!avatarOnly) {
+      return res.status(403).json({
+        message: "Employees can only update their profile photo.",
+      });
+    }
+  }
 
   const previousRows = await db
     .select()
@@ -409,6 +452,10 @@ router.patch("/employees/:id", requireAuth(["admin", "hr"]), async (req, res) =>
     updates.employmentContractUrl = extra.employmentContractUrl;
   if (extra.employmentContractName !== undefined)
     updates.employmentContractName = extra.employmentContractName;
+  if (extra.cnicDocumentUrl !== undefined)
+    updates.cnicDocumentUrl = extra.cnicDocumentUrl;
+  if (extra.cnicDocumentName !== undefined)
+    updates.cnicDocumentName = extra.cnicDocumentName;
   if (extra.providentFundPercent !== undefined)
     updates.providentFundPercent =
       extra.providentFundPercent != null ? String(extra.providentFundPercent) : null;

@@ -13,8 +13,9 @@ import {
   Sun,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { PasswordField } from "@/components/PasswordField";
 import { useTheme } from "@/hooks/use-theme";
 
 export function LoginPage() {
@@ -146,9 +147,8 @@ export function LoginPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="password">Password</Label>
-                  <Input
+                  <PasswordField
                     id="password"
-                    type="password"
                     autoComplete="current-password"
                     required
                     value={password}

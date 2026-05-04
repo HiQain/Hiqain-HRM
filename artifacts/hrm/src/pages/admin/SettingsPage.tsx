@@ -26,8 +26,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { DateField } from "@/components/DateField";
 import { getApiUrl } from "@/lib/api";
+import {
+  filterHolidays,
+  getHighlightedHoliday,
+  getMonthLabel,
+  sortHolidays,
+  type HolidayFilter,
+} from "@/lib/holidays";
+import { formatDateCalendar } from "@/lib/utils";
 
-type Country = "us" | "pk" | "other";
+type Country = "us" | "pk";
 
 const WEEK_DAYS = [
   { value: 0, label: "Sun" },
@@ -96,7 +104,7 @@ export function AdminSettingsPage() {
   const [holidays, setHolidays] = useState<
     { date: string; name: string; country: Country }[]
   >([]);
-  const [holidayFilter, setHolidayFilter] = useState<"us" | "pk">("us");
+  const [holidayFilter, setHolidayFilter] = useState<HolidayFilter>("all");
   const [newHolidayDate, setNewHolidayDate] = useState("");
   const [newHolidayName, setNewHolidayName] = useState("");
   const [newHolidayCountry, setNewHolidayCountry] = useState<"us" | "pk">("us");
@@ -131,7 +139,8 @@ export function AdminSettingsPage() {
         lateAbsenceEvery: data.lateAbsenceEvery,
       });
       setHolidays(
-        data.publicHolidays.map((h) => {
+        sortHolidays(
+          data.publicHolidays.map((h) => {
           const raw = (h.country as Country) ?? "other";
           let country: "us" | "pk";
           if (raw === "us" || raw === "pk") {
@@ -148,7 +157,8 @@ export function AdminSettingsPage() {
             name: h.name,
             country,
           };
-        }),
+            }),
+        ),
       );
       setAttendanceMode(data.attendancePolicyFileUrl ? "file" : "text");
       setCompanyMode(data.companyPolicyFileUrl ? "file" : "text");
@@ -169,17 +179,20 @@ export function AdminSettingsPage() {
   };
 
   const filteredHolidays = useMemo(() => {
-    return [...holidays]
-      .filter((h) => h.country === holidayFilter)
-      .sort((a, b) => a.date.localeCompare(b.date));
+    return filterHolidays(sortHolidays(holidays), holidayFilter);
   }, [holidays, holidayFilter]);
 
   const counts = useMemo(
     () => ({
+      all: holidays.length,
       us: holidays.filter((h) => h.country === "us").length,
       pk: holidays.filter((h) => h.country === "pk").length,
     }),
     [holidays],
+  );
+  const highlightedHoliday = useMemo(
+    () => getHighlightedHoliday(filteredHolidays),
+    [filteredHolidays],
   );
 
   const addHoliday = () => {
@@ -188,14 +201,14 @@ export function AdminSettingsPage() {
       return;
     }
     setHolidays((h) =>
-      [
+      sortHolidays([
         ...h,
         {
           date: newHolidayDate,
           name: newHolidayName.trim(),
           country: newHolidayCountry,
         },
-      ].sort((a, b) => a.date.localeCompare(b.date)),
+      ]),
     );
     setNewHolidayDate("");
     setNewHolidayName("");
@@ -415,11 +428,13 @@ export function AdminSettingsPage() {
           </p>
 
           <div className="mt-4 space-y-3">
-            <Label className="text-xs">Attendance policy notes</Label>
-            <PolicyModeToggle
-              mode={attendanceMode}
-              onChange={setAttendanceMode}
-            />
+            <div className="flex flex-col items-start gap-2">
+              <Label className="block text-xs">Attendance policy notes</Label>
+              <PolicyModeToggle
+                mode={attendanceMode}
+                onChange={setAttendanceMode}
+              />
+            </div>
             {attendanceMode === "text" ? (
               <RichTextEditor
                 value={form.attendancePolicy}
@@ -679,6 +694,11 @@ export function AdminSettingsPage() {
           <div className="space-y-3">
             <div className="inline-flex rounded-md border border-border bg-muted p-0.5 text-xs">
               <FilterTab
+                active={holidayFilter === "all"}
+                onClick={() => setHolidayFilter("all")}
+                label={`All (${counts.all})`}
+              />
+              <FilterTab
                 active={holidayFilter === "us"}
                 onClick={() => setHolidayFilter("us")}
                 label={`US (${counts.us})`}
@@ -689,7 +709,6 @@ export function AdminSettingsPage() {
                 label={`Pakistan (${counts.pk})`}
               />
             </div>
-
             <div className="grid gap-3 sm:grid-cols-[180px_1fr_140px_auto]">
               <DateField
                 value={newHolidayDate}
@@ -720,33 +739,11 @@ export function AdminSettingsPage() {
                 No holidays in this view.
               </div>
             ) : (
-              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                {filteredHolidays.map((h) => (
-                  <li
-                    key={`${h.date}-${h.name}`}
-                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <CountryBadge country={h.country} />
-                      <div>
-                        <p className="font-medium">{h.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {h.date}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-rose-600"
-                      onClick={() => removeHoliday(h.date, h.name)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <HolidayBoard
+                items={filteredHolidays}
+                highlighted={highlightedHoliday}
+                onRemove={removeHoliday}
+              />
             )}
           </div>
         </Section>
@@ -807,6 +804,76 @@ function CountryBadge({ country }: { country: Country }) {
     >
       {label}
     </span>
+  );
+}
+
+function HolidayBoard({
+  items,
+  highlighted,
+  onRemove,
+}: {
+  items: { date: string; name: string; country: Country }[];
+  highlighted?: { date: string; name: string; country: Country };
+  onRemove: (date: string, name: string) => void;
+}) {
+  const grouped = items.reduce<Record<string, typeof items>>((acc, item) => {
+    const key = getMonthLabel(item.date);
+    acc[key] = acc[key] ? [...acc[key]!, item] : [item];
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-4">
+      {highlighted && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            Highlighted holiday
+          </p>
+          <div className="mt-2 flex items-start gap-3">
+            <div className="flex items-center gap-3">
+              <CountryBadge country={highlighted.country} />
+              <div>
+                <p className="font-semibold text-foreground">
+                  {formatDateCalendar(highlighted.date)} - {highlighted.name}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {Object.entries(grouped).map(([month, monthItems]) => (
+        <div key={month} className="rounded-xl border border-border bg-card">
+          <div className="border-b border-border bg-muted/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {month}
+          </div>
+          <ul className="divide-y divide-border">
+            {monthItems.map((h) => (
+              <li
+                key={`${h.date}-${h.name}`}
+                className="flex items-start justify-between gap-3 px-4 py-3 text-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <CountryBadge country={h.country} />
+                  <p className="font-medium">
+                    {formatDateCalendar(h.date)} - {h.name}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-rose-600"
+                  onClick={() => onRemove(h.date, h.name)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
 

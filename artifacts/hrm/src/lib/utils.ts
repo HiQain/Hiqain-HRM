@@ -49,6 +49,22 @@ export function formatDateLong(s: string | Date | null | undefined): string {
   return _formatAppDate(s);
 }
 
+export function formatDateCalendar(s: string | Date | null | undefined): string {
+  if (!s) return "—";
+  const d =
+    typeof s === "string"
+      ? new Date(s.length === 10 ? `${s}T00:00:00Z` : s)
+      : s;
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);

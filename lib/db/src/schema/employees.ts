@@ -53,6 +53,8 @@ export const employeesTable = pgTable("employees", {
   immediateFamily: text("immediate_family"),
   employmentContractUrl: text("employment_contract_url"),
   employmentContractName: text("employment_contract_name"),
+  cnicDocumentUrl: text("cnic_document_url"),
+  cnicDocumentName: text("cnic_document_name"),
   providentFundPercent: numeric("provident_fund_percent", {
     precision: 5,
     scale: 2,
