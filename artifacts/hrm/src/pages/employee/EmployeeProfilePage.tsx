@@ -15,7 +15,6 @@ import {
   GraduationCap,
   Briefcase,
   Calendar,
-  PartyPopper,
   ShieldCheck,
   Upload,
   FileText,
@@ -82,7 +81,6 @@ export function EmployeeProfilePage() {
             <Pill icon={Calendar}>
               {Math.floor(employee.workDurationMonths / 12)}y {employee.workDurationMonths % 12}m
             </Pill>
-            <Pill icon={PartyPopper}>Next anniversary {formatDate(employee.anniversaryDate)}</Pill>
             <Pill icon={ShieldCheck} tone={probationActive ? "warning" : "success"}>
               {probationActive
                 ? `Probation until ${formatDate(employee.probationEndDate)}`

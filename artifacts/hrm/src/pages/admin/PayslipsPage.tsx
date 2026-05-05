@@ -6,7 +6,7 @@ import {
   getGetEmployeePayslipsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileDown, Wand2, Sliders } from "lucide-react";
+import { FileDown, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -43,8 +43,6 @@ export function AdminPayslipsPage() {
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [year, setYear] = useState<number>(now.getFullYear());
   const [viewing, setViewing] = useState<any>(null);
-  const [showOverrides, setShowOverrides] = useState(false);
-  const [latePenaltyDaysStr, setLatePenaltyDaysStr] = useState("");
 
   const { data: existing } = useGetEmployeePayslips(empId ?? 0, {
     query: {
@@ -67,17 +65,8 @@ export function AdminPayslipsPage() {
       toast.error("Cannot generate payslips for the current or future months");
       return;
     }
-    const data: {
-      employeeId: number;
-      month: number;
-      year: number;
-      latePenaltyDays?: number;
-    } = { employeeId: empId, month, year };
-    if (latePenaltyDaysStr.trim() !== "")
-      data.latePenaltyDays = Number(latePenaltyDaysStr);
-
     generate.mutate(
-      { data },
+      { data: { employeeId: empId, month, year } },
       {
         onSuccess: (p) => {
           toast.success(`Payslip ready for ${formatMonth(month, year)}`);
@@ -85,8 +74,6 @@ export function AdminPayslipsPage() {
             queryKey: getGetEmployeePayslipsQueryKey(empId),
           });
           setViewing(p);
-          setLatePenaltyDaysStr("");
-          setShowOverrides(false);
         },
         onError: () => toast.error("Could not generate payslip"),
       },
@@ -153,34 +140,7 @@ export function AdminPayslipsPage() {
               <Wand2 className="mr-2 h-4 w-4" />
               {generate.isPending ? "Generating..." : "Generate payslip"}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowOverrides((s) => !s)}
-              className="w-full sm:w-auto"
-            >
-              <Sliders className="mr-2 h-4 w-4" />
-              {showOverrides ? "Hide overrides" : "HR overrides"}
-            </Button>
           </div>
-          {showOverrides && (
-            <div className="grid gap-3 rounded-md border border-dashed border-border bg-muted/30 p-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Late to absence days override</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.5"
-                  value={latePenaltyDaysStr}
-                  onChange={(e) => setLatePenaltyDaysStr(e.target.value)}
-                  placeholder="auto"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Leave this blank to use the automatic policy from Settings. Enter `0` to forgive all late penalties or enter a smaller number to reduce them.
-                </p>
-              </div>
-            </div>
-          )}
           {isFutureOrCurrent && (
             <p className="text-xs text-amber-600">
               Payslips can only be generated for completed past months.

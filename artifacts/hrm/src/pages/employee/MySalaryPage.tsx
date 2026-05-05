@@ -342,7 +342,7 @@ function PayrollPreviewCard({
 
   return (
     <div className="flex min-h-[148px] flex-col rounded-xl border border-border bg-background/40 p-4">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+      <p className="min-h-[2.75rem] text-[11px] uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
       <div className="mt-auto">

@@ -31,7 +31,6 @@ import {
   GraduationCap,
   Briefcase,
   ShieldCheck,
-  PartyPopper,
   Pencil,
   Trash2,
   FileDown,
@@ -150,9 +149,6 @@ export function EmployeeDetailPage() {
             <Badge icon={Calendar}>
               {Math.floor(employee.workDurationMonths / 12)}y{" "}
               {employee.workDurationMonths % 12}m at company
-            </Badge>
-            <Badge icon={PartyPopper}>
-              Next anniversary {formatDate(employee.anniversaryDate)}
             </Badge>
             <Badge icon={ShieldCheck} tone={probationActive ? "warning" : "success"}>
               {probationActive
@@ -687,8 +683,6 @@ function PayrollSnapshotCard({ id }: { id: number }) {
   const now = new Date();
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [year, setYear] = useState<number>(now.getFullYear());
-  const [overrideEnabled, setOverrideEnabled] = useState(false);
-  const [overrideDays, setOverrideDays] = useState<number>(0);
 
   const monthYmd = `${year}-${String(month).padStart(2, "0")}`;
   const { data: settings } = useGetSettings({
@@ -734,17 +728,12 @@ function PayrollSnapshotCard({ id }: { id: number }) {
           employeeId: id,
           month,
           year,
-          ...(overrideEnabled
-            ? { latePenaltyDays: Math.max(0, overrideDays) }
-            : {}),
         },
       },
       {
         onSuccess: async () => {
           toast.success(
-            payslip
-              ? "Payslip recalculated"
-              : "Payslip generated for this month",
+            "Payslip generated for this month",
           );
           await qc.invalidateQueries({
             queryKey: getGetEmployeePayslipsQueryKey(id),
@@ -828,7 +817,7 @@ function PayrollSnapshotCard({ id }: { id: number }) {
           }
         />
         <SnapshotStat
-          label="Net pay (this month)"
+          label="Total disbursement"
           value={
             payslip
               ? `Rs. ${Number(payslip.netSalary).toLocaleString()}`
@@ -836,7 +825,7 @@ function PayrollSnapshotCard({ id }: { id: number }) {
           }
           hint={
             payslip
-              ? `Loan ded. Rs. ${Number(payslip.loanDeduction ?? 0).toLocaleString()}`
+              ? `Net after deductions · Loan ded. Rs. ${Number(payslip.loanDeduction ?? 0).toLocaleString()}`
               : "not generated yet"
           }
         />
@@ -869,48 +858,6 @@ function PayrollSnapshotCard({ id }: { id: number }) {
         </div>
       )}
 
-      <div className="rounded-lg border border-border p-3">
-        <label className="flex items-center gap-2 text-xs font-medium">
-          <input
-            type="checkbox"
-            checked={overrideEnabled}
-            onChange={(e) => {
-              setOverrideEnabled(e.target.checked);
-              if (e.target.checked) setOverrideDays(computedAbsenceDays);
-            }}
-          />
-          Override late → absence days for this month
-        </label>
-        {overrideEnabled && (
-          <div className="mt-2 flex items-center gap-2">
-            <Input
-              type="number"
-              min={0}
-              step={0.5}
-              value={overrideDays}
-              onChange={(e) => setOverrideDays(Number(e.target.value))}
-              className="h-8 w-[120px] text-xs"
-            />
-            <span className="text-xs text-muted-foreground">
-              days (auto: {computedAbsenceDays})
-            </span>
-          </div>
-        )}
-        <div className="mt-3">
-          <Button
-            type="button"
-            size="sm"
-            onClick={onGenerate}
-            disabled={generate.isPending}
-          >
-            {generate.isPending
-              ? "Saving..."
-              : payslip
-                ? "Recalculate payslip"
-                : "Generate payslip"}
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

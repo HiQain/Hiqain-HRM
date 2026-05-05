@@ -525,7 +525,8 @@ export function AdminSalaryPage() {
                 <PayrollStat
                   label="Late penalty days"
                   value={String(monthPayslip.lateAbsenceDays ?? 0)}
-                  hint={`${monthPayslip.lateCount} lates recorded · ${formatCurrency(monthPayslipLatePenalty)}`}
+                  hint={`${monthPayslip.lateCount} lates recorded`}
+                  subvalue={formatCurrency(monthPayslipLatePenalty)}
                   tone={(monthPayslip.lateAbsenceDays ?? 0) > 0 ? "down" : undefined}
                 />
                 <PayrollStat
@@ -858,11 +859,13 @@ function PayrollStat({
   label,
   value,
   hint,
+  subvalue,
   tone,
 }: {
   label: string;
   value: string;
   hint?: string;
+  subvalue?: string;
   tone?: "up" | "down";
 }) {
   const Icon = tone === "up" ? TrendingUp : tone === "down" ? TrendingDown : null;
@@ -881,6 +884,9 @@ function PayrollStat({
         {Icon && <Icon className="h-4 w-4" />}
         {value}
       </p>
+      {subvalue && (
+        <p className={`mt-2 text-sm font-semibold ${toneClass}`}>{subvalue}</p>
+      )}
       {hint && (
         <p className="mt-2 text-sm text-muted-foreground">{hint}</p>
       )}
