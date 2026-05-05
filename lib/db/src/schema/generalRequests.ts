@@ -16,7 +16,7 @@ export const generalRequestsTable = pgTable("general_requests", {
     .notNull()
     .references(() => employeesTable.id, { onDelete: "cascade" }),
   type: text("type", {
-    enum: ["half_day", "loan", "increment", "remote_work", "late", "resignation", "other"],
+    enum: ["half_day", "loan", "increment", "remote_work", "late", "pf_withdrawal", "resignation", "other"],
   }).notNull(),
   date: date("date").notNull(),
   dateTo: date("date_to"),

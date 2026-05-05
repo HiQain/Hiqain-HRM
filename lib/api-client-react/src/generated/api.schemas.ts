@@ -97,6 +97,11 @@ export interface Employee {
   employmentContractName?: string | null;
   cnicDocumentUrl?: string | null;
   cnicDocumentName?: string | null;
+  bankAccountTitle?: string | null;
+  bankAccountNumber?: string | null;
+  bankName?: string | null;
+  bankIban?: string | null;
+  bankBranchCode?: string | null;
   providentFundPercent?: number | null;
 }
 
@@ -199,6 +204,11 @@ export interface CreateEmployeeRequest {
   immediateFamily?: string | null;
   cnicDocumentUrl?: string | null;
   cnicDocumentName?: string | null;
+  bankAccountTitle?: string | null;
+  bankAccountNumber?: string | null;
+  bankName?: string | null;
+  bankIban?: string | null;
+  bankBranchCode?: string | null;
 }
 
 export type UpdateEmployeeRequestPositionType =
@@ -249,6 +259,11 @@ export interface UpdateEmployeeRequest {
   employmentContractName?: string | null;
   cnicDocumentUrl?: string | null;
   cnicDocumentName?: string | null;
+  bankAccountTitle?: string | null;
+  bankAccountNumber?: string | null;
+  bankName?: string | null;
+  bankIban?: string | null;
+  bankBranchCode?: string | null;
   providentFundPercent?: number | null;
 }
 
@@ -806,6 +821,7 @@ export const GeneralRequestType = {
   increment: "increment",
   remote_work: "remote_work",
   late: "late",
+  pf_withdrawal: "pf_withdrawal",
   resignation: "resignation",
   other: "other",
 } as const;
@@ -848,6 +864,7 @@ export const CreateGeneralRequestType = {
   increment: "increment",
   remote_work: "remote_work",
   late: "late",
+  pf_withdrawal: "pf_withdrawal",
   resignation: "resignation",
   other: "other",
 } as const;
@@ -875,6 +892,7 @@ export const UpdateGeneralRequestType = {
   increment: "increment",
   remote_work: "remote_work",
   late: "late",
+  pf_withdrawal: "pf_withdrawal",
   resignation: "resignation",
   other: "other",
 } as const;
@@ -1153,6 +1171,7 @@ export const ListGeneralRequestsType = {
   increment: "increment",
   remote_work: "remote_work",
   late: "late",
+  pf_withdrawal: "pf_withdrawal",
   resignation: "resignation",
   other: "other",
 } as const;

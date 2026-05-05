@@ -26,6 +26,7 @@ import { MyLeavesPage } from "@/pages/employee/MyLeavesPage";
 import { MyRequestsPage } from "@/pages/employee/MyRequestsPage";
 import { MyPayslipsPage } from "@/pages/employee/MyPayslipsPage";
 import { MySalaryPage } from "@/pages/employee/MySalaryPage";
+import { MyProvidentFundPage } from "@/pages/employee/MyProvidentFundPage";
 import { MySettingsPage } from "@/pages/employee/MySettingsPage";
 import { FeedPage } from "@/pages/FeedPage";
 import { CelebrationPopup } from "@/components/CelebrationPopup";
@@ -101,6 +102,7 @@ function AuthGate() {
           <Route path="/employee/requests" component={MyRequestsPage} />
           <Route path="/employee/payslips" component={MyPayslipsPage} />
           <Route path="/employee/salary" component={MySalaryPage} />
+          <Route path="/employee/provident-fund" component={MyProvidentFundPage} />
           <Route path="/employee/settings" component={MySettingsPage} />
           <Route path="/employee/feed" component={FeedPage} />
           <Route

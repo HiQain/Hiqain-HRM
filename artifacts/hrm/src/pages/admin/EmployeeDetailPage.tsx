@@ -8,6 +8,7 @@ import {
   useCreateSalaryEvent,
   useDeleteSalaryEvent,
   useUpdateSalaryEvent,
+  useListGeneralRequests,
   useListSalaryComponents,
   useCreateSalaryComponent,
   useDeleteSalaryComponent,
@@ -22,6 +23,7 @@ import {
   getGetEmployeePayslipsQueryKey,
   getGetSettingsQueryKey,
   getListEmployeesQueryKey,
+  getListGeneralRequestsQueryKey,
   getListSalaryComponentsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -53,6 +55,7 @@ import { DateField } from "@/components/DateField";
 import { JourneyTimeline } from "@/components/JourneyTimeline";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PayslipView } from "@/components/PayslipView";
+import { ProvidentFundLedgerCard } from "@/components/ProvidentFundLedgerCard";
 import {
   Tabs,
   TabsContent,
@@ -96,6 +99,7 @@ import {
   ymdLocal,
 } from "@/lib/utils";
 import { getApiUrl } from "@/lib/api";
+import { buildProvidentFundSummary } from "@/lib/providentFund";
 
 export function EmployeeDetailPage() {
   const params = useParams<{ id: string }>();
@@ -178,6 +182,7 @@ export function EmployeeDetailPage() {
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="journey">Journey</TabsTrigger>
           <TabsTrigger value="salary">Salary</TabsTrigger>
+          <TabsTrigger value="pf">Provident Fund</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="payslips">Payslips</TabsTrigger>
         </TabsList>
@@ -190,6 +195,9 @@ export function EmployeeDetailPage() {
         </TabsContent>
         <TabsContent value="salary" className="mt-5">
           <SalaryTab id={id} events={employee.salaryEvents ?? []} />
+        </TabsContent>
+        <TabsContent value="pf" className="mt-5">
+          <ProvidentFundTab id={id} employee={employee} />
         </TabsContent>
         <TabsContent value="attendance" className="mt-5">
           <AttendanceTab id={id} />
@@ -259,6 +267,11 @@ function ProfileTab({ employee }: { employee: any }) {
     immediateFamily: employee.immediateFamily ?? "",
     cnicDocumentUrl: employee.cnicDocumentUrl ?? "",
     cnicDocumentName: employee.cnicDocumentName ?? "",
+    bankAccountTitle: employee.bankAccountTitle ?? "",
+    bankAccountNumber: employee.bankAccountNumber ?? "",
+    bankName: employee.bankName ?? "",
+    bankIban: employee.bankIban ?? "",
+    bankBranchCode: employee.bankBranchCode ?? "",
   });
 
   const onSubmit = (e: FormEvent) => {
@@ -298,7 +311,12 @@ function ProfileTab({ employee }: { employee: any }) {
           immediateFamily: form.immediateFamily || undefined,
           cnicDocumentUrl: form.cnicDocumentUrl || undefined,
           cnicDocumentName: form.cnicDocumentName || undefined,
-        },
+          bankAccountTitle: form.bankAccountTitle || undefined,
+          bankAccountNumber: form.bankAccountNumber || undefined,
+          bankName: form.bankName || undefined,
+          bankIban: form.bankIban || undefined,
+          bankBranchCode: form.bankBranchCode || undefined,
+        } as any,
       },
       {
         onSuccess: () => {
@@ -553,6 +571,56 @@ function ProfileTab({ employee }: { employee: any }) {
                     },
                   );
                 }}
+              />
+            </FormField>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock title="Bank details">
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Account title">
+              <Input
+                value={form.bankAccountTitle}
+                onChange={(e) =>
+                  setForm({ ...form, bankAccountTitle: e.target.value })
+                }
+                placeholder="Muhammad Ali"
+              />
+            </FormField>
+            <FormField label="Account number">
+              <Input
+                value={form.bankAccountNumber}
+                onChange={(e) =>
+                  setForm({ ...form, bankAccountNumber: e.target.value })
+                }
+                placeholder="0035123456789"
+              />
+            </FormField>
+            <FormField label="Bank name">
+              <Input
+                value={form.bankName}
+                onChange={(e) =>
+                  setForm({ ...form, bankName: e.target.value })
+                }
+                placeholder="HBL / Meezan / Bank Alfalah"
+              />
+            </FormField>
+            <FormField label="IBAN">
+              <Input
+                value={form.bankIban}
+                onChange={(e) =>
+                  setForm({ ...form, bankIban: e.target.value })
+                }
+                placeholder="PK36MEZN0001234567890123"
+              />
+            </FormField>
+            <FormField label="Branch code">
+              <Input
+                value={form.bankBranchCode}
+                onChange={(e) =>
+                  setForm({ ...form, bankBranchCode: e.target.value })
+                }
+                placeholder="0123"
               />
             </FormField>
           </div>
@@ -879,6 +947,42 @@ function SnapshotStat({
       <p className="mt-1 text-lg font-semibold">{value}</p>
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>
+  );
+}
+
+function ProvidentFundTab({
+  id,
+  employee,
+}: {
+  id: number;
+  employee: any;
+}) {
+  const { data: payslips } = useGetEmployeePayslips(id, {
+    query: { queryKey: getGetEmployeePayslipsQueryKey(id), enabled: id > 0 },
+  });
+  const { data: pfRequests } = useListGeneralRequests(
+    { type: "pf_withdrawal" as any },
+    {
+      query: {
+        queryKey: getListGeneralRequestsQueryKey({ type: "pf_withdrawal" as any }),
+        enabled: id > 0,
+      },
+    },
+  );
+
+  const summary = buildProvidentFundSummary(
+    employee,
+    payslips ?? [],
+    (pfRequests ?? []).filter((request) => request.employeeId === id),
+  );
+
+  return (
+    <ProvidentFundLedgerCard
+      title="Provident fund"
+      description="PF is tracked separately from salary. Contributions start after probation and withdrawal requests unlock after 1 year."
+      summary={summary}
+      emptyText="No PF contributions or withdrawals recorded for this employee yet."
+    />
   );
 }
 

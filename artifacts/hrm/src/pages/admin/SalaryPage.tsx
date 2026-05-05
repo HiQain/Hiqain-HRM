@@ -419,9 +419,9 @@ export function AdminSalaryPage() {
                   />
                 </div>
               </div>
-            </section>
+          </section>
 
-            <section className="rounded-xl border border-border bg-card shadow-sm">
+          <section className="rounded-xl border border-border bg-card shadow-sm">
               <div className="border-b border-border p-4">
                 <p className="text-sm font-semibold">Loans</p>
                 <p className="text-xs text-muted-foreground">

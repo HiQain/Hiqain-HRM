@@ -5,10 +5,14 @@ import {
   useUpdateGeneralRequest,
   useDeleteGeneralRequest,
   useGetMe,
+  useGetEmployee,
   useGetMyLoanEligibility,
+  useGetMyPayslips,
   useGetSettings,
+  getGetEmployeeQueryKey,
   getGetSettingsQueryKey,
   getGetMyLoanEligibilityQueryKey,
+  getGetMyPayslipsQueryKey,
   getListGeneralRequestsQueryKey,
   type GeneralRequest,
   type GeneralRequestType,
@@ -58,6 +62,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils";
+import { buildProvidentFundSummary } from "@/lib/providentFund";
 
 type FilterType =
   | "all"
@@ -66,22 +71,24 @@ type FilterType =
   | "increment"
   | "remote_work"
   | "late"
+  | "pf_withdrawal"
   | "resignation"
   | "other";
 
-const TYPE_LABEL: Record<GeneralRequestType, string> = {
+const TYPE_LABEL: Record<string, string> = {
   half_day: "Half Day",
   loan: "Loan",
   increment: "Increment",
   remote_work: "Remote Work",
   late: "Late",
+  pf_withdrawal: "PF Withdrawal",
   resignation: "Resignation",
   other: "Other",
 };
 
 export function MyRequestsPage() {
   const [tab, setTab] = useState<FilterType>("all");
-  const params = tab === "all" ? undefined : { type: tab };
+  const params = tab === "all" ? undefined : ({ type: tab } as any);
   const queryKey = getListGeneralRequestsQueryKey(params);
   const { data, isLoading } = useListGeneralRequests(params, {
     query: { queryKey },
@@ -99,7 +106,7 @@ export function MyRequestsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Requests"
-        description="Submit and track requests — half-day, remote work, loan, increment, resignation, and more."
+        description="Submit and track requests — half-day, remote work, loan, PF withdrawal, increment, resignation, and more."
         actions={
           <Button
             onClick={() => {
@@ -120,6 +127,7 @@ export function MyRequestsPage() {
           <TabsTrigger value="late">Late</TabsTrigger>
           <TabsTrigger value="remote_work">Remote Work</TabsTrigger>
           <TabsTrigger value="loan">Loan</TabsTrigger>
+          <TabsTrigger value="pf_withdrawal">PF Withdrawal</TabsTrigger>
           <TabsTrigger value="increment">Increment</TabsTrigger>
           <TabsTrigger value="resignation">Resignation</TabsTrigger>
           <TabsTrigger value="other">Other</TabsTrigger>
@@ -294,6 +302,13 @@ function RequestDialog({
   const create = useCreateGeneralRequest();
   const update = useUpdateGeneralRequest();
   const { data: me } = useGetMe();
+  const employeeId = me?.employeeId ?? 0;
+  const { data: employee } = useGetEmployee(employeeId, {
+    query: {
+      queryKey: getGetEmployeeQueryKey(employeeId),
+      enabled: open && employeeId > 0,
+    },
+  });
   const { data: settings } = useGetSettings({
     query: { queryKey: getGetSettingsQueryKey() },
   });
@@ -303,6 +318,21 @@ function RequestDialog({
       enabled: open,
     },
   });
+  const { data: payslips } = useGetMyPayslips({
+    query: {
+      queryKey: getGetMyPayslipsQueryKey(),
+      enabled: open && employeeId > 0,
+    },
+  });
+  const { data: pfRequests } = useListGeneralRequests(
+    { type: "pf_withdrawal" as any },
+    {
+      query: {
+        queryKey: getListGeneralRequestsQueryKey({ type: "pf_withdrawal" as any }),
+        enabled: open && employeeId > 0,
+      },
+    },
+  );
   const today = new Date().toISOString().slice(0, 10);
   const [type, setType] = useState<GeneralRequestType>("half_day");
   const [date, setDate] = useState(today);
@@ -343,8 +373,17 @@ function RequestDialog({
   }, [open, editing, today, settings?.loanDefaultMonths]);
 
   const requiresAmount = type === "loan" || type === "increment";
+  const requiresPfAmount = (type as string) === "pf_withdrawal";
   const supportsDateRange =
     type === "half_day" || type === "remote_work" || type === "late";
+  const pfSummary =
+    employee && payslips
+      ? buildProvidentFundSummary(
+          employee,
+          payslips,
+          (pfRequests ?? []).filter((request) => request.id !== editing?.id),
+        )
+      : null;
 
   // Day-count for the "Selected" preview box
   const dayCount = useMemo(() => {
@@ -364,7 +403,7 @@ function RequestDialog({
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (requiresAmount && (!amount || Number(amount) <= 0)) {
+    if ((requiresAmount || requiresPfAmount) && (!amount || Number(amount) <= 0)) {
       toast.error("Amount is required");
       return;
     }
@@ -385,11 +424,29 @@ function RequestDialog({
         return;
       }
     }
+    if ((type as string) === "pf_withdrawal") {
+      if (!pfSummary) {
+        toast.error("PF summary is still loading");
+        return;
+      }
+      if (!pfSummary.canWithdraw) {
+        toast.error(
+          `PF withdrawal becomes available after ${formatDate(pfSummary.eligibleAfterDate)}`,
+        );
+        return;
+      }
+      if (Number(amount) > pfSummary.availableToRequest) {
+        toast.error(
+          `Withdrawal amount exceeds available PF balance of ${formatCurrency(pfSummary.availableToRequest)}`,
+        );
+        return;
+      }
+    }
     const payload = {
       type,
       date: date as unknown as string,
       dateTo: supportsDateRange && dateTo && dateTo > date ? dateTo : undefined,
-      amount: requiresAmount ? Number(amount) : null,
+      amount: requiresAmount || requiresPfAmount ? Number(amount) : null,
       installmentMonths:
         type === "loan" && Number(installmentMonths) > 0
           ? Number(installmentMonths)
@@ -447,6 +504,7 @@ function RequestDialog({
                 <SelectItem value="late">Late Arrival</SelectItem>
                 <SelectItem value="remote_work">Remote Work</SelectItem>
                 <SelectItem value="loan">Loan</SelectItem>
+                <SelectItem value="pf_withdrawal">PF Withdrawal</SelectItem>
                 <SelectItem value="increment">Salary Increment</SelectItem>
                 <SelectItem value="resignation">Resignation</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
@@ -458,6 +516,8 @@ function RequestDialog({
               <Label>
                 {type === "loan"
                   ? "Need by date"
+                  : (type as string) === "pf_withdrawal"
+                    ? "Withdrawal date"
                   : type === "increment"
                     ? "Effective date"
                     : supportsDateRange
@@ -480,9 +540,13 @@ function RequestDialog({
                 />
               </div>
             )}
-            {requiresAmount && (
+            {(requiresAmount || requiresPfAmount) && (
               <div className="space-y-1.5">
-                <Label>Amount (PKR)</Label>
+                <Label>
+                  {(type as string) === "pf_withdrawal"
+                    ? "Withdrawal amount (PKR)"
+                    : "Amount (PKR)"}
+                </Label>
                 <Input
                   required
                   type="number"
@@ -533,6 +597,34 @@ function RequestDialog({
               )}
             </div>
           )}
+          {(type as string) === "pf_withdrawal" && pfSummary && (
+            <div
+              className={
+                "rounded-md border px-3 py-2 text-xs " +
+                (pfSummary.canWithdraw
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
+                  : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100")
+              }
+            >
+              {pfSummary.canWithdraw ? (
+                <>
+                  Available PF balance:{" "}
+                  <span className="font-semibold">
+                    {formatCurrency(pfSummary.availableToRequest)}
+                  </span>
+                  . PF starts after probation and withdrawal is allowed after 1 year of service.
+                </>
+              ) : (
+                <>
+                  PF withdrawal becomes available after{" "}
+                  <span className="font-semibold">
+                    {formatDate(pfSummary.eligibleAfterDate)}
+                  </span>
+                  . Current PF balance: {formatCurrency(pfSummary.currentBalance)}.
+                </>
+              )}
+            </div>
+          )}
           <div className="rounded-md border border-dashed border-border bg-muted/40 px-3 py-2 text-sm">
             <span className="text-muted-foreground">Selected:</span>{" "}
             <span className="font-medium">{formatDateShort(date)}</span>
@@ -554,7 +646,7 @@ function RequestDialog({
                 )}
               </>
             )}
-            {requiresAmount && amount && Number(amount) > 0 && (
+            {(requiresAmount || requiresPfAmount) && amount && Number(amount) > 0 && (
               <>
                 <span className="ml-3 text-muted-foreground">·</span>
                 <span className="ml-2 font-semibold text-primary">

@@ -55,6 +55,11 @@ export const employeesTable = pgTable("employees", {
   employmentContractName: text("employment_contract_name"),
   cnicDocumentUrl: text("cnic_document_url"),
   cnicDocumentName: text("cnic_document_name"),
+  bankAccountTitle: text("bank_account_title"),
+  bankAccountNumber: text("bank_account_number"),
+  bankName: text("bank_name"),
+  bankIban: text("bank_iban"),
+  bankBranchCode: text("bank_branch_code"),
   providentFundPercent: numeric("provident_fund_percent", {
     precision: 5,
     scale: 2,

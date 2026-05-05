@@ -8,7 +8,12 @@ import {
 } from "@workspace/db";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
-import { parseHHMM, ymd } from "../lib/dates";
+import { ymd } from "../lib/dates";
+import {
+  officeMinutes,
+  officeStartForShiftDate,
+  resolveAttendanceShiftDate,
+} from "../lib/attendance";
 import { isPayrollOffDay, toHolidaySet } from "../lib/payroll";
 import { getSettings } from "./settings";
 
@@ -33,12 +38,6 @@ function serializeRecord(
   };
 }
 
-function officeMinutes(emp: typeof employeesTable.$inferSelect): number {
-  const s = parseHHMM(emp.officeStartTime);
-  const e = parseHHMM(emp.officeEndTime);
-  return e.h * 60 + e.m - (s.h * 60 + s.m);
-}
-
 router.post(
   "/attendance/check-in",
   requireAuth(["employee"]),
@@ -52,8 +51,8 @@ router.post(
       .where(eq(employeesTable.id, user.employeeId))
       .limit(1);
     const emp = empRows[0]!;
-    const today = ymd(new Date());
     const now = new Date();
+    const shiftDate = resolveAttendanceShiftDate(emp, now);
 
     const existing = await db
       .select()
@@ -61,7 +60,7 @@ router.post(
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, today),
+          eq(attendanceTable.date, shiftDate),
         ),
       )
       .limit(1);
@@ -78,8 +77,8 @@ router.post(
         and(
           eq(leaveRequestsTable.employeeId, user.employeeId),
           eq(leaveRequestsTable.status, "approved"),
-          lte(leaveRequestsTable.startDate, today),
-          gte(leaveRequestsTable.endDate, today),
+          lte(leaveRequestsTable.startDate, shiftDate),
+          gte(leaveRequestsTable.endDate, shiftDate),
         ),
       )
       .limit(1);
@@ -96,7 +95,7 @@ router.post(
       .where(
         and(
           eq(remoteWorkRequestsTable.employeeId, user.employeeId),
-          eq(remoteWorkRequestsTable.date, today),
+          eq(remoteWorkRequestsTable.date, shiftDate),
           eq(remoteWorkRequestsTable.status, "approved"),
         ),
       )
@@ -105,9 +104,7 @@ router.post(
     const isRemoteToday =
       emp.positionType === "remote" || remoteApproved.length > 0;
 
-    const { h, m } = parseHHMM(emp.officeStartTime);
-    const officeStart = new Date(now);
-    officeStart.setUTCHours(h, m, 0, 0);
+    const officeStart = officeStartForShiftDate(emp, shiftDate);
     const graceCutoff = new Date(
       officeStart.getTime() + emp.gracePeriodMinutes * 60_000,
     );
@@ -136,7 +133,7 @@ router.post(
         .insert(attendanceTable)
         .values({
           employeeId: user.employeeId,
-          date: today,
+          date: shiftDate,
           checkInTime: now,
           isLate,
           status,
@@ -161,8 +158,8 @@ router.post(
       .where(eq(employeesTable.id, user.employeeId))
       .limit(1);
     const emp = empRows[0]!;
-    const today = ymd(new Date());
     const now = new Date();
+    const shiftDate = resolveAttendanceShiftDate(emp, now);
 
     const settings = await getSettings();
     const holidaySet = toHolidaySet(settings);
@@ -172,13 +169,13 @@ router.post(
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, today),
+          eq(attendanceTable.date, shiftDate),
         ),
       )
       .limit(1);
 
     if (!rows.length || !rows[0]!.checkInTime) {
-      return res.status(400).json({ message: "You haven't checked in today" });
+      return res.status(400).json({ message: "You haven't checked in for this shift" });
     }
     const rec = rows[0]!;
     const worked = Math.floor(
@@ -238,7 +235,7 @@ router.get(
       .where(eq(employeesTable.id, user.employeeId))
       .limit(1);
     const emp = empRows[0]!;
-    const today = ymd(new Date());
+    const today = resolveAttendanceShiftDate(emp, new Date());
     const rows = await db
       .select()
       .from(attendanceTable)

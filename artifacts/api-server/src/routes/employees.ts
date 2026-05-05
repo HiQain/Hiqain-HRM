@@ -70,6 +70,11 @@ function serializeEmployee(
     employmentContractName: e.employmentContractName,
     cnicDocumentUrl: e.cnicDocumentUrl,
     cnicDocumentName: e.cnicDocumentName,
+    bankAccountTitle: e.bankAccountTitle,
+    bankAccountNumber: e.bankAccountNumber,
+    bankName: e.bankName,
+    bankIban: e.bankIban,
+    bankBranchCode: e.bankBranchCode,
     providentFundPercent:
       e.providentFundPercent != null ? Number(e.providentFundPercent) : null,
   };
@@ -194,6 +199,11 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res) => {
       immediateFamily: (data as any).immediateFamily ?? null,
       cnicDocumentUrl: (data as any).cnicDocumentUrl ?? null,
       cnicDocumentName: (data as any).cnicDocumentName ?? null,
+      bankAccountTitle: (data as any).bankAccountTitle ?? null,
+      bankAccountNumber: (data as any).bankAccountNumber ?? null,
+      bankName: (data as any).bankName ?? null,
+      bankIban: (data as any).bankIban ?? null,
+      bankBranchCode: (data as any).bankBranchCode ?? null,
     })
     .returning();
   res.status(201).json(serializeEmployee(insertedEmp[0]!, email));
@@ -286,6 +296,11 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res) =>
         immediateFamily: (data as any).immediateFamily ?? null,
         cnicDocumentUrl: (data as any).cnicDocumentUrl ?? null,
         cnicDocumentName: (data as any).cnicDocumentName ?? null,
+        bankAccountTitle: (data as any).bankAccountTitle ?? null,
+        bankAccountNumber: (data as any).bankAccountNumber ?? null,
+        bankName: (data as any).bankName ?? null,
+        bankIban: (data as any).bankIban ?? null,
+        bankBranchCode: (data as any).bankBranchCode ?? null,
       });
       created += 1;
     } catch (err) {
@@ -456,6 +471,14 @@ router.patch("/employees/:id", requireAuth(), async (req, res) => {
     updates.cnicDocumentUrl = extra.cnicDocumentUrl;
   if (extra.cnicDocumentName !== undefined)
     updates.cnicDocumentName = extra.cnicDocumentName;
+  if (extra.bankAccountTitle !== undefined)
+    updates.bankAccountTitle = extra.bankAccountTitle;
+  if (extra.bankAccountNumber !== undefined)
+    updates.bankAccountNumber = extra.bankAccountNumber;
+  if (extra.bankName !== undefined) updates.bankName = extra.bankName;
+  if (extra.bankIban !== undefined) updates.bankIban = extra.bankIban;
+  if (extra.bankBranchCode !== undefined)
+    updates.bankBranchCode = extra.bankBranchCode;
   if (extra.providentFundPercent !== undefined)
     updates.providentFundPercent =
       extra.providentFundPercent != null ? String(extra.providentFundPercent) : null;

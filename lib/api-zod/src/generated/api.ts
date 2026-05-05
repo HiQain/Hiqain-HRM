@@ -107,6 +107,11 @@ export const ListEmployeesResponseItem = zod.object({
   employmentContractName: zod.string().nullish(),
   cnicDocumentUrl: zod.string().nullish(),
   cnicDocumentName: zod.string().nullish(),
+  bankAccountTitle: zod.string().nullish(),
+  bankAccountNumber: zod.string().nullish(),
+  bankName: zod.string().nullish(),
+  bankIban: zod.string().nullish(),
+  bankBranchCode: zod.string().nullish(),
   providentFundPercent: zod.number().nullish(),
 });
 export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem);
@@ -176,6 +181,11 @@ export const CreateEmployeeBody = zod.object({
   immediateFamily: zod.string().nullish(),
   cnicDocumentUrl: zod.string().nullish(),
   cnicDocumentName: zod.string().nullish(),
+  bankAccountTitle: zod.string().nullish(),
+  bankAccountNumber: zod.string().nullish(),
+  bankName: zod.string().nullish(),
+  bankIban: zod.string().nullish(),
+  bankBranchCode: zod.string().nullish(),
 });
 
 /**
@@ -418,6 +428,11 @@ export const UpdateEmployeeBody = zod.object({
   employmentContractName: zod.string().nullish(),
   cnicDocumentUrl: zod.string().nullish(),
   cnicDocumentName: zod.string().nullish(),
+  bankAccountTitle: zod.string().nullish(),
+  bankAccountNumber: zod.string().nullish(),
+  bankName: zod.string().nullish(),
+  bankIban: zod.string().nullish(),
+  bankBranchCode: zod.string().nullish(),
   providentFundPercent: zod.number().nullish(),
 });
 
@@ -1798,6 +1813,7 @@ export const ListGeneralRequestsQueryParams = zod.object({
       "increment",
       "remote_work",
       "late",
+      "pf_withdrawal",
       "resignation",
       "other",
     ])
@@ -1815,6 +1831,7 @@ export const ListGeneralRequestsResponseItem = zod.object({
     "increment",
     "remote_work",
     "late",
+    "pf_withdrawal",
     "resignation",
     "other",
   ]),
@@ -1895,6 +1912,7 @@ export const UpdateGeneralRequestBody = zod.object({
       "increment",
       "remote_work",
       "late",
+      "pf_withdrawal",
       "resignation",
       "other",
     ])

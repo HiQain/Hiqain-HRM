@@ -11,6 +11,7 @@ import {
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { parseDate, ymd } from "../lib/dates";
+import { resolveAttendanceShiftDate } from "../lib/attendance";
 
 const router: IRouter = Router();
 
@@ -190,7 +191,8 @@ router.get(
       avatarUrl: e.avatarUrl,
     };
 
-    const today = ymd(new Date());
+    const now = new Date();
+    const today = resolveAttendanceShiftDate(e, now);
     const todayRows = await db
       .select()
       .from(attendanceTable)
@@ -226,7 +228,6 @@ router.get(
     };
 
     // Month stats
-    const now = new Date();
     const y = now.getUTCFullYear();
     const m = now.getUTCMonth() + 1;
     const start = `${y}-${String(m).padStart(2, "0")}-01`;

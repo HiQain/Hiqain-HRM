@@ -9,6 +9,7 @@ import {
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { daysBetweenInclusive, parseDate, parseHHMM, ymd } from "../lib/dates";
+import { officeMinutes } from "../lib/attendance";
 
 function leaveDayTimes(
   emp: typeof employeesTable.$inferSelect,
@@ -20,8 +21,12 @@ function leaveDayTimes(
   checkInTime.setUTCHours(start.h, start.m, 0, 0);
   const checkOutTime = new Date(`${dateStr}T00:00:00Z`);
   checkOutTime.setUTCHours(end.h, end.m, 0, 0);
-  const workedMinutes =
-    end.h * 60 + end.m - (start.h * 60 + start.m);
+  if (
+    end.h * 60 + end.m <= start.h * 60 + start.m
+  ) {
+    checkOutTime.setUTCDate(checkOutTime.getUTCDate() + 1);
+  }
+  const workedMinutes = officeMinutes(emp);
   return { checkInTime, checkOutTime, workedMinutes };
 }
 

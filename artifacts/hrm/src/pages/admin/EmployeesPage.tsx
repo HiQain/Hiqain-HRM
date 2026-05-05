@@ -394,6 +394,11 @@ function NewEmployeeSheet({
       immediateFamily: "",
       cnicDocumentUrl: "",
       cnicDocumentName: "",
+      bankAccountTitle: "",
+      bankAccountNumber: "",
+      bankName: "",
+      bankIban: "",
+      bankBranchCode: "",
     }),
     [settings],
   );
@@ -477,7 +482,12 @@ function NewEmployeeSheet({
           immediateFamily: form.immediateFamily || undefined,
           cnicDocumentUrl: form.cnicDocumentUrl || undefined,
           cnicDocumentName: form.cnicDocumentName || undefined,
-        },
+          bankAccountTitle: form.bankAccountTitle || undefined,
+          bankAccountNumber: form.bankAccountNumber || undefined,
+          bankName: form.bankName || undefined,
+          bankIban: form.bankIban || undefined,
+          bankBranchCode: form.bankBranchCode || undefined,
+        } as any,
       },
       {
         onSuccess: () => {
@@ -715,6 +725,56 @@ function NewEmployeeSheet({
                   />
                 </Field>
               </div>
+            </div>
+          </Section>
+
+          <Section title="Bank details">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Account title">
+                <Input
+                  value={form.bankAccountTitle}
+                  onChange={(e) =>
+                    setForm({ ...form, bankAccountTitle: e.target.value })
+                  }
+                  placeholder="Muhammad Ali"
+                />
+              </Field>
+              <Field label="Account number">
+                <Input
+                  value={form.bankAccountNumber}
+                  onChange={(e) =>
+                    setForm({ ...form, bankAccountNumber: e.target.value })
+                  }
+                  placeholder="0035123456789"
+                />
+              </Field>
+              <Field label="Bank name">
+                <Input
+                  value={form.bankName}
+                  onChange={(e) =>
+                    setForm({ ...form, bankName: e.target.value })
+                  }
+                  placeholder="Meezan Bank"
+                />
+              </Field>
+              <Field label="IBAN">
+                <Input
+                  value={form.bankIban}
+                  onChange={(e) =>
+                    setForm({ ...form, bankIban: e.target.value })
+                  }
+                  placeholder="PK36MEZN0001234567890123"
+                />
+              </Field>
+              <Field label="Branch code">
+                <Input
+                  value={form.bankBranchCode}
+                  onChange={(e) =>
+                    setForm({ ...form, bankBranchCode: e.target.value })
+                  }
+                  placeholder="0123"
+                />
+              </Field>
             </div>
           </Section>
           </div>

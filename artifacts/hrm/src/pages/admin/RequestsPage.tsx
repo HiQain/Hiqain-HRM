@@ -3,15 +3,19 @@ import {
   useListGeneralRequests,
   useApproveGeneralRequest,
   useRejectGeneralRequest,
+  useGetEmployee,
+  useGetEmployeePayslips,
   getListGeneralRequestsQueryKey,
   getGetAdminDashboardQueryKey,
   useGetSettings,
+  getGetEmployeeQueryKey,
+  getGetEmployeePayslipsQueryKey,
   getGetSettingsQueryKey,
   type GeneralRequest,
   type GeneralRequestType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, X } from "lucide-react";
+import { Check, PiggyBank, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
@@ -44,6 +48,7 @@ import {
 } from "@/components/ui/table";
 import type { ListGeneralRequestsParams } from "@workspace/api-client-react";
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils";
+import { buildProvidentFundSummary } from "@/lib/providentFund";
 
 type FilterStatus = "all" | "pending" | "approved" | "rejected";
 type FilterType =
@@ -53,15 +58,17 @@ type FilterType =
   | "increment"
   | "remote_work"
   | "late"
+  | "pf_withdrawal"
   | "resignation"
   | "other";
 
-const TYPE_LABEL: Record<GeneralRequestType, string> = {
+const TYPE_LABEL: Record<string, string> = {
   half_day: "Half Day",
   loan: "Loan",
   increment: "Increment",
   remote_work: "Remote Work",
   late: "Late",
+  pf_withdrawal: "PF Withdrawal",
   resignation: "Resignation",
   other: "Other",
 };
@@ -71,7 +78,7 @@ export function AdminRequestsPage() {
   const [typeFilter, setTypeFilter] = useState<FilterType>("all");
   const params: ListGeneralRequestsParams = {};
   if (status !== "all") params.status = status;
-  if (typeFilter !== "all") params.type = typeFilter;
+  if (typeFilter !== "all") params.type = typeFilter as any;
   const hasParams = Object.keys(params).length > 0;
   const queryKey = getListGeneralRequestsQueryKey(hasParams ? params : undefined);
   const { data, isLoading } = useListGeneralRequests(
@@ -86,6 +93,19 @@ export function AdminRequestsPage() {
     query: { queryKey: getGetSettingsQueryKey() },
   });
   const [loanDialog, setLoanDialog] = useState<GeneralRequest | null>(null);
+  const [pfDialog, setPfDialog] = useState<GeneralRequest | null>(null);
+  const { data: pfEmployee } = useGetEmployee(pfDialog?.employeeId ?? 0, {
+    query: {
+      queryKey: getGetEmployeeQueryKey(pfDialog?.employeeId ?? 0),
+      enabled: !!pfDialog?.employeeId,
+    },
+  });
+  const { data: pfPayslips } = useGetEmployeePayslips(pfDialog?.employeeId ?? 0, {
+    query: {
+      queryKey: getGetEmployeePayslipsQueryKey(pfDialog?.employeeId ?? 0),
+      enabled: !!pfDialog?.employeeId,
+    },
+  });
 
   const invalidate = () => {
     qc.invalidateQueries({
@@ -97,6 +117,10 @@ export function AdminRequestsPage() {
   const onApprove = (r: GeneralRequest) => {
     if (r.type === "loan") {
       setLoanDialog(r);
+      return;
+    }
+    if ((r.type as string) === "pf_withdrawal") {
+      setPfDialog(r);
       return;
     }
     approve.mutate(
@@ -130,7 +154,7 @@ export function AdminRequestsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Requests"
-        description="Approve or reject half-day, loan, and increment requests."
+        description="Approve or reject half-day, loan, PF withdrawal, increment, and other employee requests."
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -149,6 +173,7 @@ export function AdminRequestsPage() {
             <TabsTrigger value="late">Late</TabsTrigger>
             <TabsTrigger value="remote_work">Remote Work</TabsTrigger>
             <TabsTrigger value="loan">Loan</TabsTrigger>
+            <TabsTrigger value="pf_withdrawal">PF Withdrawal</TabsTrigger>
             <TabsTrigger value="increment">Increment</TabsTrigger>
             <TabsTrigger value="resignation">Resignation</TabsTrigger>
             <TabsTrigger value="other">Other</TabsTrigger>
@@ -211,7 +236,15 @@ export function AdminRequestsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {r.amount != null ? formatCurrency(r.amount) : "—"}
+                    <div className="space-y-1">
+                      <span>{r.amount != null ? formatCurrency(r.amount) : "—"}</span>
+                      {(r.type as string) === "pf_withdrawal" && (
+                        <div className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                          <PiggyBank className="h-3 w-3" />
+                          PF request
+                        </div>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="max-w-xs text-muted-foreground">
                     <ReasonCell
@@ -268,6 +301,18 @@ export function AdminRequestsPage() {
         onApproved={() => {
           invalidate();
           setLoanDialog(null);
+        }}
+      />
+
+      <ApprovePfWithdrawalDialog
+        request={pfDialog}
+        employee={pfEmployee ?? null}
+        payslips={pfPayslips ?? []}
+        requests={(data ?? []).filter((item) => item.employeeId === pfDialog?.employeeId)}
+        onClose={() => setPfDialog(null)}
+        onApproved={() => {
+          invalidate();
+          setPfDialog(null);
         }}
       />
     </div>
@@ -366,5 +411,122 @@ function ApproveLoanDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ApprovePfWithdrawalDialog({
+  request,
+  employee,
+  payslips,
+  requests,
+  onClose,
+  onApproved,
+}: {
+  request: GeneralRequest | null;
+  employee: any | null;
+  payslips: any[];
+  requests: GeneralRequest[];
+  onClose: () => void;
+  onApproved: () => void;
+}) {
+  const approve = useApproveGeneralRequest();
+  if (!request) return null;
+
+  const summary =
+    employee != null
+      ? buildProvidentFundSummary(employee, payslips, requests)
+      : null;
+
+  const requestedAmount = Number(request.amount ?? 0);
+  const exceedsAvailable =
+    summary != null && requestedAmount > summary.availableToRequest;
+
+  return (
+    <Dialog
+      open={!!request}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Approve PF withdrawal</DialogTitle>
+          <DialogDescription>
+            Review current PF balance before approving {request.employeeName}'s withdrawal request.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!summary ? (
+          <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+            Loading PF balance...
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <PfMiniCard label="Requested amount" value={formatCurrency(requestedAmount)} tone="down" />
+              <PfMiniCard label="Current PF balance" value={formatCurrency(summary.currentBalance)} />
+              <PfMiniCard label="Pending withdrawals" value={formatCurrency(summary.pendingWithdrawals)} />
+              <PfMiniCard label="Available now" value={formatCurrency(summary.availableToRequest)} />
+            </div>
+            <div className="rounded-md border border-dashed border-border bg-muted/40 px-3 py-3 text-sm">
+              <p className="font-medium text-foreground">{request.reason}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Eligible after {formatDate(summary.eligibleAfterDate)}. PF starts counting after probation.
+              </p>
+            </div>
+            {exceedsAvailable && (
+              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                Requested amount exceeds currently available PF balance. Backend will also block approval.
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={approve.isPending || !summary || exceedsAvailable}
+            onClick={() =>
+              approve.mutate(
+                { id: request.id, data: {} },
+                {
+                  onSuccess: () => {
+                    toast.success("PF withdrawal approved");
+                    onApproved();
+                  },
+                  onError: (err) =>
+                    toast.error(err instanceof Error ? err.message : "Could not approve"),
+                },
+              )
+            }
+          >
+            {approve.isPending ? "Approving..." : "Approve withdrawal"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PfMiniCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "down";
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className={`mt-1 text-base font-semibold ${tone === "down" ? "text-rose-600" : "text-foreground"}`}>
+        {value}
+      </p>
+    </div>
   );
 }

@@ -5,10 +5,13 @@ import {
   employeesTable,
   generalRequestsTable,
   loansTable,
+  payslipsTable,
+  salaryComponentsTable,
   salaryEventsTable,
 } from "@workspace/db";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
+import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
 import { getSettings } from "./settings";
 import { computeLoanEligibility } from "./loans";
 
@@ -23,6 +26,15 @@ async function loadMentioned(ids: number[] | null | undefined) {
 }
 
 type AttachmentItem = { url: string; name: string };
+type RequestType =
+  | "half_day"
+  | "loan"
+  | "increment"
+  | "remote_work"
+  | "late"
+  | "pf_withdrawal"
+  | "resignation"
+  | "other";
 
 function mergedAttachments(r: {
   attachmentUrl: string | null;
@@ -87,6 +99,160 @@ async function serialize(
   };
 }
 
+function subtractDay(d: Date): Date {
+  const r = new Date(d.getTime());
+  r.setUTCDate(r.getUTCDate() - 1);
+  return r;
+}
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function resolveComponentValue(
+  component: typeof salaryComponentsTable.$inferSelect,
+  basicSalary: number,
+) {
+  return component.valueType === "percentage"
+    ? (Number(component.value) / 100) * basicSalary
+    : Number(component.value);
+}
+
+async function computeProvidentFundBalance(
+  employeeId: number,
+  opts?: { excludeRequestId?: number; includePending?: boolean },
+) {
+  const employeeRows = await db
+    .select()
+    .from(employeesTable)
+    .where(eq(employeesTable.id, employeeId))
+    .limit(1);
+  const employee = employeeRows[0];
+  if (!employee) {
+    throw new Error("Employee not found");
+  }
+
+  const joiningDate = parseDate(employee.joiningDate);
+  const probationEndDate = subtractDay(
+    addMonths(joiningDate, employee.probationMonths),
+  );
+  const withdrawalEligibleFrom = addMonths(joiningDate, 12);
+  const now = new Date();
+
+  const payslips = await db
+    .select()
+    .from(payslipsTable)
+    .where(eq(payslipsTable.employeeId, employeeId))
+    .orderBy(desc(payslipsTable.year), desc(payslipsTable.month));
+  const components = await db
+    .select()
+    .from(salaryComponentsTable)
+    .where(eq(salaryComponentsTable.employeeId, employeeId));
+
+  const totalContributed = round2(
+    payslips.reduce((sum, payslip) => {
+      const periodEnd = new Date(Date.UTC(payslip.year, payslip.month, 0));
+      if (periodEnd.getTime() <= probationEndDate.getTime()) return sum;
+
+      const basicSalary = Number(payslip.basicSalary);
+      const pfFromComponent = components
+        .filter((component) => component.isDeduction === 1 && component.kind === "provident_fund")
+        .reduce(
+          (componentSum, component) =>
+            componentSum + resolveComponentValue(component, basicSalary),
+          0,
+        );
+      const pfFromProfile =
+        pfFromComponent <= 0 && employee.providentFundPercent != null
+          ? (Number(employee.providentFundPercent) / 100) * basicSalary
+          : 0;
+      return sum + pfFromComponent + pfFromProfile;
+    }, 0),
+  );
+
+  const withdrawalRows = await db
+    .select()
+    .from(generalRequestsTable)
+    .where(eq(generalRequestsTable.employeeId, employeeId));
+
+  const approvedWithdrawals = round2(
+    withdrawalRows
+      .filter(
+        (row) =>
+          (row.type as string) === "pf_withdrawal" &&
+          row.status === "approved" &&
+          row.id !== opts?.excludeRequestId,
+      )
+      .reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
+  );
+  const pendingWithdrawals = round2(
+    withdrawalRows
+      .filter(
+        (row) =>
+          (row.type as string) === "pf_withdrawal" &&
+          row.status === "pending" &&
+          row.id !== opts?.excludeRequestId,
+      )
+      .reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
+  );
+  const currentBalance = round2(totalContributed - approvedWithdrawals);
+  const availableBalance = Math.max(
+    0,
+    round2(
+      currentBalance - (opts?.includePending ? pendingWithdrawals : 0),
+    ),
+  );
+
+  return {
+    employee,
+    probationEndDate: ymd(probationEndDate),
+    withdrawalEligibleFrom: ymd(withdrawalEligibleFrom),
+    oneYearCompleted: diffMonths(joiningDate, now) >= 12,
+    probationCompleted: now.getTime() > probationEndDate.getTime(),
+    currentBalance,
+    availableBalance,
+  };
+}
+
+async function validateProvidentFundWithdrawal(
+  employeeId: number,
+  amount: number,
+  opts?: { excludeRequestId?: number; includePending?: boolean },
+) {
+  const summary = await computeProvidentFundBalance(employeeId, opts);
+  if (!summary.oneYearCompleted) {
+    return {
+      ok: false as const,
+      message: `PF withdrawal is available only after 1 year of service. Eligible after ${summary.withdrawalEligibleFrom}.`,
+    };
+  }
+  if (!summary.probationCompleted) {
+    return {
+      ok: false as const,
+      message: `PF starts after probation. Probation completes on ${summary.probationEndDate}.`,
+    };
+  }
+  if (amount <= 0) {
+    return {
+      ok: false as const,
+      message: "Withdrawal amount must be greater than 0.",
+    };
+  }
+  if (summary.availableBalance <= 0) {
+    return {
+      ok: false as const,
+      message: "No PF balance is available for withdrawal yet.",
+    };
+  }
+  if (amount > summary.availableBalance) {
+    return {
+      ok: false as const,
+      message: `Withdrawal amount cannot exceed available PF balance of ${summary.availableBalance}.`,
+    };
+  }
+  return { ok: true as const, summary };
+}
+
 router.get("/requests", requireAuth(), async (req, res) => {
   const user = getUser(req);
   const type = req.query.type as string | undefined;
@@ -102,12 +268,13 @@ router.get("/requests", requireAuth(), async (req, res) => {
     "increment",
     "remote_work",
     "late",
+    "pf_withdrawal",
     "resignation",
     "other",
   ] as const;
   if (type && (validTypes as readonly string[]).includes(type)) {
     filters.push(
-      eq(generalRequestsTable.type, type as (typeof validTypes)[number]),
+      eq(generalRequestsTable.type, type as any),
     );
   }
   if (status === "pending" || status === "approved" || status === "rejected") {
@@ -161,6 +328,7 @@ router.post("/requests", requireAuth(["employee"]), async (req, res) => {
     "increment",
     "remote_work",
     "late",
+    "pf_withdrawal",
     "resignation",
     "other",
   ];
@@ -177,12 +345,12 @@ router.post("/requests", requireAuth(["employee"]), async (req, res) => {
       .json({ message: "type, date and reason are required" });
   }
   if (
-    (type === "loan" || type === "increment") &&
+    (type === "loan" || type === "increment" || type === "pf_withdrawal") &&
     (amount == null || isNaN(Number(amount)) || Number(amount) <= 0)
   ) {
     return res
       .status(400)
-      .json({ message: "Amount is required for loan and increment requests" });
+      .json({ message: "Amount is required for loan, increment and PF withdrawal requests" });
   }
 
   if (type === "loan") {
@@ -205,6 +373,17 @@ router.post("/requests", requireAuth(["employee"]), async (req, res) => {
       return res
         .status(400)
         .json({ message: "Installment months is required (must be >= 1)" });
+    }
+  }
+
+  if (type === "pf_withdrawal") {
+    const validation = await validateProvidentFundWithdrawal(
+      user.employeeId,
+      Number(amount),
+      { includePending: true },
+    );
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.message });
     }
   }
 
@@ -260,10 +439,40 @@ router.patch("/requests/:id", requireAuth(["employee"]), async (req, res) => {
       .json({ message: "Only pending requests can be edited" });
 
   const body = req.body ?? {};
+  const nextType = (body.type ?? row.type) as RequestType;
+  const nextAmount =
+    body.amount === undefined
+      ? row.amount != null
+        ? Number(row.amount)
+        : null
+      : body.amount != null
+        ? Number(body.amount)
+        : null;
+
+  if (
+    (nextType === "loan" || nextType === "increment" || nextType === "pf_withdrawal") &&
+    (nextAmount == null || Number.isNaN(nextAmount) || nextAmount <= 0)
+  ) {
+    return res.status(400).json({
+      message: "Amount is required for loan, increment and PF withdrawal requests",
+    });
+  }
+
+  if (nextType === "pf_withdrawal") {
+    const validation = await validateProvidentFundWithdrawal(
+      row.employeeId,
+      Number(nextAmount),
+      { excludeRequestId: row.id, includePending: true },
+    );
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.message });
+    }
+  }
+
   const updated = await db
-    .update(generalRequestsTable)
-    .set({
-      type: body.type ?? row.type,
+      .update(generalRequestsTable)
+      .set({
+      type: (body.type ?? row.type) as any,
       date: body.date ?? row.date,
       dateTo: body.dateTo !== undefined ? (body.dateTo ?? null) : row.dateTo,
       amount:
@@ -352,6 +561,15 @@ router.post(
       if (approvedMonths == null) {
         const settings = await getSettings();
         approvedMonths = settings.loanDefaultMonths;
+      }
+    } else if ((existing.type as string) === "pf_withdrawal") {
+      const validation = await validateProvidentFundWithdrawal(
+        existing.employeeId,
+        Number(existing.amount ?? 0),
+        { excludeRequestId: existing.id, includePending: false },
+      );
+      if (!validation.ok) {
+        return res.status(400).json({ message: validation.message });
       }
     }
 

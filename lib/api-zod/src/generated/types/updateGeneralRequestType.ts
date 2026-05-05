@@ -15,6 +15,7 @@ export const UpdateGeneralRequestType = {
   increment: "increment",
   remote_work: "remote_work",
   late: "late",
+  pf_withdrawal: "pf_withdrawal",
   resignation: "resignation",
   other: "other",
 } as const;
