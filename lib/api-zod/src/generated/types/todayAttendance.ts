@@ -10,5 +10,6 @@ import type { AttendanceRecord } from './attendanceRecord';
 export interface TodayAttendance {
   hasCheckedIn: boolean;
   hasCheckedOut: boolean;
+  isPaused: boolean;
   record?: AttendanceRecord | null;
 }

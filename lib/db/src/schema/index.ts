@@ -11,3 +11,4 @@ export * from "./appSettings";
 export * from "./designationChanges";
 export * from "./newsPosts";
 export * from "./loans";
+export * from "./inventory";

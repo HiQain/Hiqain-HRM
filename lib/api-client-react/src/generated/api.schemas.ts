@@ -466,12 +466,21 @@ export const SalaryComponentValueType = {
   percentage: 'percentage',
 } as const;
 
+export type SalaryComponentPercentageBase = typeof SalaryComponentPercentageBase[keyof typeof SalaryComponentPercentageBase];
+
+
+export const SalaryComponentPercentageBase = {
+  basic_salary: 'basic_salary',
+  gross_salary: 'gross_salary',
+} as const;
+
 export interface SalaryComponent {
   id: number;
   employeeId: number;
   label: string;
   kind: SalaryComponentKind;
   valueType: SalaryComponentValueType;
+  percentageBase: SalaryComponentPercentageBase;
   value: number;
   isDeduction: boolean;
   isTaxable: boolean;
@@ -497,10 +506,19 @@ export const CreateSalaryComponentRequestValueType = {
   percentage: 'percentage',
 } as const;
 
+export type CreateSalaryComponentRequestPercentageBase = typeof CreateSalaryComponentRequestPercentageBase[keyof typeof CreateSalaryComponentRequestPercentageBase];
+
+
+export const CreateSalaryComponentRequestPercentageBase = {
+  basic_salary: 'basic_salary',
+  gross_salary: 'gross_salary',
+} as const;
+
 export interface CreateSalaryComponentRequest {
   label: string;
   kind: CreateSalaryComponentRequestKind;
   valueType: CreateSalaryComponentRequestValueType;
+  percentageBase?: CreateSalaryComponentRequestPercentageBase;
   value: number;
   isDeduction?: boolean;
   isTaxable?: boolean;
@@ -525,10 +543,19 @@ export const UpdateSalaryComponentRequestValueType = {
   percentage: 'percentage',
 } as const;
 
+export type UpdateSalaryComponentRequestPercentageBase = typeof UpdateSalaryComponentRequestPercentageBase[keyof typeof UpdateSalaryComponentRequestPercentageBase];
+
+
+export const UpdateSalaryComponentRequestPercentageBase = {
+  basic_salary: 'basic_salary',
+  gross_salary: 'gross_salary',
+} as const;
+
 export interface UpdateSalaryComponentRequest {
   label: string;
   kind: UpdateSalaryComponentRequestKind;
   valueType: UpdateSalaryComponentRequestValueType;
+  percentageBase?: UpdateSalaryComponentRequestPercentageBase;
   value: number;
   isDeduction?: boolean;
   isTaxable?: boolean;
@@ -653,6 +680,10 @@ export interface AttendanceRecord {
   /** ISO datetime */
   checkOutTime?: string | null;
   workedMinutes?: number | null;
+  /** ISO datetime */
+  pausedAt?: string | null;
+  pausedMinutes?: number;
+  isPaused?: boolean;
   status: AttendanceRecordStatus;
   isLate?: boolean;
   /** True when an approved request (late/half-day) means this row should not deduct from payroll */
@@ -663,6 +694,7 @@ export interface AttendanceRecord {
 export interface TodayAttendance {
   hasCheckedIn: boolean;
   hasCheckedOut: boolean;
+  isPaused: boolean;
   record?: AttendanceRecord | null;
 }
 
@@ -728,6 +760,107 @@ export interface AttendanceOverrideRequest {
 
 export interface SetAttendanceExcusedRequest {
   excused: boolean;
+}
+
+export interface InventoryItem {
+  id: number;
+  name: string;
+  category: string;
+  sku?: string | null;
+  totalStock: number;
+  availableStock: number;
+  assignedStock: number;
+  reorderLevel: number;
+  notes?: string | null;
+  /** ISO datetime */
+  createdAt: string;
+  /** ISO datetime */
+  updatedAt: string;
+}
+
+export type InventoryRequestStatus = typeof InventoryRequestStatus[keyof typeof InventoryRequestStatus];
+
+
+export const InventoryRequestStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface InventoryRequest {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  itemId: number;
+  itemName: string;
+  quantity: number;
+  reason?: string | null;
+  status: InventoryRequestStatus;
+  adminNotes?: string | null;
+  /** ISO datetime */
+  requestedAt: string;
+  /** ISO datetime */
+  reviewedAt?: string | null;
+  reviewedByUserId?: number | null;
+}
+
+export interface InventoryAssignment {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  itemId: number;
+  itemName: string;
+  requestId?: number | null;
+  quantity: number;
+  notes?: string | null;
+  active: boolean;
+  /** ISO datetime */
+  assignedAt: string;
+  /** ISO datetime */
+  returnedAt?: string | null;
+  assignedByUserId?: number | null;
+}
+
+export interface CreateInventoryAssignmentRequest {
+  employeeId: number;
+  itemId: number;
+  /** @minimum 1 */
+  quantity: number;
+  notes?: string | null;
+}
+
+export interface CreateInventoryItemRequest {
+  name: string;
+  category: string;
+  sku?: string | null;
+  /** @minimum 0 */
+  totalStock: number;
+  /** @minimum 0 */
+  reorderLevel?: number;
+  notes?: string | null;
+}
+
+export interface UpdateInventoryItemRequest {
+  name?: string;
+  category?: string;
+  sku?: string | null;
+  /** @minimum 0 */
+  totalStock?: number;
+  /** @minimum 0 */
+  reorderLevel?: number;
+  notes?: string | null;
+}
+
+export interface CreateInventoryRequestRequest {
+  itemId: number;
+  /** @minimum 1 */
+  quantity: number;
+  reason?: string | null;
+}
+
+export interface ReviewInventoryRequestRequest {
+  notes?: string | null;
+  adminNotes?: string | null;
 }
 
 export type LeaveRequestType = typeof LeaveRequestType[keyof typeof LeaveRequestType];
@@ -1229,6 +1362,19 @@ export type ListRemoteWorkRequestsStatus = typeof ListRemoteWorkRequestsStatus[k
 
 
 export const ListRemoteWorkRequestsStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export type ListInventoryRequestsParams = {
+status?: ListInventoryRequestsStatus;
+};
+
+export type ListInventoryRequestsStatus = typeof ListInventoryRequestsStatus[keyof typeof ListInventoryRequestsStatus];
+
+
+export const ListInventoryRequestsStatus = {
   pending: 'pending',
   approved: 'approved',
   rejected: 'rejected',

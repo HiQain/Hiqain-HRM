@@ -1,9 +1,12 @@
 import { Link } from "wouter";
+import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   Clock,
   XCircle,
   Plane,
+  Play,
+  Pause,
   LogIn,
   LogOut,
   ArrowRight,
@@ -11,6 +14,8 @@ import {
 import {
   useGetEmployeeDashboard,
   useCheckIn,
+  usePauseAttendance,
+  useResumeAttendance,
   useCheckOut,
   getGetEmployeeDashboardQueryKey,
   getGetTodayAttendanceQueryKey,
@@ -35,12 +40,20 @@ export function EmployeeDashboard() {
   const { data, isLoading } = useGetEmployeeDashboard();
   const qc = useQueryClient();
   const checkIn = useCheckIn();
+  const pauseAttendance = usePauseAttendance();
+  const resumeAttendance = useResumeAttendance();
   const checkOut = useCheckOut();
+  const [now, setNow] = useState(() => Date.now());
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: getGetEmployeeDashboardQueryKey() });
     qc.invalidateQueries({ queryKey: getGetTodayAttendanceQueryKey() });
   };
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   if (isLoading || !data) {
     return (
@@ -57,6 +70,25 @@ export function EmployeeDashboard() {
   }
 
   const { employee, todayAttendance, monthAttendance, leaveBalance, recentLeaves } = data;
+  const activeRecord = todayAttendance.record;
+  const liveWorkedMinutes =
+    activeRecord?.checkInTime && !activeRecord?.checkOutTime
+      ? Math.max(
+          0,
+          Math.floor(
+            (now - new Date(activeRecord.checkInTime).getTime()) / 60000,
+          ) -
+            (activeRecord.pausedMinutes ?? 0) -
+            (activeRecord.pausedAt
+              ? Math.max(
+                  0,
+                  Math.floor(
+                    (now - new Date(activeRecord.pausedAt).getTime()) / 60000,
+                  ),
+                )
+              : 0),
+        )
+      : activeRecord?.workedMinutes ?? 0;
 
   const onCheckIn = () =>
     checkIn.mutate(undefined, {
@@ -66,6 +98,24 @@ export function EmployeeDashboard() {
       },
       onError: (e: any) =>
         toast.error(e?.message ?? "Could not check in"),
+    });
+  const onPause = () =>
+    pauseAttendance.mutate(undefined, {
+      onSuccess: () => {
+        toast.success("Attendance paused");
+        refresh();
+      },
+      onError: (e: any) =>
+        toast.error(e?.message ?? "Could not pause attendance"),
+    });
+  const onResume = () =>
+    resumeAttendance.mutate(undefined, {
+      onSuccess: () => {
+        toast.success("Attendance resumed");
+        refresh();
+      },
+      onError: (e: any) =>
+        toast.error(e?.message ?? "Could not resume attendance"),
     });
   const onCheckOut = () =>
     checkOut.mutate(undefined, {
@@ -123,7 +173,7 @@ export function EmployeeDashboard() {
                 <div>
                   <p className="opacity-70">Worked</p>
                   <p className="mt-0.5 font-semibold">
-                    {formatDuration(todayAttendance.record.workedMinutes)}
+                    {formatDuration(liveWorkedMinutes)}
                   </p>
                 </div>
               </div>
@@ -141,6 +191,27 @@ export function EmployeeDashboard() {
               <LogIn className="mr-2 h-5 w-5" />
               {checkIn.isPending ? "Checking in..." : "Check in"}
             </Button>
+            {todayAttendance.hasCheckedIn && !todayAttendance.hasCheckedOut && (
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                disabled={pauseAttendance.isPending || resumeAttendance.isPending}
+                onClick={todayAttendance.isPaused ? onResume : onPause}
+              >
+                {todayAttendance.isPaused ? (
+                  <>
+                    <Play className="mr-2 h-5 w-5" />
+                    {resumeAttendance.isPending ? "Resuming..." : "Resume"}
+                  </>
+                ) : (
+                  <>
+                    <Pause className="mr-2 h-5 w-5" />
+                    {pauseAttendance.isPending ? "Pausing..." : "Pause"}
+                  </>
+                )}
+              </Button>
+            )}
             <Button
               size="lg"
               variant="outline"
@@ -148,6 +219,8 @@ export function EmployeeDashboard() {
               disabled={
                 !todayAttendance.hasCheckedIn ||
                 todayAttendance.hasCheckedOut ||
+                pauseAttendance.isPending ||
+                resumeAttendance.isPending ||
                 checkOut.isPending
               }
               onClick={onCheckOut}

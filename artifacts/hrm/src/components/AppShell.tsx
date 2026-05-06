@@ -23,6 +23,7 @@ import {
   Sun,
   PartyPopper,
   PiggyBank,
+  Package,
   Settings as SettingsIcon,
 } from "lucide-react";
 import { useLogout, getGetMeQueryKey } from "@workspace/api-client-react";
@@ -46,6 +47,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: "Leave Requests", href: "/admin/leaves", icon: CalendarRange },
   { label: "Requests", href: "/admin/requests", icon: Inbox },
   { label: "Salary", href: "/admin/salary", icon: Wallet },
+  { label: "Inventory", href: "/admin/inventory", icon: Package },
   { label: "Payslips", href: "/admin/payslips", icon: Receipt },
   { label: "News Feed", href: "/admin/feed", icon: PartyPopper },
   { label: "Settings", href: "/admin/settings", icon: SettingsIcon },
@@ -56,6 +58,7 @@ const EMP_NAV: NavItem[] = [
   { label: "Profile", href: "/employee/profile", icon: UserCircle },
   { label: "Attendance", href: "/employee/attendance", icon: CalendarCheck },
   { label: "Leaves", href: "/employee/leaves", icon: ClipboardList },
+  { label: "Inventory", href: "/employee/inventory", icon: Package },
   { label: "Requests", href: "/employee/requests", icon: FilePlus2 },
   { label: "Salary", href: "/employee/salary", icon: Wallet },
   { label: "Provident Fund", href: "/employee/provident-fund", icon: PiggyBank },

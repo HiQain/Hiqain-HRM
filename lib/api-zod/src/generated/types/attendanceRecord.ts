@@ -17,6 +17,10 @@ export interface AttendanceRecord {
   /** ISO datetime */
   checkOutTime?: string | null;
   workedMinutes?: number | null;
+  /** ISO datetime */
+  pausedAt?: string | null;
+  pausedMinutes?: number;
+  isPaused?: boolean;
   status: AttendanceRecordStatus;
   isLate?: boolean;
   /** True when an approved request (late/half-day) means this row should not deduct from payroll */

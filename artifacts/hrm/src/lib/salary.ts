@@ -10,6 +10,7 @@ type SalaryComponentLike = {
   label: string;
   kind: string;
   valueType: string;
+  percentageBase?: string;
   value: number;
   isDeduction?: boolean;
   isTaxable?: boolean;
@@ -64,9 +65,18 @@ export function isManualTaxComponent(component: { label: string; isDeduction?: b
   return Boolean(component.isDeduction) && /\btax\b/i.test(component.label);
 }
 
-function componentValue(component: SalaryComponentLike, basicSalary: number): number {
+function componentValue(
+  component: SalaryComponentLike,
+  basicSalary: number,
+  grossSalaryBase: number,
+): number {
   if (component.valueType === "percentage") {
-    return (component.value / 100) * basicSalary;
+    return (
+      (component.value / 100) *
+      (component.percentageBase === "gross_salary"
+        ? grossSalaryBase
+        : basicSalary)
+    );
   }
   return component.value;
 }
@@ -127,6 +137,7 @@ export function computeSalaryStructurePreview({
     .reduce((sum, component) => sum + component.value, 0);
 
   const resolvedBasicSalary = designationFixed > 0 ? designationFixed : basicSalary;
+  const grossSalaryBase = resolvedBasicSalary + defaultAllowances;
   let componentAllowances = 0;
   let nonTaxableAllowances = 0;
   let commission = 0;
@@ -135,7 +146,11 @@ export function computeSalaryStructurePreview({
   let providentFund = 0;
 
   for (const component of components) {
-    const value = componentValue(component, resolvedBasicSalary);
+    const value = componentValue(
+      component,
+      resolvedBasicSalary,
+      grossSalaryBase,
+    );
     if (isManualTaxComponent(component)) continue;
     if (component.isDeduction && component.kind === "provident_fund") {
       providentFund += value;

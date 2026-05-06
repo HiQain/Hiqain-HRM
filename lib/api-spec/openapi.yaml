@@ -347,6 +347,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/AttendanceRecord"
 
+  /attendance/pause:
+    post:
+      operationId: pauseAttendance
+      tags: [attendance]
+      summary: Pause the current employee attendance timer
+      responses:
+        "200":
+          description: Paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceRecord"
+
+  /attendance/resume:
+    post:
+      operationId: resumeAttendance
+      tags: [attendance]
+      summary: Resume the current employee attendance timer
+      responses:
+        "200":
+          description: Resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceRecord"
+
   /attendance/today:
     get:
       operationId: getTodayAttendance
@@ -549,6 +575,211 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RemoteWorkRequest"
+
+  /inventory/items:
+    get:
+      operationId: listInventoryItems
+      tags: [inventory]
+      summary: List inventory items
+      responses:
+        "200":
+          description: Inventory items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+    post:
+      operationId: createInventoryItem
+      tags: [inventory]
+      summary: Create inventory item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryItemRequest"
+      responses:
+        "201":
+          description: Created inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+
+  /inventory/items/{id}:
+    patch:
+      operationId: updateInventoryItem
+      tags: [inventory]
+      summary: Update inventory item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInventoryItemRequest"
+      responses:
+        "200":
+          description: Updated inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+
+  /inventory/requests:
+    get:
+      operationId: listInventoryRequests
+      tags: [inventory]
+      summary: List inventory requests
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        "200":
+          description: Inventory requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryRequest"
+
+  /inventory/requests/me:
+    get:
+      operationId: listMyInventoryRequests
+      tags: [inventory]
+      summary: List my inventory requests
+      responses:
+        "200":
+          description: My inventory requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryRequest"
+    post:
+      operationId: createMyInventoryRequest
+      tags: [inventory]
+      summary: Create inventory request for current employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryRequestRequest"
+      responses:
+        "201":
+          description: Created inventory request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryRequest"
+
+  /inventory/requests/{id}/approve:
+    post:
+      operationId: approveInventoryRequest
+      tags: [inventory]
+      summary: Approve inventory request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewInventoryRequestRequest"
+      responses:
+        "200":
+          description: Approved inventory request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryRequest"
+
+  /inventory/requests/{id}/reject:
+    post:
+      operationId: rejectInventoryRequest
+      tags: [inventory]
+      summary: Reject inventory request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewInventoryRequestRequest"
+      responses:
+        "200":
+          description: Rejected inventory request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryRequest"
+
+  /inventory/assignments:
+    get:
+      operationId: listInventoryAssignments
+      tags: [inventory]
+      summary: List inventory assignments
+      responses:
+        "200":
+          description: Inventory assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryAssignment"
+    post:
+      operationId: createInventoryAssignment
+      tags: [inventory]
+      summary: Assign inventory manually to an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryAssignmentRequest"
+      responses:
+        "201":
+          description: Created inventory assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryAssignment"
+
+  /inventory/assignments/me:
+    get:
+      operationId: listMyInventoryAssignments
+      tags: [inventory]
+      summary: List my active inventory assignments
+      responses:
+        "200":
+          description: My inventory assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryAssignment"
 
   /remote-work/{id}:
     patch:
@@ -1617,7 +1848,7 @@ components:
 
     SalaryComponent:
       type: object
-      required: [id, employeeId, label, kind, valueType, value, isDeduction, isTaxable]
+      required: [id, employeeId, label, kind, valueType, percentageBase, value, isDeduction, isTaxable]
       properties:
         id: { type: integer }
         employeeId: { type: integer }
@@ -1628,6 +1859,9 @@ components:
         valueType:
           type: string
           enum: [fixed, percentage]
+        percentageBase:
+          type: string
+          enum: [basic_salary, gross_salary]
         value: { type: number }
         isDeduction: { type: boolean }
         isTaxable: { type: boolean }
@@ -1644,6 +1878,9 @@ components:
         valueType:
           type: string
           enum: [fixed, percentage]
+        percentageBase:
+          type: string
+          enum: [basic_salary, gross_salary]
         value: { type: number }
         isDeduction: { type: boolean }
         isTaxable: { type: boolean }
@@ -1658,6 +1895,9 @@ components:
         valueType:
           type: string
           enum: [fixed, percentage]
+        percentageBase:
+          type: string
+          enum: [basic_salary, gross_salary]
         value: { type: number }
         isDeduction: { type: boolean }
         isTaxable: { type: boolean }
@@ -1791,6 +2031,9 @@ components:
         checkInTime: { type: string, nullable: true, description: "ISO datetime" }
         checkOutTime: { type: string, nullable: true, description: "ISO datetime" }
         workedMinutes: { type: integer, nullable: true }
+        pausedAt: { type: string, nullable: true, description: "ISO datetime" }
+        pausedMinutes: { type: integer }
+        isPaused: { type: boolean }
         status:
           type: string
           enum: [present, late, absent, on_leave, half_day, remote_work]
@@ -1800,10 +2043,11 @@ components:
 
     TodayAttendance:
       type: object
-      required: [hasCheckedIn, hasCheckedOut]
+      required: [hasCheckedIn, hasCheckedOut, isPaused]
       properties:
         hasCheckedIn: { type: boolean }
         hasCheckedOut: { type: boolean }
+        isPaused: { type: boolean }
         record:
           oneOf:
             - $ref: "#/components/schemas/AttendanceRecord"
@@ -1875,6 +2119,125 @@ components:
       required: [excused]
       properties:
         excused: { type: boolean }
+
+    InventoryItem:
+      type: object
+      required:
+        - id
+        - name
+        - category
+        - totalStock
+        - availableStock
+        - assignedStock
+        - reorderLevel
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        category: { type: string }
+        sku: { type: string, nullable: true }
+        totalStock: { type: integer }
+        availableStock: { type: integer }
+        assignedStock: { type: integer }
+        reorderLevel: { type: integer }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, description: "ISO datetime" }
+        updatedAt: { type: string, description: "ISO datetime" }
+
+    InventoryRequest:
+      type: object
+      required:
+        - id
+        - employeeId
+        - employeeName
+        - itemId
+        - itemName
+        - quantity
+        - status
+        - requestedAt
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        itemId: { type: integer }
+        itemName: { type: string }
+        quantity: { type: integer }
+        reason: { type: string, nullable: true }
+        status: { type: string, enum: [pending, approved, rejected] }
+        adminNotes: { type: string, nullable: true }
+        requestedAt: { type: string, description: "ISO datetime" }
+        reviewedAt: { type: string, nullable: true, description: "ISO datetime" }
+        reviewedByUserId: { type: integer, nullable: true }
+
+    InventoryAssignment:
+      type: object
+      required:
+        - id
+        - employeeId
+        - employeeName
+        - itemId
+        - itemName
+        - quantity
+        - active
+        - assignedAt
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        itemId: { type: integer }
+        itemName: { type: string }
+        requestId: { type: integer, nullable: true }
+        quantity: { type: integer }
+        notes: { type: string, nullable: true }
+        active: { type: boolean }
+        assignedAt: { type: string, description: "ISO datetime" }
+        returnedAt: { type: string, nullable: true, description: "ISO datetime" }
+        assignedByUserId: { type: integer, nullable: true }
+
+    CreateInventoryAssignmentRequest:
+      type: object
+      required: [employeeId, itemId, quantity]
+      properties:
+        employeeId: { type: integer }
+        itemId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        notes: { type: string, nullable: true }
+
+    CreateInventoryItemRequest:
+      type: object
+      required: [name, category, totalStock]
+      properties:
+        name: { type: string }
+        category: { type: string }
+        sku: { type: string, nullable: true }
+        totalStock: { type: integer, minimum: 0 }
+        reorderLevel: { type: integer, minimum: 0 }
+        notes: { type: string, nullable: true }
+
+    UpdateInventoryItemRequest:
+      type: object
+      properties:
+        name: { type: string }
+        category: { type: string }
+        sku: { type: string, nullable: true }
+        totalStock: { type: integer, minimum: 0 }
+        reorderLevel: { type: integer, minimum: 0 }
+        notes: { type: string, nullable: true }
+
+    CreateInventoryRequestRequest:
+      type: object
+      required: [itemId, quantity]
+      properties:
+        itemId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        reason: { type: string, nullable: true }
+
+    ReviewInventoryRequestRequest:
+      type: object
+      properties:
+        notes: { type: string, nullable: true }
+        adminNotes: { type: string, nullable: true }
 
     LeaveRequest:
       type: object

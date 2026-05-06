@@ -206,9 +206,22 @@ router.get(
       )
       .limit(1);
     const todayRec = todayRows[0];
+    const activePauseMinutes = todayRec?.pausedAt
+      ? Math.max(0, Math.floor((now.getTime() - todayRec.pausedAt.getTime()) / 60000))
+      : 0;
+    const liveWorkedMinutes =
+      todayRec?.checkInTime && !todayRec.checkOutTime
+        ? Math.max(
+            0,
+            Math.floor((now.getTime() - todayRec.checkInTime.getTime()) / 60000) -
+              (todayRec.pausedMinutes ?? 0) -
+              activePauseMinutes,
+          )
+        : todayRec?.workedMinutes ?? null;
     const todayAttendance = {
       hasCheckedIn: !!todayRec?.checkInTime,
       hasCheckedOut: !!todayRec?.checkOutTime,
+      isPaused: !!todayRec?.pausedAt && !todayRec?.checkOutTime,
       record: todayRec
         ? {
             id: todayRec.id,
@@ -221,7 +234,10 @@ router.get(
             checkOutTime: todayRec.checkOutTime
               ? todayRec.checkOutTime.toISOString()
               : null,
-            workedMinutes: todayRec.workedMinutes,
+            workedMinutes: liveWorkedMinutes,
+            pausedAt: todayRec.pausedAt ? todayRec.pausedAt.toISOString() : null,
+            pausedMinutes: todayRec.pausedMinutes ?? 0,
+            isPaused: !!todayRec.pausedAt && !todayRec.checkOutTime,
             status: todayRec.status,
             isLate: todayRec.isLate,
             notes: todayRec.notes,

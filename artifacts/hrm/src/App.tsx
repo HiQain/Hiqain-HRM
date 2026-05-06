@@ -19,9 +19,11 @@ import { AdminRequestsPage } from "@/pages/admin/RequestsPage";
 import { AdminPayslipsPage } from "@/pages/admin/PayslipsPage";
 import { AdminSalaryPage } from "@/pages/admin/SalaryPage";
 import { AdminSettingsPage } from "@/pages/admin/SettingsPage";
+import { AdminInventoryPage } from "@/pages/admin/InventoryPage";
 import { EmployeeDashboard } from "@/pages/employee/EmployeeDashboard";
 import { EmployeeProfilePage } from "@/pages/employee/EmployeeProfilePage";
 import { MyAttendancePage } from "@/pages/employee/MyAttendancePage";
+import { MyInventoryPage } from "@/pages/employee/MyInventoryPage";
 import { MyLeavesPage } from "@/pages/employee/MyLeavesPage";
 import { MyRequestsPage } from "@/pages/employee/MyRequestsPage";
 import { MyPayslipsPage } from "@/pages/employee/MyPayslipsPage";
@@ -84,6 +86,7 @@ function AuthGate() {
           <Route path="/admin/requests" component={AdminRequestsPage} />
           <Route path="/admin/payslips" component={AdminPayslipsPage} />
           <Route path="/admin/salary" component={AdminSalaryPage} />
+          <Route path="/admin/inventory" component={AdminInventoryPage} />
           <Route path="/admin/feed" component={FeedPage} />
           <Route path="/admin/settings" component={AdminSettingsPage} />
           <Route
@@ -98,6 +101,7 @@ function AuthGate() {
           <Route path="/employee" component={EmployeeDashboard} />
           <Route path="/employee/profile" component={EmployeeProfilePage} />
           <Route path="/employee/attendance" component={MyAttendancePage} />
+          <Route path="/employee/inventory" component={MyInventoryPage} />
           <Route path="/employee/leaves" component={MyLeavesPage} />
           <Route path="/employee/requests" component={MyRequestsPage} />
           <Route path="/employee/payslips" component={MyPayslipsPage} />

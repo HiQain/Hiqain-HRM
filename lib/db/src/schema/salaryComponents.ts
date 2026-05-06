@@ -26,6 +26,9 @@ export const salaryComponentsTable = mysqlTable("salary_components", {
   valueType: mysqlEnum("value_type", ["fixed", "percentage"])
     .notNull()
     .default("fixed"),
+  percentageBase: mysqlEnum("percentage_base", ["basic_salary", "gross_salary"])
+    .notNull()
+    .default("basic_salary"),
   value: decimal("value", { precision: 12, scale: 2 }).notNull().default("0"),
   isDeduction: int("is_deduction").notNull().default(0),
   isTaxable: int("is_taxable").notNull().default(1),

@@ -21,6 +21,8 @@ export const attendanceTable = mysqlTable(
     checkInTime: timestamp("check_in_time"),
     checkOutTime: timestamp("check_out_time"),
     workedMinutes: int("worked_minutes"),
+    pausedAt: timestamp("paused_at"),
+    pausedMinutes: int("paused_minutes").notNull().default(0),
     status: mysqlEnum("status", [
       "present",
       "late",

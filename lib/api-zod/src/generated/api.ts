@@ -769,6 +769,9 @@ export const CheckInResponse = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -787,6 +790,51 @@ export const CheckOutResponse = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
+  "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
+  "isLate": zod.boolean().optional(),
+  "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Pause the current employee attendance timer
+ */
+export const PauseAttendanceResponse = zod.object({
+  "id": zod.number(),
+  "employeeId": zod.number(),
+  "employeeName": zod.string().optional(),
+  "date": zod.coerce.date(),
+  "checkInTime": zod.string().nullish().describe('ISO datetime'),
+  "checkOutTime": zod.string().nullish().describe('ISO datetime'),
+  "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
+  "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
+  "isLate": zod.boolean().optional(),
+  "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Resume the current employee attendance timer
+ */
+export const ResumeAttendanceResponse = zod.object({
+  "id": zod.number(),
+  "employeeId": zod.number(),
+  "employeeName": zod.string().optional(),
+  "date": zod.coerce.date(),
+  "checkInTime": zod.string().nullish().describe('ISO datetime'),
+  "checkOutTime": zod.string().nullish().describe('ISO datetime'),
+  "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -800,6 +848,7 @@ export const CheckOutResponse = zod.object({
 export const GetTodayAttendanceResponse = zod.object({
   "hasCheckedIn": zod.boolean(),
   "hasCheckedOut": zod.boolean(),
+  "isPaused": zod.boolean(),
   "record": zod.union([zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
@@ -808,6 +857,9 @@ export const GetTodayAttendanceResponse = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -831,6 +883,9 @@ export const GetMyAttendanceResponseItem = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -858,6 +913,9 @@ export const GetEmployeeAttendanceResponseItem = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -890,6 +948,9 @@ export const GetTodayAttendanceSummaryResponse = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -921,6 +982,9 @@ export const GetAttendanceCalendarResponse = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -948,6 +1012,9 @@ export const OverrideAttendanceResponse = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -974,6 +1041,9 @@ export const SetAttendanceExcusedResponse = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -1000,6 +1070,9 @@ export const GetEmployeeLateRecordsResponseItem = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -1053,6 +1126,248 @@ export const CreateRemoteWorkRequestBody = zod.object({
 })).optional(),
   "mentionedEmployeeIds": zod.array(zod.number()).optional()
 })
+
+
+/**
+ * @summary List inventory items
+ */
+export const ListInventoryItemsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "sku": zod.string().nullish(),
+  "totalStock": zod.number(),
+  "availableStock": zod.number(),
+  "assignedStock": zod.number(),
+  "reorderLevel": zod.number(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string().describe('ISO datetime'),
+  "updatedAt": zod.string().describe('ISO datetime')
+})
+export const ListInventoryItemsResponse = zod.array(ListInventoryItemsResponseItem)
+
+
+/**
+ * @summary Create inventory item
+ */
+export const createInventoryItemBodyTotalStockMin = 0;
+
+export const createInventoryItemBodyReorderLevelMin = 0;
+
+
+
+export const CreateInventoryItemBody = zod.object({
+  "name": zod.string(),
+  "category": zod.string(),
+  "sku": zod.string().nullish(),
+  "totalStock": zod.number().min(createInventoryItemBodyTotalStockMin),
+  "reorderLevel": zod.number().min(createInventoryItemBodyReorderLevelMin).optional(),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update inventory item
+ */
+export const UpdateInventoryItemParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateInventoryItemBodyTotalStockMin = 0;
+
+export const updateInventoryItemBodyReorderLevelMin = 0;
+
+
+
+export const UpdateInventoryItemBody = zod.object({
+  "name": zod.string().optional(),
+  "category": zod.string().optional(),
+  "sku": zod.string().nullish(),
+  "totalStock": zod.number().min(updateInventoryItemBodyTotalStockMin).optional(),
+  "reorderLevel": zod.number().min(updateInventoryItemBodyReorderLevelMin).optional(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateInventoryItemResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "sku": zod.string().nullish(),
+  "totalStock": zod.number(),
+  "availableStock": zod.number(),
+  "assignedStock": zod.number(),
+  "reorderLevel": zod.number(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string().describe('ISO datetime'),
+  "updatedAt": zod.string().describe('ISO datetime')
+})
+
+
+/**
+ * @summary List inventory requests
+ */
+export const ListInventoryRequestsQueryParams = zod.object({
+  "status": zod.enum(['pending', 'approved', 'rejected']).optional()
+})
+
+export const ListInventoryRequestsResponseItem = zod.object({
+  "id": zod.number(),
+  "employeeId": zod.number(),
+  "employeeName": zod.string(),
+  "itemId": zod.number(),
+  "itemName": zod.string(),
+  "quantity": zod.number(),
+  "reason": zod.string().nullish(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "adminNotes": zod.string().nullish(),
+  "requestedAt": zod.string().describe('ISO datetime'),
+  "reviewedAt": zod.string().nullish().describe('ISO datetime'),
+  "reviewedByUserId": zod.number().nullish()
+})
+export const ListInventoryRequestsResponse = zod.array(ListInventoryRequestsResponseItem)
+
+
+/**
+ * @summary List my inventory requests
+ */
+export const ListMyInventoryRequestsResponseItem = zod.object({
+  "id": zod.number(),
+  "employeeId": zod.number(),
+  "employeeName": zod.string(),
+  "itemId": zod.number(),
+  "itemName": zod.string(),
+  "quantity": zod.number(),
+  "reason": zod.string().nullish(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "adminNotes": zod.string().nullish(),
+  "requestedAt": zod.string().describe('ISO datetime'),
+  "reviewedAt": zod.string().nullish().describe('ISO datetime'),
+  "reviewedByUserId": zod.number().nullish()
+})
+export const ListMyInventoryRequestsResponse = zod.array(ListMyInventoryRequestsResponseItem)
+
+
+/**
+ * @summary Create inventory request for current employee
+ */
+
+
+
+export const CreateMyInventoryRequestBody = zod.object({
+  "itemId": zod.number(),
+  "quantity": zod.number().min(1),
+  "reason": zod.string().nullish()
+})
+
+
+/**
+ * @summary Approve inventory request
+ */
+export const ApproveInventoryRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ApproveInventoryRequestBody = zod.object({
+  "notes": zod.string().nullish(),
+  "adminNotes": zod.string().nullish()
+})
+
+export const ApproveInventoryRequestResponse = zod.object({
+  "id": zod.number(),
+  "employeeId": zod.number(),
+  "employeeName": zod.string(),
+  "itemId": zod.number(),
+  "itemName": zod.string(),
+  "quantity": zod.number(),
+  "reason": zod.string().nullish(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "adminNotes": zod.string().nullish(),
+  "requestedAt": zod.string().describe('ISO datetime'),
+  "reviewedAt": zod.string().nullish().describe('ISO datetime'),
+  "reviewedByUserId": zod.number().nullish()
+})
+
+
+/**
+ * @summary Reject inventory request
+ */
+export const RejectInventoryRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RejectInventoryRequestBody = zod.object({
+  "notes": zod.string().nullish(),
+  "adminNotes": zod.string().nullish()
+})
+
+export const RejectInventoryRequestResponse = zod.object({
+  "id": zod.number(),
+  "employeeId": zod.number(),
+  "employeeName": zod.string(),
+  "itemId": zod.number(),
+  "itemName": zod.string(),
+  "quantity": zod.number(),
+  "reason": zod.string().nullish(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "adminNotes": zod.string().nullish(),
+  "requestedAt": zod.string().describe('ISO datetime'),
+  "reviewedAt": zod.string().nullish().describe('ISO datetime'),
+  "reviewedByUserId": zod.number().nullish()
+})
+
+
+/**
+ * @summary List inventory assignments
+ */
+export const ListInventoryAssignmentsResponseItem = zod.object({
+  "id": zod.number(),
+  "employeeId": zod.number(),
+  "employeeName": zod.string(),
+  "itemId": zod.number(),
+  "itemName": zod.string(),
+  "requestId": zod.number().nullish(),
+  "quantity": zod.number(),
+  "notes": zod.string().nullish(),
+  "active": zod.boolean(),
+  "assignedAt": zod.string().describe('ISO datetime'),
+  "returnedAt": zod.string().nullish().describe('ISO datetime'),
+  "assignedByUserId": zod.number().nullish()
+})
+export const ListInventoryAssignmentsResponse = zod.array(ListInventoryAssignmentsResponseItem)
+
+
+/**
+ * @summary Assign inventory manually to an employee
+ */
+
+
+
+export const CreateInventoryAssignmentBody = zod.object({
+  "employeeId": zod.number(),
+  "itemId": zod.number(),
+  "quantity": zod.number().min(1),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary List my active inventory assignments
+ */
+export const ListMyInventoryAssignmentsResponseItem = zod.object({
+  "id": zod.number(),
+  "employeeId": zod.number(),
+  "employeeName": zod.string(),
+  "itemId": zod.number(),
+  "itemName": zod.string(),
+  "requestId": zod.number().nullish(),
+  "quantity": zod.number(),
+  "notes": zod.string().nullish(),
+  "active": zod.boolean(),
+  "assignedAt": zod.string().describe('ISO datetime'),
+  "returnedAt": zod.string().nullish().describe('ISO datetime'),
+  "assignedByUserId": zod.number().nullish()
+})
+export const ListMyInventoryAssignmentsResponse = zod.array(ListMyInventoryAssignmentsResponseItem)
 
 
 /**
@@ -1612,6 +1927,7 @@ export const GetEmployeeDashboardResponse = zod.object({
   "todayAttendance": zod.object({
   "hasCheckedIn": zod.boolean(),
   "hasCheckedOut": zod.boolean(),
+  "isPaused": zod.boolean(),
   "record": zod.union([zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
@@ -1620,6 +1936,9 @@ export const GetEmployeeDashboardResponse = zod.object({
   "checkInTime": zod.string().nullish().describe('ISO datetime'),
   "checkOutTime": zod.string().nullish().describe('ISO datetime'),
   "workedMinutes": zod.number().nullish(),
+  "pausedAt": zod.string().nullish().describe('ISO datetime'),
+  "pausedMinutes": zod.number().optional(),
+  "isPaused": zod.boolean().optional(),
   "status": zod.enum(['present', 'late', 'absent', 'on_leave', 'half_day', 'remote_work']),
   "isLate": zod.boolean().optional(),
   "excused": zod.boolean().optional().describe('True when an approved request (late\/half-day) means this row should not deduct from payroll'),
@@ -2111,6 +2430,7 @@ export const ListSalaryComponentsResponseItem = zod.object({
   "label": zod.string(),
   "kind": zod.enum(['designation', 'commission', 'allowance', 'provident_fund', 'other']),
   "valueType": zod.enum(['fixed', 'percentage']),
+  "percentageBase": zod.enum(['basic_salary', 'gross_salary']),
   "value": zod.number(),
   "isDeduction": zod.boolean(),
   "isTaxable": zod.boolean(),
@@ -2130,6 +2450,7 @@ export const CreateSalaryComponentBody = zod.object({
   "label": zod.string(),
   "kind": zod.enum(['designation', 'commission', 'allowance', 'provident_fund', 'other']),
   "valueType": zod.enum(['fixed', 'percentage']),
+  "percentageBase": zod.enum(['basic_salary', 'gross_salary']).optional(),
   "value": zod.number(),
   "isDeduction": zod.boolean().optional(),
   "isTaxable": zod.boolean().optional()
@@ -2148,6 +2469,7 @@ export const UpdateSalaryComponentBody = zod.object({
   "label": zod.string(),
   "kind": zod.enum(['designation', 'commission', 'allowance', 'provident_fund', 'other']),
   "valueType": zod.enum(['fixed', 'percentage']),
+  "percentageBase": zod.enum(['basic_salary', 'gross_salary']).optional(),
   "value": zod.number(),
   "isDeduction": zod.boolean().optional(),
   "isTaxable": zod.boolean().optional()
@@ -2159,6 +2481,7 @@ export const UpdateSalaryComponentResponse = zod.object({
   "label": zod.string(),
   "kind": zod.enum(['designation', 'commission', 'allowance', 'provident_fund', 'other']),
   "valueType": zod.enum(['fixed', 'percentage']),
+  "percentageBase": zod.enum(['basic_salary', 'gross_salary']),
   "value": zod.number(),
   "isDeduction": zod.boolean(),
   "isTaxable": zod.boolean(),

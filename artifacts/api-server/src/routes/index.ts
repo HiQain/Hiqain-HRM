@@ -13,6 +13,7 @@ import settingsRouter from "./settings";
 import salaryComponentsRouter from "./salary-components";
 import newsRouter from "./news";
 import loansRouter from "./loans";
+import inventoryRouter from "./inventory";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(settingsRouter);
 router.use(salaryComponentsRouter);
 router.use(newsRouter);
 router.use(loansRouter);
+router.use(inventoryRouter);
 
 export default router;

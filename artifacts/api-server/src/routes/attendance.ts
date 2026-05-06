@@ -31,6 +31,9 @@ function serializeRecord(
     checkInTime: r.checkInTime ? r.checkInTime.toISOString() : null,
     checkOutTime: r.checkOutTime ? r.checkOutTime.toISOString() : null,
     workedMinutes: r.workedMinutes,
+    pausedAt: r.pausedAt ? r.pausedAt.toISOString() : null,
+    pausedMinutes: r.pausedMinutes ?? 0,
+    isPaused: Boolean(r.pausedAt && !r.checkOutTime),
     status: r.status,
     isLate: r.isLate,
     excused: r.excused,
@@ -128,6 +131,8 @@ router.post(
           checkInTime: now,
           isLate,
           status,
+          pausedAt: null,
+          pausedMinutes: 0,
         })
         .where(eq(attendanceTable.id, existing[0]!.id));
       const updatedRows = await db
@@ -145,6 +150,8 @@ router.post(
           checkInTime: now,
           isLate,
           status,
+          pausedAt: null,
+          pausedMinutes: 0,
         })
         .$returningId();
       const recordId = inserted[0]?.id;
@@ -197,15 +204,30 @@ router.post(
       return;
     }
     const rec = rows[0]!;
-    const worked = Math.floor(
-      (now.getTime() - rec.checkInTime!.getTime()) / 60000,
+    const activePauseMinutes = rec.pausedAt
+      ? Math.max(0, Math.floor((now.getTime() - rec.pausedAt.getTime()) / 60000))
+      : 0;
+    const worked = Math.max(
+      0,
+      Math.floor(
+        (now.getTime() - rec.checkInTime!.getTime()) / 60000,
+      ) - (rec.pausedMinutes ?? 0) - activePauseMinutes,
     );
 
-    // Auto half-day if worked < 50% of office hours (only when not remote/leave)
+    // Attendance thresholds:
+    // - under 25% of the shift => absent
+    // - under 50% of the shift => half-day
     const fullDayMinutes = officeMinutes(emp);
     let nextStatus = rec.status;
     let nextIsLate = rec.isLate;
     if (
+      rec.status !== "remote_work" &&
+      rec.status !== "on_leave" &&
+      fullDayMinutes > 0 &&
+      worked < fullDayMinutes / 4
+    ) {
+      nextStatus = "absent";
+    } else if (
       rec.status !== "remote_work" &&
       rec.status !== "on_leave" &&
       fullDayMinutes > 0 &&
@@ -227,6 +249,7 @@ router.post(
       .set({
         checkOutTime: now,
         workedMinutes: worked,
+        pausedAt: null,
         status: nextStatus,
         isLate: nextIsLate,
       })
@@ -249,6 +272,7 @@ router.get(
       res.json({
         hasCheckedIn: false,
         hasCheckedOut: false,
+        isPaused: false,
         record: null,
       });
       return;
@@ -274,6 +298,7 @@ router.get(
       res.json({
         hasCheckedIn: false,
         hasCheckedOut: false,
+        isPaused: false,
         record: null,
       });
       return;
@@ -282,6 +307,7 @@ router.get(
     res.json({
       hasCheckedIn: !!r.checkInTime,
       hasCheckedOut: !!r.checkOutTime,
+      isPaused: !!r.pausedAt && !r.checkOutTime,
       record: serializeRecord(r, emp.name),
     });
   },
@@ -309,6 +335,125 @@ function monthRange(month?: string): {
   const end = ymd(endDate);
   return { start, end, year: y, month: m };
 }
+
+router.post(
+  "/attendance/pause",
+  requireAuth(["employee"]),
+  async (req, res): Promise<void> => {
+    const user = getUser(req);
+    if (!user.employeeId) {
+      res.status(400).json({ message: "No employee profile" });
+      return;
+    }
+    const empRows = await db
+      .select()
+      .from(employeesTable)
+      .where(eq(employeesTable.id, user.employeeId))
+      .limit(1);
+    const emp = empRows[0]!;
+    const shiftDate = resolveAttendanceShiftDate(emp, new Date());
+    const rows = await db
+      .select()
+      .from(attendanceTable)
+      .where(
+        and(
+          eq(attendanceTable.employeeId, user.employeeId),
+          eq(attendanceTable.date, shiftDate),
+        ),
+      )
+      .limit(1);
+
+    if (!rows.length || !rows[0]!.checkInTime) {
+      res.status(400).json({ message: "You need to check in first" });
+      return;
+    }
+
+    const rec = rows[0]!;
+    if (rec.checkOutTime) {
+      res.status(400).json({ message: "You have already checked out" });
+      return;
+    }
+    if (rec.pausedAt) {
+      res.status(400).json({ message: "Attendance is already paused" });
+      return;
+    }
+
+    const now = new Date();
+    await db
+      .update(attendanceTable)
+      .set({ pausedAt: now })
+      .where(eq(attendanceTable.id, rec.id));
+    const updatedRows = await db
+      .select()
+      .from(attendanceTable)
+      .where(eq(attendanceTable.id, rec.id))
+      .limit(1);
+    res.json(serializeRecord(updatedRows[0]!, emp.name));
+  },
+);
+
+router.post(
+  "/attendance/resume",
+  requireAuth(["employee"]),
+  async (req, res): Promise<void> => {
+    const user = getUser(req);
+    if (!user.employeeId) {
+      res.status(400).json({ message: "No employee profile" });
+      return;
+    }
+    const empRows = await db
+      .select()
+      .from(employeesTable)
+      .where(eq(employeesTable.id, user.employeeId))
+      .limit(1);
+    const emp = empRows[0]!;
+    const now = new Date();
+    const shiftDate = resolveAttendanceShiftDate(emp, now);
+    const rows = await db
+      .select()
+      .from(attendanceTable)
+      .where(
+        and(
+          eq(attendanceTable.employeeId, user.employeeId),
+          eq(attendanceTable.date, shiftDate),
+        ),
+      )
+      .limit(1);
+
+    if (!rows.length || !rows[0]!.checkInTime) {
+      res.status(400).json({ message: "You need to check in first" });
+      return;
+    }
+
+    const rec = rows[0]!;
+    if (rec.checkOutTime) {
+      res.status(400).json({ message: "You have already checked out" });
+      return;
+    }
+    if (!rec.pausedAt) {
+      res.status(400).json({ message: "Attendance is not paused" });
+      return;
+    }
+
+    const pausedThisSession = Math.max(
+      0,
+      Math.floor((now.getTime() - rec.pausedAt.getTime()) / 60000),
+    );
+    await db
+      .update(attendanceTable)
+      .set({
+        pausedAt: null,
+        pausedMinutes: (rec.pausedMinutes ?? 0) + pausedThisSession,
+      })
+      .where(eq(attendanceTable.id, rec.id));
+    const updatedRows = await db
+      .select()
+      .from(attendanceTable)
+      .where(eq(attendanceTable.id, rec.id))
+      .limit(1);
+    res.json(serializeRecord(updatedRows[0]!, emp.name));
+  },
+);
 
 router.get("/attendance/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
@@ -426,6 +571,9 @@ router.get(
           checkInTime: null,
           checkOutTime: null,
           workedMinutes: null,
+          pausedAt: null,
+          pausedMinutes: 0,
+          isPaused: false,
           status: "absent",
           isLate: false,
           excused: false,
@@ -441,6 +589,9 @@ router.get(
           checkInTime: null,
           checkOutTime: null,
           workedMinutes: null,
+          pausedAt: null,
+          pausedMinutes: 0,
+          isPaused: false,
           status: "on_leave",
           isLate: false,
           excused: false,
@@ -456,6 +607,9 @@ router.get(
           checkInTime: null,
           checkOutTime: null,
           workedMinutes: null,
+          pausedAt: null,
+          pausedMinutes: 0,
+          isPaused: false,
           status: "absent",
           isLate: false,
           excused: false,

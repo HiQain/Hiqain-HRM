@@ -6,12 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UpdateSalaryComponentRequestKind } from './updateSalaryComponentRequestKind';
+import type { UpdateSalaryComponentRequestPercentageBase } from './updateSalaryComponentRequestPercentageBase';
 import type { UpdateSalaryComponentRequestValueType } from './updateSalaryComponentRequestValueType';
 
 export interface UpdateSalaryComponentRequest {
   label: string;
   kind: UpdateSalaryComponentRequestKind;
   valueType: UpdateSalaryComponentRequestValueType;
+  percentageBase?: UpdateSalaryComponentRequestPercentageBase;
   value: number;
   isDeduction?: boolean;
   isTaxable?: boolean;

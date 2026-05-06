@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SalaryComponentKind } from './salaryComponentKind';
+import type { SalaryComponentPercentageBase } from './salaryComponentPercentageBase';
 import type { SalaryComponentValueType } from './salaryComponentValueType';
 
 export interface SalaryComponent {
@@ -14,6 +15,7 @@ export interface SalaryComponent {
   label: string;
   kind: SalaryComponentKind;
   valueType: SalaryComponentValueType;
+  percentageBase: SalaryComponentPercentageBase;
   value: number;
   isDeduction: boolean;
   isTaxable: boolean;

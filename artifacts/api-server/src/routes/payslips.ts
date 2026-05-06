@@ -42,9 +42,13 @@ function isComponentTaxable(component: typeof salaryComponentsTable.$inferSelect
 function resolveComponentValue(
   component: typeof salaryComponentsTable.$inferSelect,
   basicSalary: number,
+  grossSalaryBase: number,
 ) {
   return component.valueType === "percentage"
-    ? (Number(component.value) / 100) * basicSalary
+    ? (Number(component.value) / 100) *
+        (component.percentageBase === "gross_salary"
+          ? grossSalaryBase
+          : basicSalary)
     : Number(component.value);
 }
 
@@ -59,6 +63,7 @@ function buildPayslipBreakdown(
 ) {
   const basicSalary = Number(payslip.basicSalary);
   const defaultAllowances = Number(employee.allowances);
+  const grossSalaryBase = basicSalary + defaultAllowances;
   const homeRent = roundAmount(defaultAllowances / 2);
   const utilityBills = roundAmount(defaultAllowances - homeRent);
   const absentDays = Number(payslip.absentDays);
@@ -81,7 +86,9 @@ function buildPayslipBreakdown(
   let nonTaxableRecurringComponentTotal = 0;
 
   for (const component of components) {
-    const amount = roundAmount(resolveComponentValue(component, basicSalary));
+    const amount = roundAmount(
+      resolveComponentValue(component, basicSalary, grossSalaryBase),
+    );
     if (amount <= 0) continue;
 
     if (component.isDeduction === 1 && component.kind === "provident_fund") {
@@ -318,11 +325,9 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
       ? designationFixed
       : Number(emp.basicSalary) + incrementAdjust;
 
-  const evalComponent = (c: (typeof components)[number]) => {
-    return c.valueType === "percentage"
-      ? (Number(c.value) / 100) * baseDesignation
-      : Number(c.value);
-  };
+  const grossSalaryBase = baseDesignation + Number(emp.allowances);
+  const evalComponent = (c: (typeof components)[number]) =>
+    resolveComponentValue(c, baseDesignation, grossSalaryBase);
 
   const basicSalary = baseDesignation;
   let allowances = Number(emp.allowances);
