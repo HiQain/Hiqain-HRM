@@ -1,13 +1,12 @@
 import {
-  pgTable,
-  serial,
-  text,
-  integer,
   boolean,
-  jsonb,
-  numeric,
+  decimal,
+  int,
+  json,
+  mysqlTable,
   timestamp,
-} from "drizzle-orm/pg-core";
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 export type PublicHoliday = {
   date: string;
@@ -15,85 +14,83 @@ export type PublicHoliday = {
   country?: "us" | "pk" | "other";
 };
 
-export const appSettingsTable = pgTable("app_settings", {
-  id: serial("id").primaryKey(),
-  companyName: text("company_name").notNull().default("HiQain"),
-  defaultCasualLeaveQuota: integer("default_casual_leave_quota")
+export const appSettingsTable = mysqlTable("app_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  companyName: varchar("company_name", { length: 255 }).notNull().default("HiQain"),
+  defaultCasualLeaveQuota: int("default_casual_leave_quota")
     .notNull()
     .default(6),
-  defaultSickLeaveQuota: integer("default_sick_leave_quota")
+  defaultSickLeaveQuota: int("default_sick_leave_quota")
     .notNull()
     .default(6),
-  defaultAnnualLeaveQuota: integer("default_annual_leave_quota")
+  defaultAnnualLeaveQuota: int("default_annual_leave_quota")
     .notNull()
     .default(12),
-  defaultGracePeriodMinutes: integer("default_grace_period_minutes")
+  defaultGracePeriodMinutes: int("default_grace_period_minutes")
     .notNull()
     .default(15),
-  defaultProbationMonths: integer("default_probation_months")
+  defaultProbationMonths: int("default_probation_months")
     .notNull()
     .default(3),
-  defaultOfficeStartTime: text("default_office_start_time")
+  defaultOfficeStartTime: varchar("default_office_start_time", { length: 16 })
     .notNull()
     .default("09:00"),
-  defaultOfficeEndTime: text("default_office_end_time")
+  defaultOfficeEndTime: varchar("default_office_end_time", { length: 16 })
     .notNull()
     .default("18:00"),
-  weeklyOffDays: jsonb("weekly_off_days")
+  weeklyOffDays: json("weekly_off_days")
     .$type<number[]>()
     .notNull()
     .default([0, 6]),
-  publicHolidays: jsonb("public_holidays")
+  publicHolidays: json("public_holidays")
     .$type<PublicHoliday[]>()
     .notNull()
     .default([]),
   proRatedQuotas: boolean("pro_rated_quotas").notNull().default(true),
-  weeklyHours: integer("weekly_hours").notNull().default(40),
-  monthlyHours: integer("monthly_hours").notNull().default(176),
-  attendancePolicy: text("attendance_policy").notNull().default(""),
-  attendancePolicyFileUrl: text("attendance_policy_file_url")
+  weeklyHours: int("weekly_hours").notNull().default(40),
+  monthlyHours: int("monthly_hours").notNull().default(176),
+  attendancePolicy: varchar("attendance_policy", { length: 2048 }).notNull().default(""),
+  attendancePolicyFileUrl: varchar("attendance_policy_file_url", { length: 1024 })
     .notNull()
     .default(""),
-  attendancePolicyFileName: text("attendance_policy_file_name")
+  attendancePolicyFileName: varchar("attendance_policy_file_name", { length: 255 })
     .notNull()
     .default(""),
-  basicSalaryPercent: numeric("basic_salary_percent", { precision: 5, scale: 2 })
+  basicSalaryPercent: decimal("basic_salary_percent", { precision: 5, scale: 2 })
     .notNull()
     .default("50"),
-  allowancePercent: numeric("allowance_percent", { precision: 5, scale: 2 })
+  allowancePercent: decimal("allowance_percent", { precision: 5, scale: 2 })
     .notNull()
     .default("50"),
   providentFundEnabled: boolean("provident_fund_enabled")
     .notNull()
     .default(false),
-  defaultProvidentFundPercent: numeric("default_provident_fund_percent", {
+  defaultProvidentFundPercent: decimal("default_provident_fund_percent", {
     precision: 5,
     scale: 2,
   })
     .notNull()
     .default("5"),
-  companyPolicy: text("company_policy").notNull().default(""),
-  companyPolicyFileUrl: text("company_policy_file_url").notNull().default(""),
-  companyPolicyFileName: text("company_policy_file_name").notNull().default(""),
-  loanMinTenureMonths: integer("loan_min_tenure_months").notNull().default(12),
-  loanMaxSalaryMultiplier: numeric("loan_max_salary_multiplier", {
+  companyPolicy: varchar("company_policy", { length: 2048 }).notNull().default(""),
+  companyPolicyFileUrl: varchar("company_policy_file_url", { length: 1024 }).notNull().default(""),
+  companyPolicyFileName: varchar("company_policy_file_name", { length: 255 }).notNull().default(""),
+  loanMinTenureMonths: int("loan_min_tenure_months").notNull().default(12),
+  loanMaxSalaryMultiplier: decimal("loan_max_salary_multiplier", {
     precision: 5,
     scale: 2,
   })
     .notNull()
     .default("1"),
-  loanDefaultMonths: integer("loan_default_months").notNull().default(6),
-  lateGraceCount: integer("late_grace_count").notNull().default(2),
-  lateDeductionFraction: numeric("late_deduction_fraction", {
+  loanDefaultMonths: int("loan_default_months").notNull().default(6),
+  lateGraceCount: int("late_grace_count").notNull().default(2),
+  lateDeductionFraction: decimal("late_deduction_fraction", {
     precision: 4,
     scale: 2,
   })
     .notNull()
     .default("0.5"),
-  lateAbsenceEvery: integer("late_absence_every").notNull().default(3),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  lateAbsenceEvery: int("late_absence_every").notNull().default(3),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export type AppSettings = typeof appSettingsTable.$inferSelect;

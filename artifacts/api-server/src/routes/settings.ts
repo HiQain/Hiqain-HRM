@@ -11,65 +11,159 @@ import { UpdateSettingsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-const DEFAULT_PUBLIC_HOLIDAYS_2026: Array<{
+type GeneratedHoliday = {
   date: string;
   name: string;
-  country: "us" | "pk";
-}> = [
-  { date: "2026-01-01", name: "New Year's Day", country: "us" },
-  { date: "2026-05-25", name: "Memorial Day", country: "us" },
-  { date: "2026-07-03", name: "Independence Day", country: "us" },
-  { date: "2026-09-07", name: "Labor Day", country: "us" },
-  { date: "2026-11-26", name: "Thanksgiving Day", country: "us" },
-  { date: "2026-12-24", name: "Christmas Day", country: "us" },
-  { date: "2026-12-25", name: "Christmas Day", country: "us" },
-  { date: "2026-12-31", name: "New Year's Eve", country: "us" },
-  {
-    date: "2026-03-21",
-    name: "Eid-ul-Fitr - Day 1 (subject to moon sighting)",
-    country: "pk",
-  },
-  {
-    date: "2026-03-22",
-    name: "Eid-ul-Fitr - Day 2 (subject to moon sighting)",
-    country: "pk",
-  },
-  {
-    date: "2026-03-23",
-    name: "Eid-ul-Fitr - Day 3 (subject to moon sighting)",
-    country: "pk",
-  },
-  {
-    date: "2026-05-27",
-    name: "Eid-ul-Adha - Day 1 (subject to moon sighting)",
-    country: "pk",
-  },
-  {
-    date: "2026-05-28",
-    name: "Eid-ul-Adha - Day 2 (subject to moon sighting)",
-    country: "pk",
-  },
-  {
-    date: "2026-05-29",
-    name: "Eid-ul-Adha - Day 3 (subject to moon sighting)",
-    country: "pk",
-  },
-  {
-    date: "2026-06-24",
-    name: "Muharram - 9th Muharram (subject to moon sighting)",
-    country: "pk",
-  },
-  {
-    date: "2026-06-25",
-    name: "Muharram - 10th Muharram (subject to moon sighting)",
-    country: "pk",
-  },
-];
+  country: "us" | "pk" | "other";
+};
 
 function toHolidayCountry(value: unknown): "us" | "pk" | "other" | undefined {
   return value === "us" || value === "pk" || value === "other"
     ? value
     : undefined;
+}
+
+function toHolidayDate(value: string | Date): string {
+  return typeof value === "string"
+    ? value
+    : value.toISOString().slice(0, 10);
+}
+
+function sortHolidays<T extends { date: string; name: string }>(holidays: T[]): T[] {
+  return [...holidays].sort((a, b) => {
+    const byDate = a.date.localeCompare(b.date);
+    return byDate !== 0 ? byDate : a.name.localeCompare(b.name);
+  });
+}
+
+function nthWeekdayOfMonth(
+  year: number,
+  monthIndex: number,
+  weekday: number,
+  occurrence: number,
+): string {
+  const date = new Date(Date.UTC(year, monthIndex, 1));
+  while (date.getUTCDay() !== weekday) {
+    date.setUTCDate(date.getUTCDate() + 1);
+  }
+  date.setUTCDate(date.getUTCDate() + (occurrence - 1) * 7);
+  return date.toISOString().slice(0, 10);
+}
+
+function lastWeekdayOfMonth(
+  year: number,
+  monthIndex: number,
+  weekday: number,
+): string {
+  const date = new Date(Date.UTC(year, monthIndex + 1, 0));
+  while (date.getUTCDay() !== weekday) {
+    date.setUTCDate(date.getUTCDate() - 1);
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function observedUsHoliday(
+  year: number,
+  monthIndex: number,
+  day: number,
+): string {
+  const date = new Date(Date.UTC(year, monthIndex, day));
+  const weekday = date.getUTCDay();
+  if (weekday === 6) date.setUTCDate(date.getUTCDate() - 1);
+  if (weekday === 0) date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function findIslamicDatesInGregorianYear(
+  year: number,
+  month: number,
+  days: number[],
+): string[] {
+  const formatter = new Intl.DateTimeFormat("en-TN-u-ca-islamic", {
+    day: "numeric",
+    month: "numeric",
+    timeZone: "UTC",
+  });
+  const wanted = new Set(days);
+  const matches = new Map<number, string>();
+
+  for (
+    let date = new Date(Date.UTC(year, 0, 1));
+    date.getUTCFullYear() === year;
+    date.setUTCDate(date.getUTCDate() + 1)
+  ) {
+    const parts = formatter.formatToParts(date);
+    const islamicMonth = Number(
+      parts.find((part) => part.type === "month")?.value ?? "0",
+    );
+    const islamicDay = Number(
+      parts.find((part) => part.type === "day")?.value ?? "0",
+    );
+    if (islamicMonth === month && wanted.has(islamicDay)) {
+      matches.set(islamicDay, date.toISOString().slice(0, 10));
+    }
+  }
+
+  return days
+    .map((day) => matches.get(day))
+    .filter((value): value is string => Boolean(value));
+}
+
+function buildPakistanMoonSightingHolidays(year: number): GeneratedHoliday[] {
+  const mapHoliday = (
+    dates: string[],
+    name: string,
+  ): GeneratedHoliday[] =>
+    dates.map((date) => ({
+      date,
+      name: `${name} (subject to moon sighting)`,
+      country: "pk",
+    }));
+
+  return [
+    ...mapHoliday(
+      findIslamicDatesInGregorianYear(year, 10, [1, 2, 3]),
+      "Eid-ul-Fitr",
+    ),
+    ...mapHoliday(
+      findIslamicDatesInGregorianYear(year, 12, [10, 11, 12]),
+      "Eid-ul-Adha",
+    ),
+    ...mapHoliday(
+      findIslamicDatesInGregorianYear(year, 1, [9, 10]),
+      "Muharram",
+    ),
+  ];
+}
+
+function buildDefaultPublicHolidays(year: number): GeneratedHoliday[] {
+  const usFixedHolidays: GeneratedHoliday[] = [
+    { date: `${year}-01-01`, name: "New Year's Day", country: "us" },
+    { date: lastWeekdayOfMonth(year, 4, 1), name: "Memorial Day", country: "us" },
+    {
+      date: observedUsHoliday(year, 6, 4),
+      name: "Independence Day",
+      country: "us",
+    },
+    { date: nthWeekdayOfMonth(year, 8, 1, 1), name: "Labor Day", country: "us" },
+    {
+      date: nthWeekdayOfMonth(year, 10, 4, 4),
+      name: "Thanksgiving Day",
+      country: "us",
+    },
+    { date: `${year}-12-24`, name: "Christmas Day", country: "us" },
+    { date: `${year}-12-25`, name: "Christmas Day", country: "us" },
+    { date: `${year}-12-31`, name: "New Year's Eve", country: "us" },
+  ];
+
+  return sortHolidays([
+    ...usFixedHolidays,
+    ...buildPakistanMoonSightingHolidays(year),
+  ]);
+}
+
+function getGeneratedPublicHolidays(_settings: AppSettings): GeneratedHoliday[] {
+  return buildDefaultPublicHolidays(new Date().getFullYear());
 }
 
 function parseTime(t: string): number {
@@ -111,15 +205,7 @@ function serialize(s: AppSettings) {
   const workingDaysPerWeek = 7 - (s.weeklyOffDays?.length ?? 0);
   const weeklyHours = Math.round(dailyHours * workingDaysPerWeek);
   const today = new Date();
-  const savedPublicHolidays = (s.publicHolidays ?? []).map((h) => ({
-      date: h.date,
-      name: h.name,
-      country: toHolidayCountry((h as { country?: unknown }).country),
-    }));
-  const effectivePublicHolidays =
-    savedPublicHolidays.length > 0
-      ? savedPublicHolidays
-      : DEFAULT_PUBLIC_HOLIDAYS_2026;
+  const effectivePublicHolidays = getGeneratedPublicHolidays(s);
   const holidaySet = new Set(effectivePublicHolidays.map((h) => h.date));
   const monthlyWorkingDays = computeWorkingDaysInMonth(
     today.getFullYear(),
@@ -170,8 +256,9 @@ function serialize(s: AppSettings) {
 export async function getSettings(): Promise<AppSettings> {
   const rows = await db.select().from(appSettingsTable).limit(1);
   if (rows.length) return rows[0]!;
-  const inserted = await db.insert(appSettingsTable).values({}).returning();
-  return inserted[0]!;
+  await db.insert(appSettingsTable).values({});
+  const nextRows = await db.select().from(appSettingsTable).limit(1);
+  return nextRows[0]!;
 }
 
 router.get("/settings", requireAuth(), async (_req, res) => {
@@ -179,10 +266,11 @@ router.get("/settings", requireAuth(), async (_req, res) => {
   res.json(serialize(s));
 });
 
-router.patch("/settings", requireAuth(["admin", "hr"]), async (req, res) => {
+router.patch("/settings", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const parsed = UpdateSettingsBody.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: "Invalid settings payload" });
+    res.status(400).json({ message: "Invalid settings payload" });
+    return;
   }
   const data = parsed.data;
   const current = await getSettings();
@@ -204,15 +292,6 @@ router.patch("/settings", requireAuth(["admin", "hr"]), async (req, res) => {
     updates.defaultOfficeEndTime = data.defaultOfficeEndTime;
   if (data.weeklyOffDays !== undefined)
     updates.weeklyOffDays = data.weeklyOffDays;
-  if (data.publicHolidays !== undefined)
-    updates.publicHolidays = data.publicHolidays.map((h) => ({
-        date:
-          typeof h.date === "string"
-            ? h.date
-            : (h.date as Date).toISOString().slice(0, 10),
-        name: h.name,
-        country: h.country,
-      }));
   if (data.proRatedQuotas !== undefined)
     updates.proRatedQuotas = data.proRatedQuotas;
   if (data.attendancePolicy !== undefined)

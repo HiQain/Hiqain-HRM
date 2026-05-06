@@ -1,33 +1,36 @@
 import {
-  pgTable,
-  serial,
-  text,
-  integer,
-  numeric,
+  decimal,
+  int,
+  mysqlEnum,
+  mysqlTable,
   timestamp,
-} from "drizzle-orm/pg-core";
+  varchar,
+} from "drizzle-orm/mysql-core";
 import { employeesTable } from "./employees";
 
-export const salaryComponentsTable = pgTable("salary_components", {
-  id: serial("id").primaryKey(),
-  employeeId: integer("employee_id")
+export const salaryComponentsTable = mysqlTable("salary_components", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id")
     .notNull()
     .references(() => employeesTable.id, { onDelete: "cascade" }),
-  label: text("label").notNull(),
-  kind: text("kind", {
-    enum: ["designation", "commission", "allowance", "provident_fund", "other"],
-  })
+  label: varchar("label", { length: 255 }).notNull(),
+  kind: mysqlEnum("kind", [
+    "designation",
+    "commission",
+    "allowance",
+    "provident_fund",
+    "other",
+  ])
     .notNull()
     .default("allowance"),
-  valueType: text("value_type", { enum: ["fixed", "percentage"] })
+  valueType: mysqlEnum("value_type", ["fixed", "percentage"])
     .notNull()
     .default("fixed"),
-  value: numeric("value", { precision: 12, scale: 2 }).notNull().default("0"),
-  isDeduction: integer("is_deduction").notNull().default(0),
-  sortOrder: integer("sort_order").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  value: decimal("value", { precision: 12, scale: 2 }).notNull().default("0"),
+  isDeduction: int("is_deduction").notNull().default(0),
+  isTaxable: int("is_taxable").notNull().default(1),
+  sortOrder: int("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type SalaryComponent = typeof salaryComponentsTable.$inferSelect;

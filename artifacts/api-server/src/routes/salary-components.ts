@@ -15,6 +15,7 @@ function serialize(c: typeof salaryComponentsTable.$inferSelect) {
     valueType: c.valueType,
     value: Number(c.value),
     isDeduction: c.isDeduction === 1,
+    isTaxable: c.isTaxable === 1,
     sortOrder: c.sortOrder,
   };
 }
@@ -22,11 +23,12 @@ function serialize(c: typeof salaryComponentsTable.$inferSelect) {
 router.get(
   "/employees/:id/salary-components",
   requireAuth(),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     const user = getUser(req);
     if (user.role === "employee" && user.employeeId !== id) {
-      return res.status(403).json({ message: "Forbidden" });
+      res.status(403).json({ message: "Forbidden" });
+      return;
     }
     const rows = await db
       .select()
@@ -40,11 +42,12 @@ router.get(
 router.post(
   "/employees/:id/salary-components",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     const parsed = CreateSalaryComponentBody.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid payload" });
+      res.status(400).json({ message: "Invalid payload" });
+      return;
     }
     const data = parsed.data;
     const inserted = await db
@@ -56,24 +59,41 @@ router.post(
         valueType: data.valueType,
         value: String(data.value),
         isDeduction: data.isDeduction ? 1 : 0,
+        isTaxable: data.isTaxable === false ? 0 : 1,
       })
-      .returning();
-    res.status(201).json(serialize(inserted[0]!));
+      .$returningId();
+    const componentId = inserted[0]?.id;
+    if (!componentId) {
+      res.status(500).json({ message: "Failed to create salary component" });
+      return;
+    }
+    const rows = await db
+      .select()
+      .from(salaryComponentsTable)
+      .where(eq(salaryComponentsTable.id, componentId))
+      .limit(1);
+    const component = rows[0];
+    if (!component) {
+      res.status(500).json({ message: "Created salary component not found" });
+      return;
+    }
+    res.status(201).json(serialize(component));
   },
 );
 
 router.patch(
   "/employees/:id/salary-components/:componentId",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     const componentId = Number(req.params.componentId);
     const parsed = UpdateSalaryComponentBody.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid payload" });
+      res.status(400).json({ message: "Invalid payload" });
+      return;
     }
     const data = parsed.data;
-    const updated = await db
+    const updateResult = await db
       .update(salaryComponentsTable)
       .set({
         label: data.label,
@@ -81,19 +101,35 @@ router.patch(
         valueType: data.valueType,
         value: String(data.value),
         isDeduction: data.isDeduction ? 1 : 0,
+        isTaxable: data.isTaxable === false ? 0 : 1,
       })
       .where(
         and(
           eq(salaryComponentsTable.id, componentId),
           eq(salaryComponentsTable.employeeId, id),
         ),
-      )
-      .returning();
+      );
 
-    if (!updated.length) {
-      return res.status(404).json({ message: "Salary component not found" });
+    if (!updateResult[0].affectedRows) {
+      res.status(404).json({ message: "Salary component not found" });
+      return;
     }
-    res.json(serialize(updated[0]!));
+    const rows = await db
+      .select()
+      .from(salaryComponentsTable)
+      .where(
+        and(
+          eq(salaryComponentsTable.id, componentId),
+          eq(salaryComponentsTable.employeeId, id),
+        ),
+      )
+      .limit(1);
+    const component = rows[0];
+    if (!component) {
+      res.status(404).json({ message: "Salary component not found" });
+      return;
+    }
+    res.json(serialize(component));
   },
 );
 

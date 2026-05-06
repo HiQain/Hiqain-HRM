@@ -199,23 +199,54 @@ function ListView({
   month: string;
 }) {
   const params = { month };
+  const calendarParams = { employeeId: employeeId ?? 0, month };
   const { data, isLoading } = useGetEmployeeAttendance(employeeId ?? 0, params, {
     query: {
       queryKey: getGetEmployeeAttendanceQueryKey(employeeId ?? 0, params),
       enabled: !!employeeId,
     },
   });
+  const { data: calendar, isLoading: calendarLoading } = useGetAttendanceCalendar(
+    calendarParams,
+    {
+      query: {
+        queryKey: getGetAttendanceCalendarQueryKey(calendarParams),
+        enabled: !!employeeId,
+      },
+    },
+  );
+
+  const rows = useMemo(() => {
+    return (calendar?.days ?? [])
+      .filter((day) => !["future", "weekend", "none"].includes(day.status))
+      .map((day) => day.record ?? {
+        id: Number(day.date.replaceAll("-", "")),
+        employeeId: employeeId ?? 0,
+        employeeName: calendar?.employeeName ?? "",
+        date: day.date,
+        checkInTime: null,
+        checkOutTime: null,
+        workedMinutes: 0,
+        status: day.status,
+        isLate: false,
+        excused: false,
+        notes: null,
+      })
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+  }, [calendar, employeeId]);
 
   const summary = useMemo(() => {
     const s = { present: 0, late: 0, absent: 0, on_leave: 0 };
-    for (const r of data ?? []) {
+    for (const r of rows) {
       if (r.status === "present") s.present += 1;
       else if (r.status === "late") s.late += 1;
       else if (r.status === "on_leave") s.on_leave += 1;
+      else if (r.status === "remote_work") s.present += 1;
+      else if (r.status === "half_day") s.present += 0.5;
       else s.absent += 1;
     }
     return s;
-  }, [data]);
+  }, [rows]);
 
   return (
     <div className="space-y-4">
@@ -254,21 +285,21 @@ function ListView({
                   Select an employee to view attendance.
                 </TableCell>
               </TableRow>
-            ) : isLoading ? (
+            ) : isLoading || calendarLoading ? (
               <TableRow>
                 <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
-            ) : (data ?? []).length === 0 ? (
+            ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                   No records for this month.
                 </TableCell>
               </TableRow>
             ) : (
-              (data ?? []).map((r) => (
-                <TableRow key={r.id}>
+              rows.map((r) => (
+                <TableRow key={`${r.date}-${r.id}`}>
                   <TableCell>{formatDate(r.date)}</TableCell>
                   <TableCell>
                     <StatusBadge status={r.status} />

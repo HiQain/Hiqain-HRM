@@ -171,43 +171,61 @@ router.get("/loans", requireAuth(["admin", "hr"]), async (_req, res) => {
   res.json(out);
 });
 
-router.get("/loans/me", requireAuth(["employee"]), async (req, res) => {
+router.get("/loans/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
-  if (!user.employeeId) return res.json([]);
+  if (!user.employeeId) {
+    res.json([]);
+    return;
+  }
   const out = await loadLoansForEmployees([user.employeeId]);
   res.json(out);
 });
 
-router.get("/loans/eligibility", requireAuth(["employee"]), async (req, res) => {
+router.get("/loans/eligibility", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
-    return res
+    res
       .status(400)
       .json({ message: "No employee profile linked to your account" });
+    return;
   }
   const result = await computeLoanEligibility(user.employeeId);
   res.json(result);
 });
 
-router.get("/loans/employee/:id", requireAuth(), async (req, res) => {
+router.get("/loans/employee/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const user = getUser(req);
   if (user.role === "employee" && user.employeeId !== id) {
-    return res.status(403).json({ message: "Forbidden" });
+    res.status(403).json({ message: "Forbidden" });
+    return;
   }
   const out = await loadLoansForEmployees([id]);
   res.json(out);
 });
 
-router.post("/loans/:id/cancel", requireAuth(["admin", "hr"]), async (req, res) => {
+router.post("/loans/:id/cancel", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  const updated = await db
+  const updateResult = await db
     .update(loansTable)
     .set({ status: "cancelled", closedAt: new Date() })
     .where(eq(loansTable.id, id))
-    .returning();
-  if (!updated.length) return res.status(404).json({ message: "Loan not found" });
-  const out = await loadLoansForEmployees([updated[0]!.employeeId]);
+    ;
+  if (!updateResult[0].affectedRows) {
+    res.status(404).json({ message: "Loan not found" });
+    return;
+  }
+  const updatedRows = await db
+    .select()
+    .from(loansTable)
+    .where(eq(loansTable.id, id))
+    .limit(1);
+  const updated = updatedRows[0];
+  if (!updated) {
+    res.status(404).json({ message: "Loan not found" });
+    return;
+  }
+  const out = await loadLoansForEmployees([updated.employeeId]);
   const found = out.find((l) => l.id === id);
   res.json(found ?? out[0]);
 });

@@ -1,4 +1,0 @@
-name,email,password,role,phone,position,department,positionType,joiningDate,probationMonths,officeStartTime,officeEndTime,gracePeriodMinutes,basicSalary,allowances,casualLeaveQuota,sickLeaveQuota,annualLeaveQuota,dateOfBirth,education,address
-Ayesha Khan,ayesha.khan@hiqain.com,welcome123,employee,+923001234567,Software Engineer,Engineering,onsite,2026-01-15,3,09:30,18:30,15,150000,10000,10,10,14,1998-06-12,BSc Computer Science,Lahore Pakistan
-Bilal Ahmed,bilal.ahmed@hiqain.com,welcome123,admin,+923009876543,HR Lead,Human Resources,onsite,2025-11-01,3,09:30,18:30,15,180000,15000,10,10,14,1995-03-20,MBA HR,Karachi Pakistan
-Sara Iqbal,sara.iqbal@hiqain.com,welcome123,employee,,Designer,Design,remote,2026-02-10,3,10:00,19:00,15,130000,5000,10,10,14,,BFA,Islamabad

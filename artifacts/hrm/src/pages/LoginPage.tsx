@@ -169,16 +169,6 @@ export function LoginPage() {
                   {login.isPending ? "Signing in..." : "Sign in"}
                 </Button>
               </form>
-              <p className="mt-5 rounded-md bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
-                Admin demo:{" "}
-                <span className="font-mono font-medium text-foreground">
-                  admin@hiqain.com
-                </span>{" "}
-                /{" "}
-                <span className="font-mono font-medium text-foreground">
-                  password
-                </span>
-              </p>
             </div>
           </div>
         </div>

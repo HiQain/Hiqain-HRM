@@ -101,6 +101,22 @@ import {
 import { getApiUrl } from "@/lib/api";
 import { buildProvidentFundSummary } from "@/lib/providentFund";
 
+const PRIMARY_PAYROLL_BANK = "Bank Al Habib";
+
+function splitTotalSalary(totalSalary: number) {
+  const safeTotal = Math.max(0, totalSalary);
+  const basicSalary = Math.round(safeTotal / 2);
+  const allowances = safeTotal - basicSalary;
+  return { basicSalary, allowances };
+}
+
+function splitAllowanceBreakdown(allowances: number) {
+  const safeAllowances = Math.max(0, allowances);
+  const homeRent = Math.round(safeAllowances / 2);
+  const utilityBills = safeAllowances - homeRent;
+  return { homeRent, utilityBills };
+}
+
 export function EmployeeDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
@@ -237,8 +253,10 @@ function Badge({
 function ProfileTab({ employee }: { employee: any }) {
   const qc = useQueryClient();
   const update = useUpdateEmployee();
+  const totalSalary = Number(employee.basicSalary) + Number(employee.allowances);
   const [form, setForm] = useState({
     name: employee.name,
+    personalEmail: employee.personalEmail ?? "",
     phone: employee.phone ?? "",
     position: employee.position ?? "",
     department: employee.department ?? "",
@@ -248,6 +266,7 @@ function ProfileTab({ employee }: { employee: any }) {
     officeStartTime: employee.officeStartTime,
     officeEndTime: employee.officeEndTime,
     gracePeriodMinutes: employee.gracePeriodMinutes,
+    totalSalary,
     basicSalary: employee.basicSalary,
     allowances: employee.allowances,
     casualLeaveQuota: employee.casualLeaveQuota ?? 10,
@@ -257,22 +276,48 @@ function ProfileTab({ employee }: { employee: any }) {
     address: employee.address ?? "",
     employeeCode: employee.employeeCode ?? "",
     leftDate: employee.leftDate ?? "",
+    emergencyContactName: employee.emergencyContactName ?? "",
+    emergencyContactNumber:
+      employee.emergencyContactNumber ?? employee.emergencyContact ?? "",
     emergencyContact: employee.emergencyContact ?? "",
     cnic: employee.cnic ?? "",
     lastQualification: employee.lastQualification ?? "",
     previousCompany: employee.previousCompany ?? "",
     lastPay: employee.lastPay != null ? String(employee.lastPay) : "",
-    benefits: employee.benefits ?? "",
     notes: employee.notes ?? "",
-    immediateFamily: employee.immediateFamily ?? "",
     cnicDocumentUrl: employee.cnicDocumentUrl ?? "",
     cnicDocumentName: employee.cnicDocumentName ?? "",
-    bankAccountTitle: employee.bankAccountTitle ?? "",
-    bankAccountNumber: employee.bankAccountNumber ?? "",
-    bankName: employee.bankName ?? "",
-    bankIban: employee.bankIban ?? "",
-    bankBranchCode: employee.bankBranchCode ?? "",
+    cnicFrontDocumentUrl: employee.cnicFrontDocumentUrl ?? "",
+    cnicFrontDocumentName: employee.cnicFrontDocumentName ?? "",
+    cnicBackDocumentUrl: employee.cnicBackDocumentUrl ?? "",
+    cnicBackDocumentName: employee.cnicBackDocumentName ?? "",
+    qualificationDocumentUrl: employee.qualificationDocumentUrl ?? "",
+    qualificationDocumentName: employee.qualificationDocumentName ?? "",
+    lastPayslipOneUrl: employee.lastPayslipOneUrl ?? "",
+    lastPayslipOneName: employee.lastPayslipOneName ?? "",
+    lastPayslipTwoUrl: employee.lastPayslipTwoUrl ?? "",
+    lastPayslipTwoName: employee.lastPayslipTwoName ?? "",
+    lastPayslipThreeUrl: employee.lastPayslipThreeUrl ?? "",
+    lastPayslipThreeName: employee.lastPayslipThreeName ?? "",
+    primaryBankAccountTitle:
+      employee.primaryBankAccountTitle ?? employee.bankAccountTitle ?? "",
+    primaryBankAccountNumber:
+      employee.primaryBankAccountNumber ?? employee.bankAccountNumber ?? "",
+    primaryBankName:
+      employee.primaryBankName ?? employee.bankName ?? PRIMARY_PAYROLL_BANK,
+    primaryBankIban: employee.primaryBankIban ?? employee.bankIban ?? "",
+    primaryBankBranchCode:
+      employee.primaryBankBranchCode ?? employee.bankBranchCode ?? "",
+    secondaryBankAccountTitle: employee.secondaryBankAccountTitle ?? "",
+    secondaryBankAccountNumber: employee.secondaryBankAccountNumber ?? "",
+    secondaryBankName: employee.secondaryBankName ?? "",
+    secondaryBankIban: employee.secondaryBankIban ?? "",
+    secondaryBankBranchCode: employee.secondaryBankBranchCode ?? "",
   });
+  const allowanceBreakdown = useMemo(
+    () => splitAllowanceBreakdown(Number(form.allowances) || 0),
+    [form.allowances],
+  );
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -281,6 +326,7 @@ function ProfileTab({ employee }: { employee: any }) {
         id: employee.id,
         data: {
           name: form.name,
+          personalEmail: form.personalEmail.trim() || undefined,
           phone: form.phone || undefined,
           position: form.position || undefined,
           department: form.department || undefined,
@@ -301,21 +347,45 @@ function ProfileTab({ employee }: { employee: any }) {
           address: form.address || undefined,
           employeeCode: form.employeeCode || undefined,
           leftDate: form.leftDate ? (form.leftDate as unknown as string) : undefined,
-          emergencyContact: form.emergencyContact || undefined,
+          emergencyContactName: form.emergencyContactName || undefined,
+          emergencyContactNumber: form.emergencyContactNumber || undefined,
+          emergencyContact:
+            form.emergencyContactNumber || form.emergencyContact || undefined,
           cnic: form.cnic || undefined,
           lastQualification: form.lastQualification || undefined,
           previousCompany: form.previousCompany || undefined,
           lastPay: form.lastPay ? Number(form.lastPay) : undefined,
-          benefits: form.benefits || undefined,
           notes: form.notes || undefined,
-          immediateFamily: form.immediateFamily || undefined,
           cnicDocumentUrl: form.cnicDocumentUrl || undefined,
           cnicDocumentName: form.cnicDocumentName || undefined,
-          bankAccountTitle: form.bankAccountTitle || undefined,
-          bankAccountNumber: form.bankAccountNumber || undefined,
-          bankName: form.bankName || undefined,
-          bankIban: form.bankIban || undefined,
-          bankBranchCode: form.bankBranchCode || undefined,
+          cnicFrontDocumentUrl: form.cnicFrontDocumentUrl || undefined,
+          cnicFrontDocumentName: form.cnicFrontDocumentName || undefined,
+          cnicBackDocumentUrl: form.cnicBackDocumentUrl || undefined,
+          cnicBackDocumentName: form.cnicBackDocumentName || undefined,
+          qualificationDocumentUrl:
+            form.qualificationDocumentUrl || undefined,
+          qualificationDocumentName:
+            form.qualificationDocumentName || undefined,
+          lastPayslipOneUrl: form.lastPayslipOneUrl || undefined,
+          lastPayslipOneName: form.lastPayslipOneName || undefined,
+          lastPayslipTwoUrl: form.lastPayslipTwoUrl || undefined,
+          lastPayslipTwoName: form.lastPayslipTwoName || undefined,
+          lastPayslipThreeUrl: form.lastPayslipThreeUrl || undefined,
+          lastPayslipThreeName: form.lastPayslipThreeName || undefined,
+          primaryBankAccountTitle: form.primaryBankAccountTitle || undefined,
+          primaryBankAccountNumber:
+            form.primaryBankAccountNumber || undefined,
+          primaryBankName: PRIMARY_PAYROLL_BANK,
+          primaryBankIban: form.primaryBankIban || undefined,
+          primaryBankBranchCode: form.primaryBankBranchCode || undefined,
+          secondaryBankAccountTitle:
+            form.secondaryBankAccountTitle || undefined,
+          secondaryBankAccountNumber:
+            form.secondaryBankAccountNumber || undefined,
+          secondaryBankName: form.secondaryBankName || undefined,
+          secondaryBankIban: form.secondaryBankIban || undefined,
+          secondaryBankBranchCode:
+            form.secondaryBankBranchCode || undefined,
         } as any,
       },
       {
@@ -347,14 +417,25 @@ function ProfileTab({ employee }: { employee: any }) {
           />
           <div className="grid gap-4 sm:grid-cols-2">
             <DocumentUploader
-              label="CNIC document"
-              uploadLabel="Uploading CNIC document..."
+              label="Front CNIC"
+              uploadLabel="Uploading front CNIC..."
               employeeId={employee.id}
-              currentUrl={form.cnicDocumentUrl || null}
-              currentName={form.cnicDocumentName || null}
+              currentUrl={form.cnicFrontDocumentUrl || null}
+              currentName={form.cnicFrontDocumentName || null}
               payloadKeys={{
-                url: "cnicDocumentUrl",
-                name: "cnicDocumentName",
+                url: "cnicFrontDocumentUrl",
+                name: "cnicFrontDocumentName",
+              }}
+            />
+            <DocumentUploader
+              label="Back CNIC"
+              uploadLabel="Uploading back CNIC..."
+              employeeId={employee.id}
+              currentUrl={form.cnicBackDocumentUrl || null}
+              currentName={form.cnicBackDocumentName || null}
+              payloadKeys={{
+                url: "cnicBackDocumentUrl",
+                name: "cnicBackDocumentName",
               }}
             />
             <ContractUploader
@@ -364,19 +445,38 @@ function ProfileTab({ employee }: { employee: any }) {
             />
           </div>
         </div>
-        <SectionBlock title="Account details">
+        <SectionBlock title="User details">
           <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Employee code">
+              <Input
+                value={form.employeeCode}
+                onChange={(e) =>
+                  setForm({ ...form, employeeCode: e.target.value })
+                }
+                placeholder="e.g. EMP-001"
+              />
+            </FormField>
             <FormField label="Full name">
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </FormField>
-            <FormField label="Phone">
+            <FormField label="Work phone">
               <Input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 placeholder="+923XXXXXXXXX"
+              />
+            </FormField>
+            <FormField label="Personal email">
+              <Input
+                type="email"
+                value={form.personalEmail}
+                onChange={(e) =>
+                  setForm({ ...form, personalEmail: e.target.value })
+                }
+                placeholder="name@example.com"
               />
             </FormField>
             <FormField label="Position">
@@ -434,15 +534,6 @@ function ProfileTab({ employee }: { employee: any }) {
                 }
               />
             </FormField>
-            <FormField label="Employee code">
-              <Input
-                value={form.employeeCode}
-                onChange={(e) =>
-                  setForm({ ...form, employeeCode: e.target.value })
-                }
-                placeholder="e.g. EMP-001"
-              />
-            </FormField>
             <FormField label="Left date">
               <DateField
                 value={form.leftDate}
@@ -490,27 +581,51 @@ function ProfileTab({ employee }: { employee: any }) {
 
         <SectionBlock title="Compensation">
           <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Total salary (PKR)">
+              <Input
+                type="number"
+                min={0}
+                value={form.totalSalary}
+                onChange={(e) =>
+                  setForm(() => {
+                    const totalSalary = Number(e.target.value);
+                    const split = splitTotalSalary(totalSalary);
+                    return {
+                      ...form,
+                      totalSalary,
+                      basicSalary: split.basicSalary,
+                      allowances: split.allowances,
+                    };
+                  })
+                }
+              />
+            </FormField>
             <FormField label="Basic salary (PKR)">
               <Input
                 type="number"
-                min={0}
                 value={form.basicSalary}
-                onChange={(e) =>
-                  setForm({ ...form, basicSalary: Number(e.target.value) })
-                }
+                readOnly
               />
             </FormField>
-            <FormField label="Allowances (PKR)">
+            <FormField label="Home rent (PKR)">
               <Input
                 type="number"
-                min={0}
-                value={form.allowances}
-                onChange={(e) =>
-                  setForm({ ...form, allowances: Number(e.target.value) })
-                }
+                value={allowanceBreakdown.homeRent}
+                readOnly
+              />
+            </FormField>
+            <FormField label="Utility bills (PKR)">
+              <Input
+                type="number"
+                value={allowanceBreakdown.utilityBills}
+                readOnly
               />
             </FormField>
           </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            The total salary is split automatically into 50% basic salary,
+            25% home rent, and 25% utility bills.
+          </p>
           <div className="mt-3 grid items-start gap-3 md:grid-cols-3">
             <FormField label="Casual leave">
               <Input
@@ -576,49 +691,121 @@ function ProfileTab({ employee }: { employee: any }) {
           </div>
         </SectionBlock>
 
-        <SectionBlock title="Bank details">
+        <SectionBlock title="Primary bank details">
+          <p className="-mt-1 mb-4 text-sm text-muted-foreground">
+            The payroll account is always maintained with Bank Al Habib.
+          </p>
           <div className="grid gap-3 md:grid-cols-2">
             <FormField label="Account title">
               <Input
-                value={form.bankAccountTitle}
+                value={form.primaryBankAccountTitle}
                 onChange={(e) =>
-                  setForm({ ...form, bankAccountTitle: e.target.value })
+                  setForm({
+                    ...form,
+                    primaryBankAccountTitle: e.target.value,
+                  })
                 }
                 placeholder="Muhammad Ali"
               />
             </FormField>
             <FormField label="Account number">
               <Input
-                value={form.bankAccountNumber}
+                value={form.primaryBankAccountNumber}
                 onChange={(e) =>
-                  setForm({ ...form, bankAccountNumber: e.target.value })
+                  setForm({
+                    ...form,
+                    primaryBankAccountNumber: e.target.value,
+                  })
                 }
                 placeholder="0035123456789"
               />
             </FormField>
             <FormField label="Bank name">
               <Input
-                value={form.bankName}
-                onChange={(e) =>
-                  setForm({ ...form, bankName: e.target.value })
-                }
-                placeholder="HBL / Meezan / Bank Alfalah"
+                value={PRIMARY_PAYROLL_BANK}
+                readOnly
               />
             </FormField>
             <FormField label="IBAN">
               <Input
-                value={form.bankIban}
+                value={form.primaryBankIban}
                 onChange={(e) =>
-                  setForm({ ...form, bankIban: e.target.value })
+                  setForm({ ...form, primaryBankIban: e.target.value })
+                }
+                placeholder="PK12BAGB0001234567890123"
+              />
+            </FormField>
+            <FormField label="Branch code">
+              <Input
+                value={form.primaryBankBranchCode}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    primaryBankBranchCode: e.target.value,
+                  })
+                }
+                placeholder="0123"
+              />
+            </FormField>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock title="Secondary bank details">
+          <p className="-mt-1 mb-4 text-sm text-muted-foreground">
+            This account can belong to any bank and may be used before
+            probation completion if needed.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Account title">
+              <Input
+                value={form.secondaryBankAccountTitle}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    secondaryBankAccountTitle: e.target.value,
+                  })
+                }
+                placeholder="Muhammad Ali"
+              />
+            </FormField>
+            <FormField label="Account number">
+              <Input
+                value={form.secondaryBankAccountNumber}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    secondaryBankAccountNumber: e.target.value,
+                  })
+                }
+                placeholder="0035123456789"
+              />
+            </FormField>
+            <FormField label="Bank name">
+              <Input
+                value={form.secondaryBankName}
+                onChange={(e) =>
+                  setForm({ ...form, secondaryBankName: e.target.value })
+                }
+                placeholder="Meezan Bank"
+              />
+            </FormField>
+            <FormField label="IBAN">
+              <Input
+                value={form.secondaryBankIban}
+                onChange={(e) =>
+                  setForm({ ...form, secondaryBankIban: e.target.value })
                 }
                 placeholder="PK36MEZN0001234567890123"
               />
             </FormField>
             <FormField label="Branch code">
               <Input
-                value={form.bankBranchCode}
+                value={form.secondaryBankBranchCode}
                 onChange={(e) =>
-                  setForm({ ...form, bankBranchCode: e.target.value })
+                  setForm({
+                    ...form,
+                    secondaryBankBranchCode: e.target.value,
+                  })
                 }
                 placeholder="0123"
               />
@@ -635,16 +822,31 @@ function ProfileTab({ employee }: { employee: any }) {
                 placeholder="XXXXX-XXXXXXX-X"
               />
             </FormField>
-            <FormField label="Emergency contact">
+            <FormField label="Emergency contact name">
               <Input
-                value={form.emergencyContact}
+                value={form.emergencyContactName}
                 onChange={(e) =>
-                  setForm({ ...form, emergencyContact: e.target.value })
+                  setForm({
+                    ...form,
+                    emergencyContactName: e.target.value,
+                  })
+                }
+                placeholder="Muhammad Ali"
+              />
+            </FormField>
+            <FormField label="Emergency contact number">
+              <Input
+                value={form.emergencyContactNumber}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    emergencyContactNumber: e.target.value,
+                  })
                 }
                 placeholder="+923XXXXXXXXX"
               />
             </FormField>
-            <FormField label="Last qualification" className="md:col-span-2">
+            <FormField label="Last qualification">
               <Input
                 value={form.lastQualification}
                 onChange={(e) =>
@@ -653,6 +855,17 @@ function ProfileTab({ employee }: { employee: any }) {
                 placeholder="e.g. BS Computer Science"
               />
             </FormField>
+            <DocumentUploader
+              label="Upload qualification"
+              uploadLabel="Uploading qualification..."
+              employeeId={employee.id}
+              currentUrl={form.qualificationDocumentUrl || null}
+              currentName={form.qualificationDocumentName || null}
+              payloadKeys={{
+                url: "qualificationDocumentUrl",
+                name: "qualificationDocumentName",
+              }}
+            />
             <FormField label="Previous company">
               <Input
                 value={form.previousCompany}
@@ -670,22 +883,33 @@ function ProfileTab({ employee }: { employee: any }) {
                 placeholder="e.g. 80000"
               />
             </FormField>
-            <FormField label="Immediate family" className="md:col-span-2">
-              <Input
-                value={form.immediateFamily}
-                onChange={(e) =>
-                  setForm({ ...form, immediateFamily: e.target.value })
-                }
-                placeholder="e.g. Spouse, 2 children"
-              />
-            </FormField>
-            <FormField label="Benefits" className="md:col-span-2">
-              <Input
-                value={form.benefits}
-                onChange={(e) => setForm({ ...form, benefits: e.target.value })}
-                placeholder="e.g. Health insurance, fuel allowance"
-              />
-            </FormField>
+            <DocumentUploader
+              label="Last 3 months payslip 1"
+              uploadLabel="Uploading payslip 1..."
+              employeeId={employee.id}
+              currentUrl={form.lastPayslipOneUrl || null}
+              currentName={form.lastPayslipOneName || null}
+              payloadKeys={{ url: "lastPayslipOneUrl", name: "lastPayslipOneName" }}
+            />
+            <DocumentUploader
+              label="Last 3 months payslip 2"
+              uploadLabel="Uploading payslip 2..."
+              employeeId={employee.id}
+              currentUrl={form.lastPayslipTwoUrl || null}
+              currentName={form.lastPayslipTwoName || null}
+              payloadKeys={{ url: "lastPayslipTwoUrl", name: "lastPayslipTwoName" }}
+            />
+            <DocumentUploader
+              label="Last 3 months payslip 3"
+              uploadLabel="Uploading payslip 3..."
+              employeeId={employee.id}
+              currentUrl={form.lastPayslipThreeUrl || null}
+              currentName={form.lastPayslipThreeName || null}
+              payloadKeys={{
+                url: "lastPayslipThreeUrl",
+                name: "lastPayslipThreeName",
+              }}
+            />
             <FormField label="Address" className="md:col-span-2">
               <Textarea
                 value={form.address}
@@ -1416,6 +1640,7 @@ function SalaryComponentsCard({ id }: { id: number }) {
   const [valueType, setValueType] = useState<"fixed" | "percentage">("fixed");
   const [value, setValue] = useState<number>(0);
   const [isDeduction, setIsDeduction] = useState(false);
+  const [isTaxable, setIsTaxable] = useState(true);
 
   const onAdd = (e: FormEvent) => {
     e.preventDefault();
@@ -1426,7 +1651,14 @@ function SalaryComponentsCard({ id }: { id: number }) {
     create.mutate(
       {
         id,
-        data: { label: label.trim(), kind, valueType, value, isDeduction },
+        data: {
+          label: label.trim(),
+          kind,
+          valueType,
+          value,
+          isDeduction,
+          isTaxable,
+        },
       },
       {
         onSuccess: () => {
@@ -1436,6 +1668,7 @@ function SalaryComponentsCard({ id }: { id: number }) {
           });
           setLabel("");
           setValue(0);
+          setIsTaxable(true);
         },
         onError: () => toast.error("Could not add component"),
       },
@@ -1460,6 +1693,7 @@ function SalaryComponentsCard({ id }: { id: number }) {
   const onKindChange = (k: typeof kind) => {
     setKind(k);
     setIsDeduction(k === "provident_fund");
+    if (k === "provident_fund") setIsTaxable(false);
     if (k === "provident_fund") setValueType("percentage");
   };
 
@@ -1521,9 +1755,22 @@ function SalaryComponentsCard({ id }: { id: number }) {
           <input
             type="checkbox"
             checked={isDeduction}
-            onChange={(e) => setIsDeduction(e.target.checked)}
+            onChange={(e) => {
+              const next = e.target.checked;
+              setIsDeduction(next);
+              if (next) setIsTaxable(false);
+            }}
           />
           This is a deduction
+        </label>
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={isTaxable}
+            disabled={isDeduction}
+            onChange={(e) => setIsTaxable(e.target.checked)}
+          />
+          Deduct tax from this
         </label>
         <Button
           type="submit"
@@ -1562,6 +1809,9 @@ function SalaryComponentsCard({ id }: { id: number }) {
                   </p>
                   <p className="text-xs text-muted-foreground capitalize">
                     {c.kind.replace("_", " ")} · {c.valueType}
+                    {!c.isDeduction && c.isTaxable === false
+                      ? " · non-taxable"
+                      : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1995,6 +2245,11 @@ function DocumentUploader({
   const qc = useQueryClient();
   const update = useUpdateEmployee();
   const [uploading, setUploading] = useState(false);
+  const normalizedLabel = currentName || label;
+  const lowerAsset = `${currentUrl ?? ""} ${normalizedLabel}`.toLowerCase();
+  const isImageAsset =
+    /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(lowerAsset) ||
+    lowerAsset.includes("image/");
 
   const onPick = async (file: File) => {
     setUploading(true);
@@ -2059,6 +2314,30 @@ function DocumentUploader({
         )}
         {currentUrl ? (
           <div className="space-y-3">
+            {isImageAsset ? (
+              <a
+                href={currentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block overflow-hidden rounded-lg border border-border bg-card"
+              >
+                <img
+                  src={currentUrl}
+                  alt={normalizedLabel}
+                  className="h-48 w-full object-contain bg-muted/30"
+                />
+              </a>
+            ) : (
+              <a
+                href={currentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-3 text-sm font-medium text-primary hover:underline"
+              >
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="truncate">{normalizedLabel}</span>
+              </a>
+            )}
             <a
               href={currentUrl}
               target="_blank"
@@ -2066,7 +2345,7 @@ function DocumentUploader({
               className="flex min-w-0 items-center gap-2 text-sm font-medium text-primary hover:underline"
             >
               <FileText className="h-4 w-4 shrink-0" />
-              <span className="truncate">{currentName || "Contract"}</span>
+              <span className="truncate">{normalizedLabel}</span>
             </a>
             <div className="flex flex-wrap items-center gap-2">
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-muted">
@@ -2097,7 +2376,9 @@ function DocumentUploader({
               </button>
             </div>
             <p className="text-xs text-muted-foreground">
-              PDF or Word, up to 10 MB.
+              {isImageAsset
+                ? "Image preview available. Click the preview to open the full file."
+                : "PDF, Word, or image file, up to 10 MB."}
             </p>
           </div>
         ) : (

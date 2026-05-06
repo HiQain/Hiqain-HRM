@@ -37,6 +37,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -57,8 +65,8 @@ import {
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { formatCurrency, formatDate, formatMonth } from "@/lib/utils";
 import {
+  computeSalaryStructurePreview,
   getDefaultAllowanceBreakdown,
-  getPakistanMonthlySalaryTax,
   isManualTaxComponent,
 } from "@/lib/salary";
 
@@ -160,18 +168,29 @@ export function AdminSalaryPage() {
   const countedLates = totalLates - excusedLates;
   const defaultAllowances = emp?.allowances ?? 0;
   const totalSalary = (emp?.basicSalary ?? 0) + defaultAllowances;
+  const salaryPreview = computeSalaryStructurePreview({
+    basicSalary: emp?.basicSalary ?? 0,
+    defaultAllowances,
+    components: visibleComponents,
+    providentFundPercent: emp?.providentFundPercent,
+    month,
+    year,
+  });
+  const generatedPayrollTax =
+    monthPayslip?.salaryBreakdown?.deductions?.find((line) => line.label === "Payroll Tax")
+      ?.amount ?? null;
   const currentTax = monthPayslip
-    ? getPakistanMonthlySalaryTax(
-        monthPayslip.basicSalary + monthPayslip.allowances + monthPayslip.bonus,
-        month,
-        year,
-      )
-    : getPakistanMonthlySalaryTax(totalSalary, month, year);
+    ? generatedPayrollTax ?? 0
+    : salaryPreview.tax;
+  const currentPerDaySalary = totalSalary / 30;
   const monthPayslipLatePenalty =
-    monthPayslip && monthPayslip.totalWorkingDays > 0
-      ? ((monthPayslip.basicSalary / monthPayslip.totalWorkingDays) *
-          (monthPayslip.lateAbsenceDays ?? 0))
+    monthPayslip
+      ? (((monthPayslip.basicSalary + monthPayslip.allowances) / 30) *
+        (monthPayslip.lateAbsenceDays ?? 0))
       : 0;
+  const generatedPerDaySalary = monthPayslip
+    ? (monthPayslip.basicSalary + monthPayslip.allowances) / 30
+    : currentPerDaySalary;
   const isFutureOrCurrent =
     year > now.getFullYear() ||
     (year === now.getFullYear() && month >= now.getMonth() + 1);
@@ -419,9 +438,9 @@ export function AdminSalaryPage() {
                   />
                 </div>
               </div>
-          </section>
+            </section>
 
-          <section className="rounded-xl border border-border bg-card shadow-sm">
+            <section className="rounded-xl border border-border bg-card shadow-sm">
               <div className="border-b border-border p-4">
                 <p className="text-sm font-semibold">Loans</p>
                 <p className="text-xs text-muted-foreground">
@@ -523,6 +542,11 @@ export function AdminSalaryPage() {
                   hint={`${monthPayslip.presentDays} present · ${monthPayslip.absentDays} absent`}
                 />
                 <PayrollStat
+                  label="Per day salary"
+                  value={formatCurrency(generatedPerDaySalary)}
+                  hint="Calculated on a 30-day month"
+                />
+                <PayrollStat
                   label="Late penalty days"
                   value={String(monthPayslip.lateAbsenceDays ?? 0)}
                   hint={`${monthPayslip.lateCount} lates recorded`}
@@ -531,15 +555,7 @@ export function AdminSalaryPage() {
                 />
                 <PayrollStat
                   label="Tax"
-                  value={formatCurrency(
-                    getPakistanMonthlySalaryTax(
-                      monthPayslip.basicSalary +
-                      monthPayslip.allowances +
-                      monthPayslip.bonus,
-                      month,
-                      year,
-                    ),
-                  )}
+                  value={formatCurrency(currentTax)}
                   tone="down"
                 />
                 <PayrollStat
@@ -639,6 +655,7 @@ function ManageSalaryComponentsCard({
     valueType: string;
     value: number;
     isDeduction?: boolean;
+    isTaxable?: boolean;
   }>;
 }) {
   const qc = useQueryClient();
@@ -657,6 +674,7 @@ function ManageSalaryComponentsCard({
   const [valueType, setValueType] = useState<"fixed" | "percentage">("fixed");
   const [value, setValue] = useState(0);
   const [isDeduction, setIsDeduction] = useState(false);
+  const [pendingTaxDecision, setPendingTaxDecision] = useState(false);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getListSalaryComponentsQueryKey(employeeId) });
@@ -667,10 +685,10 @@ function ManageSalaryComponentsCard({
     setValueType("fixed");
     setValue(0);
     setIsDeduction(false);
+    setPendingTaxDecision(false);
   };
 
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const createComponent = (isTaxable: boolean) => {
     if (!label.trim()) {
       toast.error("Label is required");
       return;
@@ -685,6 +703,7 @@ function ManageSalaryComponentsCard({
           valueType,
           value,
           isDeduction,
+          isTaxable,
         },
       },
       {
@@ -696,6 +715,20 @@ function ManageSalaryComponentsCard({
         onError: () => toast.error("Could not add component"),
       },
     );
+  };
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!label.trim()) {
+      toast.error("Label is required");
+      return;
+    }
+
+    if (!isDeduction && (kind === "allowance" || kind === "commission")) {
+      setPendingTaxDecision(true);
+      return;
+    }
+
+    createComponent(false);
   };
   const managedRows = [
     ...defaultAllowanceRows,
@@ -751,7 +784,7 @@ function ManageSalaryComponentsCard({
           onChange={(e) => setValue(Number(e.target.value))}
           className="lg:col-span-2"
         />
-        <label className="flex items-center gap-2 text-xs text-muted-foreground lg:col-span-2">
+        <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground lg:col-span-1">
           <input
             type="checkbox"
             checked={isDeduction}
@@ -789,6 +822,9 @@ function ManageSalaryComponentsCard({
                 <p className="text-xs text-muted-foreground capitalize">
                   {humanizeSalaryKind(component.kind)} · {component.valueType} ·{" "}
                   {component.isDeduction ? "deduction" : "earning"}
+                  {!component.isDeduction && component.isTaxable === false
+                    ? " · non-taxable"
+                    : ""}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -825,6 +861,42 @@ function ManageSalaryComponentsCard({
           ))
         )}
       </div>
+
+      <Dialog open={pendingTaxDecision} onOpenChange={setPendingTaxDecision}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Count this in payroll tax?</DialogTitle>
+            <DialogDescription>
+              If this {kind === "commission" ? "commission" : "allowance"} is counted in
+              tax, payroll tax will be calculated on the employee&apos;s updated taxable
+              salary. If not, it will be added as a non-taxable extra amount.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={create.isPending}
+              onClick={() => {
+                setPendingTaxDecision(false);
+                createComponent(false);
+              }}
+            >
+              Do not count in tax
+            </Button>
+            <Button
+              type="button"
+              disabled={create.isPending}
+              onClick={() => {
+                setPendingTaxDecision(false);
+                createComponent(true);
+              }}
+            >
+              Count in tax
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -916,7 +988,7 @@ function MoneySummaryCard({
   return (
     <div className="rounded-2xl border border-border bg-gradient-to-b from-background to-muted/20 px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
       <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
+        {label === "Home rent" ? <>HOME<br />RENT</> : label}
       </p>
       <div className={`mt-6 overflow-hidden ${toneClass}`}>
         <p className="text-sm font-semibold leading-none opacity-90">{currency}</p>

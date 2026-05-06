@@ -2,15 +2,22 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
+  "workspaces": [
+    "artifacts/*",
+    "lib/*",
+    "scripts"
+  ],
   "scripts": {
-    "preinstall": "node -e \"const fs=require('fs'); ['package-lock.json','yarn.lock'].forEach((f)=>{try{fs.unlinkSync(f)}catch{}}); const ua=process.env.npm_config_user_agent||''; if(!ua.startsWith('pnpm/')){console.error('Use pnpm instead'); process.exit(1)}\"",
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "dev": "dotenv -e .env -- concurrently -k -n api,hrm -c blue,green \"npm run dev --workspace=@workspace/api-server\" \"npm run dev --workspace=@workspace/hrm\"",
+    "build": "dotenv -e .env -- npm run build --workspace=@workspace/api-server --workspace=@workspace/hrm",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "npm run typecheck:libs && npm run typecheck --workspace=@workspace/api-server --workspace=@workspace/hrm --workspace=@workspace/mockup-sandbox --workspace=@workspace/scripts"
   },
   "private": true,
   "devDependencies": {
-    "typescript": "~5.9.2",
-    "prettier": "^3.8.1"
+    "concurrently": "^9.2.1",
+    "dotenv-cli": "^10.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2"
   }
 }

@@ -253,13 +253,16 @@ async function validateProvidentFundWithdrawal(
   return { ok: true as const, summary };
 }
 
-router.get("/requests", requireAuth(), async (req, res) => {
+router.get("/requests", requireAuth(), async (req, res): Promise<void> => {
   const user = getUser(req);
   const type = req.query.type as string | undefined;
   const status = req.query.status as string | undefined;
   const filters = [];
   if (user.role === "employee") {
-    if (!user.employeeId) return res.json([]);
+    if (!user.employeeId) {
+      res.json([]);
+      return;
+    }
     filters.push(eq(generalRequestsTable.employeeId, user.employeeId));
   }
   const validTypes = [
@@ -307,10 +310,12 @@ function dateRange(start: string, end: string | null | undefined): string[] {
   return out;
 }
 
-router.post("/requests", requireAuth(["employee"]), async (req, res) => {
+router.post("/requests", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
-  if (!user.employeeId)
-    return res.status(400).json({ message: "No employee profile" });
+  if (!user.employeeId) {
+    res.status(400).json({ message: "No employee profile" });
+    return;
+  }
   const {
     type,
     date,
@@ -340,39 +345,44 @@ router.post("/requests", requireAuth(["employee"]), async (req, res) => {
     typeof reason !== "string" ||
     !reason.trim()
   ) {
-    return res
+    res
       .status(400)
       .json({ message: "type, date and reason are required" });
+    return;
   }
   if (
     (type === "loan" || type === "increment" || type === "pf_withdrawal") &&
     (amount == null || isNaN(Number(amount)) || Number(amount) <= 0)
   ) {
-    return res
+    res
       .status(400)
       .json({ message: "Amount is required for loan, increment and PF withdrawal requests" });
+    return;
   }
 
   if (type === "loan") {
     const eligibility = await computeLoanEligibility(user.employeeId);
     if (!eligibility.eligible) {
-      return res.status(400).json({
+      res.status(400).json({
         message: eligibility.reason ?? "Not eligible for a loan right now",
       });
+      return;
     }
     if (Number(amount) > eligibility.maxAmount) {
-      return res.status(400).json({
+      res.status(400).json({
         message: `Loan amount cannot exceed ${eligibility.maxAmount}`,
       });
+      return;
     }
     if (
       installmentMonths == null ||
       !Number.isInteger(Number(installmentMonths)) ||
       Number(installmentMonths) < 1
     ) {
-      return res
+      res
         .status(400)
         .json({ message: "Installment months is required (must be >= 1)" });
+      return;
     }
   }
 
@@ -383,7 +393,8 @@ router.post("/requests", requireAuth(["employee"]), async (req, res) => {
       { includePending: true },
     );
     if (!validation.ok) {
-      return res.status(400).json({ message: validation.message });
+      res.status(400).json({ message: validation.message });
+      return;
     }
   }
 
@@ -417,11 +428,26 @@ router.post("/requests", requireAuth(["employee"]), async (req, res) => {
         : [],
       status: "pending",
     })
-    .returning();
-  res.status(201).json(await serialize(inserted[0]!, emp.name));
+    .$returningId();
+  const requestId = inserted[0]?.id;
+  if (!requestId) {
+    res.status(500).json({ message: "Failed to create request" });
+    return;
+  }
+  const insertedRows = await db
+    .select()
+    .from(generalRequestsTable)
+    .where(eq(generalRequestsTable.id, requestId))
+    .limit(1);
+  const request = insertedRows[0];
+  if (!request) {
+    res.status(500).json({ message: "Created request could not be loaded" });
+    return;
+  }
+  res.status(201).json(await serialize(request, emp.name));
 });
 
-router.patch("/requests/:id", requireAuth(["employee"]), async (req, res) => {
+router.patch("/requests/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -430,13 +456,20 @@ router.patch("/requests/:id", requireAuth(["employee"]), async (req, res) => {
     .where(eq(generalRequestsTable.id, id))
     .limit(1);
   const row = existing[0];
-  if (!row) return res.status(404).json({ message: "Request not found" });
-  if (row.employeeId !== user.employeeId)
-    return res.status(403).json({ message: "Not your request" });
-  if (row.status !== "pending")
-    return res
+  if (!row) {
+    res.status(404).json({ message: "Request not found" });
+    return;
+  }
+  if (row.employeeId !== user.employeeId) {
+    res.status(403).json({ message: "Not your request" });
+    return;
+  }
+  if (row.status !== "pending") {
+    res
       .status(400)
       .json({ message: "Only pending requests can be edited" });
+    return;
+  }
 
   const body = req.body ?? {};
   const nextType = (body.type ?? row.type) as RequestType;
@@ -453,9 +486,10 @@ router.patch("/requests/:id", requireAuth(["employee"]), async (req, res) => {
     (nextType === "loan" || nextType === "increment" || nextType === "pf_withdrawal") &&
     (nextAmount == null || Number.isNaN(nextAmount) || nextAmount <= 0)
   ) {
-    return res.status(400).json({
+    res.status(400).json({
       message: "Amount is required for loan, increment and PF withdrawal requests",
     });
+    return;
   }
 
   if (nextType === "pf_withdrawal") {
@@ -465,13 +499,14 @@ router.patch("/requests/:id", requireAuth(["employee"]), async (req, res) => {
       { excludeRequestId: row.id, includePending: true },
     );
     if (!validation.ok) {
-      return res.status(400).json({ message: validation.message });
+      res.status(400).json({ message: validation.message });
+      return;
     }
   }
 
-  const updated = await db
-      .update(generalRequestsTable)
-      .set({
+  await db
+    .update(generalRequestsTable)
+    .set({
       type: (body.type ?? row.type) as any,
       date: body.date ?? row.date,
       dateTo: body.dateTo !== undefined ? (body.dateTo ?? null) : row.dateTo,
@@ -502,16 +537,26 @@ router.patch("/requests/:id", requireAuth(["employee"]), async (req, res) => {
         : (row.mentionedEmployeeIds ?? []),
     })
     .where(eq(generalRequestsTable.id, id))
-    .returning();
+    ;
+  const updatedRows = await db
+    .select()
+    .from(generalRequestsTable)
+    .where(eq(generalRequestsTable.id, id))
+    .limit(1);
+  const updated = updatedRows[0];
+  if (!updated) {
+    res.status(404).json({ message: "Request not found" });
+    return;
+  }
   const empRows = await db
     .select()
     .from(employeesTable)
-    .where(eq(employeesTable.id, updated[0]!.employeeId))
+    .where(eq(employeesTable.id, updated.employeeId))
     .limit(1);
-  res.json(await serialize(updated[0]!, empRows[0]?.name ?? ""));
+  res.json(await serialize(updated, empRows[0]?.name ?? ""));
 });
 
-router.delete("/requests/:id", requireAuth(["employee"]), async (req, res) => {
+router.delete("/requests/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -520,13 +565,20 @@ router.delete("/requests/:id", requireAuth(["employee"]), async (req, res) => {
     .where(eq(generalRequestsTable.id, id))
     .limit(1);
   const row = existing[0];
-  if (!row) return res.status(404).json({ message: "Request not found" });
-  if (row.employeeId !== user.employeeId)
-    return res.status(403).json({ message: "Not your request" });
-  if (row.status !== "pending")
-    return res
+  if (!row) {
+    res.status(404).json({ message: "Request not found" });
+    return;
+  }
+  if (row.employeeId !== user.employeeId) {
+    res.status(403).json({ message: "Not your request" });
+    return;
+  }
+  if (row.status !== "pending") {
+    res
       .status(400)
       .json({ message: "Only pending requests can be cancelled" });
+    return;
+  }
   await db.delete(generalRequestsTable).where(eq(generalRequestsTable.id, id));
   res.json({ ok: true });
 });
@@ -534,15 +586,17 @@ router.delete("/requests/:id", requireAuth(["employee"]), async (req, res) => {
 router.post(
   "/requests/:id/approve",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     const existingRow = await db
       .select()
       .from(generalRequestsTable)
       .where(eq(generalRequestsTable.id, id))
       .limit(1);
-    if (!existingRow.length)
-      return res.status(404).json({ message: "Request not found" });
+    if (!existingRow.length) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
     const existing = existingRow[0]!;
 
     // For loan, allow override of installment months from body
@@ -552,9 +606,10 @@ router.post(
       if (body.installmentMonths != null) {
         const m = Number(body.installmentMonths);
         if (!Number.isInteger(m) || m < 1) {
-          return res
+          res
             .status(400)
             .json({ message: "installmentMonths must be a positive integer" });
+          return;
         }
         approvedMonths = m;
       }
@@ -569,11 +624,12 @@ router.post(
         { excludeRequestId: existing.id, includePending: false },
       );
       if (!validation.ok) {
-        return res.status(400).json({ message: validation.message });
+        res.status(400).json({ message: validation.message });
+        return;
       }
     }
 
-    const updated = await db
+    const updateResult = await db
       .update(generalRequestsTable)
       .set({
         status: "approved",
@@ -581,8 +637,17 @@ router.post(
         installmentMonths: approvedMonths ?? existing.installmentMonths,
       })
       .where(eq(generalRequestsTable.id, id))
-      .returning();
-    const row = updated[0]!;
+      ;
+    if (!updateResult[0].affectedRows) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
+    const updatedRows = await db
+      .select()
+      .from(generalRequestsTable)
+      .where(eq(generalRequestsTable.id, id))
+      .limit(1);
+    const row = updatedRows[0]!;
 
     // Side effects
     if (
@@ -670,15 +735,27 @@ router.post(
 router.post(
   "/requests/:id/reject",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
-    const updated = await db
+    const updateResult = await db
       .update(generalRequestsTable)
       .set({ status: "rejected", reviewedAt: new Date() })
       .where(eq(generalRequestsTable.id, id))
-      .returning();
-    const row = updated[0];
-    if (!row) return res.status(404).json({ message: "Request not found" });
+      ;
+    if (!updateResult[0].affectedRows) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
+    const updatedRows = await db
+      .select()
+      .from(generalRequestsTable)
+      .where(eq(generalRequestsTable.id, id))
+      .limit(1);
+    const row = updatedRows[0];
+    if (!row) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
     const empRows = await db
       .select()
       .from(employeesTable)

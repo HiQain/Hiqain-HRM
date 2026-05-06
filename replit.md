@@ -2,41 +2,40 @@
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+npm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
 ## Stack
 
-- **Monorepo tool**: pnpm workspaces
+- **Monorepo tool**: npm workspaces
 - **Node.js version**: 24
-- **Package manager**: pnpm
+- **Package manager**: npm
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
+- **Database**: MySQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
 ## Key Commands
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `npm run typecheck` — full typecheck across the active workspaces
+- `npm run build` — typecheck + build the API server and HRM app
+- `npm run codegen --workspace=@workspace/api-spec` — regenerate API hooks and Zod schemas from OpenAPI spec
+- `npm run push --workspace=@workspace/db` — push DB schema changes (dev only)
+- `npm run dev --workspace=@workspace/api-server` — run API server locally
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+See the root `package.json` workspaces for structure, TypeScript setup, and package details.
 
 ## HiQain — HR Management
 
 A full-stack HRM web app for HiQain, built on top of the workspace stack.
 
 ### Artifacts
-- `artifacts/api-server` — Express API at `/api`, session auth (express-session + connect-pg-simple), bcryptjs password hashing.
+- `artifacts/api-server` — Express API at `/api`, MySQL-backed session auth, bcryptjs password hashing.
 - `artifacts/hrm` — React + Vite frontend (TanStack Query + shadcn/ui + Tailwind v4 + wouter).
 
-### Roles & seeded accounts
-- Admin: `admin@hiqain.com` / `password`.
-- Sample employees (must change password on first login): various `@hiqain.com` accounts / `welcome123`.
+### Bootstrap access
+- Admin bootstrap credentials come from `HRM_BOOTSTRAP_ADMIN_EMAIL` and `HRM_BOOTSTRAP_ADMIN_PASSWORD`.
 
 ### Features
 - Auth: login, logout, change password, force-change on first login.
@@ -67,7 +66,7 @@ A full-stack HRM web app for HiQain, built on top of the workspace stack.
 - Multi-attachments on Leaves and Requests: each leave/general/remote-work request stores an `attachments: { url, name }[]` array (legacy `attachmentUrl/Name` mirror the first item for back-compat). UI uses `MultiAttachmentField` for picking multiple files at once.
 - Dark mode toggle (Moon/Sun) in sidebar; persisted via localStorage.
 - Employee status: "Permanent" (was "Confirmed") after probation.
-- Global Settings (admin): defaults CL 6 / SL 6 / AL 12, salary 50/50, PF 5%. Computed `dailyHours`/`weeklyHours`/`monthlyHours` returned by GET `/api/settings` (from office times, weekly off days, and current month working days minus public holidays). Leave quota changes always auto-propagate to every employee on save (no toggle). PF is auto-enabled whenever `defaultProvidentFundPercent > 0` (no toggle). Attendance policy and Company policy each support text OR file (mutually exclusive via tab toggle). Text mode uses a custom `RichTextEditor` component (contentEditable + execCommand) with a Word-style toolbar (bold/italic/underline, H1/H2, lists, quote, link, undo/redo, clear formatting); content stored as HTML and rendered via `RichTextView` using `dangerouslySetInnerHTML` (admin-authored, internal users only). Public holidays carry an optional `country` tag (`us` | `pk` | `other`) — admin gets two separate "Load US 2026" / "Load Pakistan 2026" buttons and All/US/PK filter tabs with country badges. Employees see a read-only `/employee/settings` page that uses **their own** office hours (not the global defaults) for the per-day / per-week / per-month calculations and shows their own leave quotas; same holiday filter tabs apply.
+- Global Settings (admin): defaults CL 6 / SL 6 / AL 12, salary 50/50, PF 5%. Computed `dailyHours`/`weeklyHours`/`monthlyHours` returned by GET `/api/settings` (from office times, weekly off days, and current month working days minus public holidays). Leave quota changes always auto-propagate to every employee on save (no toggle). PF is auto-enabled whenever `defaultProvidentFundPercent > 0` (no toggle). Attendance policy and Company policy each support text OR file (mutually exclusive via tab toggle). Text mode uses a custom `RichTextEditor` component (contentEditable + execCommand) with a Word-style toolbar (bold/italic/underline, H1/H2, lists, quote, link, undo/redo, clear formatting); content stored as HTML and rendered via `RichTextView` using `dangerouslySetInnerHTML` (admin-authored, internal users only). Public holidays carry an optional `country` tag (`us` | `pk` | `other`) and are rendered from saved settings for the active year. Employees see a read-only `/employee/settings` page that uses **their own** office hours (not the global defaults) for the per-day / per-week / per-month calculations and shows their own leave quotas; same holiday filter tabs apply.
 
 ### Implementation notes
 - API responds with structured errors as `{ error: string }` and uses session cookies.
@@ -75,4 +74,4 @@ A full-stack HRM web app for HiQain, built on top of the workspace stack.
 - Frontend uses generated React Query hooks from `@workspace/api-client-react`. Wouter base = `import.meta.env.BASE_URL.replace(/\/$/, "")`.
 - jsPDF is bundled at the artifact level.
 - OpenAPI-first: all API changes must update `lib/api-spec/openapi.yaml` then run codegen.
-- DB schema uses Drizzle ORM; new columns added to `lib/db/src/schema/` and applied via `executeSql` directly.
+- Tax rules are runtime-configured through `HRM_TAX_CONFIG_JSON` and `VITE_HRM_TAX_CONFIG_JSON`.

@@ -1337,6 +1337,7 @@ components:
         userId: { type: integer }
         name: { type: string }
         email: { type: string }
+        personalEmail: { type: string, format: email, nullable: true }
         phone: { type: string, nullable: true }
         position: { type: string, nullable: true }
         department: { type: string, nullable: true }
@@ -1358,6 +1359,8 @@ components:
         avatarUrl: { type: string, nullable: true }
         employeeCode: { type: string, nullable: true }
         leftDate: { type: string, format: date, nullable: true }
+        emergencyContactName: { type: string, nullable: true }
+        emergencyContactNumber: { type: string, nullable: true }
         emergencyContact: { type: string, nullable: true }
         cnic: { type: string, nullable: true }
         lastQualification: { type: string, nullable: true }
@@ -1370,6 +1373,33 @@ components:
         employmentContractName: { type: string, nullable: true }
         cnicDocumentUrl: { type: string, nullable: true }
         cnicDocumentName: { type: string, nullable: true }
+        cnicFrontDocumentUrl: { type: string, nullable: true }
+        cnicFrontDocumentName: { type: string, nullable: true }
+        cnicBackDocumentUrl: { type: string, nullable: true }
+        cnicBackDocumentName: { type: string, nullable: true }
+        qualificationDocumentUrl: { type: string, nullable: true }
+        qualificationDocumentName: { type: string, nullable: true }
+        lastPayslipOneUrl: { type: string, nullable: true }
+        lastPayslipOneName: { type: string, nullable: true }
+        lastPayslipTwoUrl: { type: string, nullable: true }
+        lastPayslipTwoName: { type: string, nullable: true }
+        lastPayslipThreeUrl: { type: string, nullable: true }
+        lastPayslipThreeName: { type: string, nullable: true }
+        bankAccountTitle: { type: string, nullable: true, description: "Legacy compatibility field mapped from the primary payroll account." }
+        bankAccountNumber: { type: string, nullable: true, description: "Legacy compatibility field mapped from the primary payroll account." }
+        bankName: { type: string, nullable: true, description: "Legacy compatibility field mapped from the primary payroll account." }
+        bankIban: { type: string, nullable: true, description: "Legacy compatibility field mapped from the primary payroll account." }
+        bankBranchCode: { type: string, nullable: true, description: "Legacy compatibility field mapped from the primary payroll account." }
+        primaryBankAccountTitle: { type: string, nullable: true }
+        primaryBankAccountNumber: { type: string, nullable: true }
+        primaryBankName: { type: string, nullable: true, description: "Primary payroll bank. This is always Bank Al Habib." }
+        primaryBankIban: { type: string, nullable: true }
+        primaryBankBranchCode: { type: string, nullable: true }
+        secondaryBankAccountTitle: { type: string, nullable: true }
+        secondaryBankAccountNumber: { type: string, nullable: true }
+        secondaryBankName: { type: string, nullable: true, description: "Secondary bank used before probation completion when needed." }
+        secondaryBankIban: { type: string, nullable: true }
+        secondaryBankBranchCode: { type: string, nullable: true }
         providentFundPercent: { type: number, nullable: true }
 
     EmployeeDetail:
@@ -1402,6 +1432,7 @@ components:
         email: { type: string, format: email }
         password: { type: string, minLength: 6 }
         role: { type: string, enum: [admin, hr, employee], nullable: true, description: "Defaults to employee. Admin members get full HRM rights; HR members get all admin rights except destructive deletes and creating other admins." }
+        personalEmail: { type: string, format: email, nullable: true }
         phone: { type: string, nullable: true }
         position: { type: string, nullable: true }
         department: { type: string, nullable: true }
@@ -1421,6 +1452,8 @@ components:
         address: { type: string, nullable: true }
         employeeCode: { type: string, nullable: true }
         leftDate: { type: string, format: date, nullable: true }
+        emergencyContactName: { type: string, nullable: true }
+        emergencyContactNumber: { type: string, nullable: true }
         emergencyContact: { type: string, nullable: true }
         cnic: { type: string, nullable: true }
         lastQualification: { type: string, nullable: true }
@@ -1431,11 +1464,39 @@ components:
         immediateFamily: { type: string, nullable: true }
         cnicDocumentUrl: { type: string, nullable: true }
         cnicDocumentName: { type: string, nullable: true }
+        cnicFrontDocumentUrl: { type: string, nullable: true }
+        cnicFrontDocumentName: { type: string, nullable: true }
+        cnicBackDocumentUrl: { type: string, nullable: true }
+        cnicBackDocumentName: { type: string, nullable: true }
+        qualificationDocumentUrl: { type: string, nullable: true }
+        qualificationDocumentName: { type: string, nullable: true }
+        lastPayslipOneUrl: { type: string, nullable: true }
+        lastPayslipOneName: { type: string, nullable: true }
+        lastPayslipTwoUrl: { type: string, nullable: true }
+        lastPayslipTwoName: { type: string, nullable: true }
+        lastPayslipThreeUrl: { type: string, nullable: true }
+        lastPayslipThreeName: { type: string, nullable: true }
+        bankAccountTitle: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankAccountNumber: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankName: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankIban: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankBranchCode: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        primaryBankAccountTitle: { type: string, nullable: true }
+        primaryBankAccountNumber: { type: string, nullable: true }
+        primaryBankName: { type: string, nullable: true }
+        primaryBankIban: { type: string, nullable: true }
+        primaryBankBranchCode: { type: string, nullable: true }
+        secondaryBankAccountTitle: { type: string, nullable: true }
+        secondaryBankAccountNumber: { type: string, nullable: true }
+        secondaryBankName: { type: string, nullable: true }
+        secondaryBankIban: { type: string, nullable: true }
+        secondaryBankBranchCode: { type: string, nullable: true }
 
     UpdateEmployeeRequest:
       type: object
       properties:
         name: { type: string }
+        personalEmail: { type: string, format: email, nullable: true }
         phone: { type: string, nullable: true }
         position: { type: string, nullable: true }
         department: { type: string, nullable: true }
@@ -1455,6 +1516,8 @@ components:
         address: { type: string, nullable: true }
         employeeCode: { type: string, nullable: true }
         leftDate: { type: string, format: date, nullable: true }
+        emergencyContactName: { type: string, nullable: true }
+        emergencyContactNumber: { type: string, nullable: true }
         emergencyContact: { type: string, nullable: true }
         cnic: { type: string, nullable: true }
         lastQualification: { type: string, nullable: true }
@@ -1468,6 +1531,33 @@ components:
         employmentContractName: { type: string, nullable: true }
         cnicDocumentUrl: { type: string, nullable: true }
         cnicDocumentName: { type: string, nullable: true }
+        cnicFrontDocumentUrl: { type: string, nullable: true }
+        cnicFrontDocumentName: { type: string, nullable: true }
+        cnicBackDocumentUrl: { type: string, nullable: true }
+        cnicBackDocumentName: { type: string, nullable: true }
+        qualificationDocumentUrl: { type: string, nullable: true }
+        qualificationDocumentName: { type: string, nullable: true }
+        lastPayslipOneUrl: { type: string, nullable: true }
+        lastPayslipOneName: { type: string, nullable: true }
+        lastPayslipTwoUrl: { type: string, nullable: true }
+        lastPayslipTwoName: { type: string, nullable: true }
+        lastPayslipThreeUrl: { type: string, nullable: true }
+        lastPayslipThreeName: { type: string, nullable: true }
+        bankAccountTitle: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankAccountNumber: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankName: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankIban: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankBranchCode: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        primaryBankAccountTitle: { type: string, nullable: true }
+        primaryBankAccountNumber: { type: string, nullable: true }
+        primaryBankName: { type: string, nullable: true }
+        primaryBankIban: { type: string, nullable: true }
+        primaryBankBranchCode: { type: string, nullable: true }
+        secondaryBankAccountTitle: { type: string, nullable: true }
+        secondaryBankAccountNumber: { type: string, nullable: true }
+        secondaryBankName: { type: string, nullable: true }
+        secondaryBankIban: { type: string, nullable: true }
+        secondaryBankBranchCode: { type: string, nullable: true }
         providentFundPercent: { type: number, nullable: true }
 
     EmployeeJourney:
@@ -1527,7 +1617,7 @@ components:
 
     SalaryComponent:
       type: object
-      required: [id, employeeId, label, kind, valueType, value, isDeduction]
+      required: [id, employeeId, label, kind, valueType, value, isDeduction, isTaxable]
       properties:
         id: { type: integer }
         employeeId: { type: integer }
@@ -1540,6 +1630,7 @@ components:
           enum: [fixed, percentage]
         value: { type: number }
         isDeduction: { type: boolean }
+        isTaxable: { type: boolean }
         sortOrder: { type: integer }
 
     CreateSalaryComponentRequest:
@@ -1555,6 +1646,7 @@ components:
           enum: [fixed, percentage]
         value: { type: number }
         isDeduction: { type: boolean }
+        isTaxable: { type: boolean }
     UpdateSalaryComponentRequest:
       type: object
       required: [label, kind, valueType, value]
@@ -1568,6 +1660,7 @@ components:
           enum: [fixed, percentage]
         value: { type: number }
         isDeduction: { type: boolean }
+        isTaxable: { type: boolean }
 
     PublicHoliday:
       type: object
@@ -2094,7 +2187,26 @@ components:
         loanDeduction: { type: number }
         otherDeductions: { type: number }
         netSalary: { type: number }
+        salaryBreakdown:
+          type: object
+          nullable: true
+          properties:
+            earnings:
+              type: array
+              items:
+                $ref: "#/components/schemas/PayslipBreakdownLine"
+            deductions:
+              type: array
+              items:
+                $ref: "#/components/schemas/PayslipBreakdownLine"
         generatedAt: { type: string }
+
+    PayslipBreakdownLine:
+      type: object
+      required: [label, amount]
+      properties:
+        label: { type: string }
+        amount: { type: number }
 
     Loan:
       type: object

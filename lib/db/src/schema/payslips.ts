@@ -1,44 +1,41 @@
 import {
-  pgTable,
-  serial,
-  integer,
-  numeric,
+  decimal,
+  int,
+  mysqlTable,
   timestamp,
   uniqueIndex,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/mysql-core";
 import { employeesTable } from "./employees";
 
-export const payslipsTable = pgTable(
+export const payslipsTable = mysqlTable(
   "payslips",
   {
-    id: serial("id").primaryKey(),
-    employeeId: integer("employee_id")
+    id: int("id").autoincrement().primaryKey(),
+    employeeId: int("employee_id")
       .notNull()
       .references(() => employeesTable.id, { onDelete: "cascade" }),
-    month: integer("month").notNull(),
-    year: integer("year").notNull(),
-    totalWorkingDays: integer("total_working_days").notNull(),
-    presentDays: integer("present_days").notNull(),
-    absentDays: integer("absent_days").notNull(),
-    paidLeaveDays: integer("paid_leave_days").notNull().default(0),
-    unpaidLeaveDays: integer("unpaid_leave_days").notNull().default(0),
-    lateCount: integer("late_count").notNull().default(0),
-    lateAbsenceDays: numeric("late_absence_days", { precision: 5, scale: 2 })
+    month: int("month").notNull(),
+    year: int("year").notNull(),
+    totalWorkingDays: int("total_working_days").notNull(),
+    presentDays: int("present_days").notNull(),
+    absentDays: int("absent_days").notNull(),
+    paidLeaveDays: int("paid_leave_days").notNull().default(0),
+    unpaidLeaveDays: int("unpaid_leave_days").notNull().default(0),
+    lateCount: int("late_count").notNull().default(0),
+    lateAbsenceDays: decimal("late_absence_days", { precision: 5, scale: 2 })
       .notNull()
       .default("0"),
-    basicSalary: numeric("basic_salary", { precision: 12, scale: 2 }).notNull(),
-    allowances: numeric("allowances", { precision: 12, scale: 2 }).notNull(),
-    bonus: numeric("bonus", { precision: 12, scale: 2 }).notNull().default("0"),
-    loanDeduction: numeric("loan_deduction", { precision: 12, scale: 2 })
+    basicSalary: decimal("basic_salary", { precision: 12, scale: 2 }).notNull(),
+    allowances: decimal("allowances", { precision: 12, scale: 2 }).notNull(),
+    bonus: decimal("bonus", { precision: 12, scale: 2 }).notNull().default("0"),
+    loanDeduction: decimal("loan_deduction", { precision: 12, scale: 2 })
       .notNull()
       .default("0"),
-    otherDeductions: numeric("other_deductions", { precision: 12, scale: 2 })
+    otherDeductions: decimal("other_deductions", { precision: 12, scale: 2 })
       .notNull()
       .default("0"),
-    netSalary: numeric("net_salary", { precision: 12, scale: 2 }).notNull(),
-    generatedAt: timestamp("generated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    netSalary: decimal("net_salary", { precision: 12, scale: 2 }).notNull(),
+    generatedAt: timestamp("generated_at").notNull().defaultNow(),
   },
   (t) => ({
     uniqEmpMonth: uniqueIndex("payslip_emp_month_unique").on(

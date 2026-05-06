@@ -57,8 +57,22 @@ router.post("/news", requireAuth(["admin", "hr"]), async (req, res): Promise<voi
       attachmentUrl: data.attachmentUrl ?? null,
       attachmentName: data.attachmentName ?? null,
     })
-    .returning();
-  const post = inserted[0]!;
+    .$returningId();
+  const postId = inserted[0]?.id;
+  if (!postId) {
+    res.status(500).json({ message: "Failed to create post" });
+    return;
+  }
+  const postRows = await db
+    .select()
+    .from(newsPostsTable)
+    .where(eq(newsPostsTable.id, postId))
+    .limit(1);
+  const post = postRows[0];
+  if (!post) {
+    res.status(500).json({ message: "Created post could not be loaded" });
+    return;
+  }
   const authorRows = await db
     .select({
       email: usersTable.email,

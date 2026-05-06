@@ -1,24 +1,21 @@
 import {
-  pgTable,
-  serial,
-  text,
-  integer,
   date,
+  int,
+  mysqlTable,
   timestamp,
-} from "drizzle-orm/pg-core";
+  varchar,
+} from "drizzle-orm/mysql-core";
 import { employeesTable } from "./employees";
 
-export const designationChangesTable = pgTable("designation_changes", {
-  id: serial("id").primaryKey(),
-  employeeId: integer("employee_id")
+export const designationChangesTable = mysqlTable("designation_changes", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id")
     .notNull()
     .references(() => employeesTable.id, { onDelete: "cascade" }),
-  fromTitle: text("from_title"),
-  toTitle: text("to_title").notNull(),
-  effectiveDate: date("effective_date").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  fromTitle: varchar("from_title", { length: 255 }),
+  toTitle: varchar("to_title", { length: 255 }).notNull(),
+  effectiveDate: date("effective_date", { mode: "string" }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type DesignationChange = typeof designationChangesTable.$inferSelect;

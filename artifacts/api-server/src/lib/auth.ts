@@ -80,7 +80,7 @@ export function requireAuth(roles?: Array<Role>) {
       return res.status(403).json({ message: "Forbidden" });
     }
     (req as Request & { user: SessionUser }).user = user;
-    next();
+    return next();
   };
 }
 

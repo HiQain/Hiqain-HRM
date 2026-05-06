@@ -28,9 +28,12 @@ router.post(
   "/uploads",
   requireAuth(),
   upload.single("file"),
-  (req, res) => {
+  (req, res): void => {
     const file = (req as unknown as { file?: Express.Multer.File }).file;
-    if (!file) return res.status(400).json({ message: "No file uploaded" });
+    if (!file) {
+      res.status(400).json({ message: "No file uploaded" });
+      return;
+    }
     res.json({
       url: `/api/uploads/${file.filename}`,
       name: file.originalname,

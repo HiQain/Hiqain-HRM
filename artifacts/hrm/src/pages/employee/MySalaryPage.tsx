@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatMonth } from "@/lib/utils";
 import {
+  computeSalaryStructurePreview,
   getDefaultAllowanceBreakdown,
-  getPakistanMonthlySalaryTax,
   isManualTaxComponent,
 } from "@/lib/salary";
 
@@ -86,6 +86,17 @@ export function MySalaryPage() {
   const latestPayslip = payslips?.[0];
   const defaultAllowances = emp.allowances ?? 0;
   const totalSalary = emp.basicSalary + defaultAllowances;
+  const salaryPreview = computeSalaryStructurePreview({
+    basicSalary: emp.basicSalary,
+    defaultAllowances,
+    components: visibleComponents,
+    providentFundPercent: emp.providentFundPercent,
+    month: currentMonth,
+    year: currentYear,
+  });
+  const latestPayrollTax =
+    latestPayslip?.salaryBreakdown?.deductions?.find((line) => line.label === "Payroll Tax")
+      ?.amount ?? null;
   const latestLatePenalty =
     latestPayslip && latestPayslip.totalWorkingDays > 0
       ? ((latestPayslip.basicSalary / latestPayslip.totalWorkingDays) *
@@ -143,7 +154,7 @@ export function MySalaryPage() {
         <StatCard
           icon={<Landmark className="h-4 w-4" />}
           label="Tax"
-          value={formatCurrency(getPakistanMonthlySalaryTax(totalSalary, currentMonth, currentYear))}
+          value={formatCurrency(latestPayrollTax ?? salaryPreview.tax)}
         />
       </div>
 
@@ -182,9 +193,7 @@ export function MySalaryPage() {
             />
             <PayrollPreviewCard
               label="Payroll tax"
-              value={formatCurrency(
-                getPakistanMonthlySalaryTax(totalSalary, currentMonth, currentYear),
-              )}
+              value={formatCurrency(latestPayrollTax ?? salaryPreview.tax)}
               tone="down"
             />
             <PayrollPreviewCard
@@ -226,13 +235,9 @@ export function MySalaryPage() {
               icon={<Receipt className="h-4 w-4" />}
               label="Tax"
               value={formatCurrency(
-                getPakistanMonthlySalaryTax(
-                  latestPayslip.basicSalary +
-                    latestPayslip.allowances +
-                    latestPayslip.bonus,
-                  latestPayslip.month,
-                  latestPayslip.year,
-                ),
+                latestPayslip.salaryBreakdown?.deductions?.find(
+                  (line) => line.label === "Payroll Tax",
+                )?.amount ?? 0,
               )}
             />
             <StatCard

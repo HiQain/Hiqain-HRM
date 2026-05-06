@@ -14,10 +14,11 @@ import {
 
 const router: IRouter = Router();
 
-router.post("/auth/login", async (req, res) => {
+router.post("/auth/login", async (req, res): Promise<void> => {
   const parsed = LoginBody.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: "Invalid login payload" });
+    res.status(400).json({ message: "Invalid login payload" });
+    return;
   }
   const { email, password } = parsed.data;
   const rows = await db
@@ -27,18 +28,20 @@ router.post("/auth/login", async (req, res) => {
     .limit(1);
   const user = rows[0];
   if (!user) {
-    return res.status(401).json({ message: "Invalid email or password" });
+    res.status(401).json({ message: "Invalid email or password" });
+    return;
   }
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) {
-    return res.status(401).json({ message: "Invalid email or password" });
+    res.status(401).json({ message: "Invalid email or password" });
+    return;
   }
   req.session.userId = user.id;
   await new Promise<void>((resolve, reject) =>
     req.session.save((err) => (err ? reject(err) : resolve())),
   );
   const session = await getSessionUser(req);
-  return res.json({ user: session });
+  res.json({ user: session });
 });
 
 router.post("/auth/logout", (req, res) => {
@@ -48,18 +51,20 @@ router.post("/auth/logout", (req, res) => {
   });
 });
 
-router.get("/auth/me", async (req, res) => {
+router.get("/auth/me", async (req, res): Promise<void> => {
   const user = await getSessionUser(req);
   if (!user) {
-    return res.status(401).json({ message: "Not authenticated" });
+    res.status(401).json({ message: "Not authenticated" });
+    return;
   }
-  return res.json(user);
+  res.json(user);
 });
 
-router.post("/auth/change-password", requireAuth(), async (req, res) => {
+router.post("/auth/change-password", requireAuth(), async (req, res): Promise<void> => {
   const parsed = ChangePasswordBody.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: "Invalid payload" });
+    res.status(400).json({ message: "Invalid payload" });
+    return;
   }
   const userId = req.session.userId!;
   const rows = await db
@@ -68,20 +73,25 @@ router.post("/auth/change-password", requireAuth(), async (req, res) => {
     .where(eq(usersTable.id, userId))
     .limit(1);
   const user = rows[0];
-  if (!user) return res.status(401).json({ message: "Not authenticated" });
+  if (!user) {
+    res.status(401).json({ message: "Not authenticated" });
+    return;
+  }
 
   if (!user.mustChangePassword) {
     if (!parsed.data.currentPassword) {
-      return res
+      res
         .status(400)
         .json({ message: "Current password is required" });
+      return;
     }
     const ok = await verifyPassword(
       parsed.data.currentPassword,
       user.passwordHash,
     );
     if (!ok) {
-      return res.status(400).json({ message: "Current password is incorrect" });
+      res.status(400).json({ message: "Current password is incorrect" });
+      return;
     }
   }
 
@@ -95,11 +105,11 @@ router.post("/auth/change-password", requireAuth(), async (req, res) => {
   // / browser they were logged in on is signed out. Keep the current session
   // (where the password change happened) so the user stays signed in here.
   const currentSid = req.sessionID;
-  await pool.query(
-    `DELETE FROM "user_sessions"
-     WHERE (sess->>'userId')::int = $1
-       AND sid <> $2`,
-    [userId, currentSid],
+  await pool.execute(
+    `DELETE FROM user_sessions
+     WHERE JSON_UNQUOTE(JSON_EXTRACT(CAST(sess AS JSON), '$.userId')) = ?
+       AND sid <> ?`,
+    [String(userId), currentSid],
   );
 
   res.json({ success: true });

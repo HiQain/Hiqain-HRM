@@ -41,10 +41,12 @@ function serializeRecord(
 router.post(
   "/attendance/check-in",
   requireAuth(["employee"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const user = getUser(req);
-    if (!user.employeeId)
-      return res.status(400).json({ message: "No employee profile" });
+    if (!user.employeeId) {
+      res.status(400).json({ message: "No employee profile" });
+      return;
+    }
     const empRows = await db
       .select()
       .from(employeesTable)
@@ -66,7 +68,8 @@ router.post(
       .limit(1);
 
     if (existing.length && existing[0]!.checkInTime) {
-      return res.status(400).json({ message: "Already checked in today" });
+      res.status(400).json({ message: "Already checked in today" });
+      return;
     }
 
     // Block check-in if on approved leave today
@@ -83,9 +86,10 @@ router.post(
       )
       .limit(1);
     if (leaveOnDay.length) {
-      return res.status(400).json({
+      res.status(400).json({
         message: "You are on approved leave today and cannot check in.",
       });
+      return;
     }
 
     // Determine if today is an approved remote work day
@@ -118,16 +122,20 @@ router.post(
 
     let record;
     if (existing.length) {
-      const updated = await db
+      await db
         .update(attendanceTable)
         .set({
           checkInTime: now,
           isLate,
           status,
         })
+        .where(eq(attendanceTable.id, existing[0]!.id));
+      const updatedRows = await db
+        .select()
+        .from(attendanceTable)
         .where(eq(attendanceTable.id, existing[0]!.id))
-        .returning();
-      record = updated[0]!;
+        .limit(1);
+      record = updatedRows[0]!;
     } else {
       const inserted = await db
         .insert(attendanceTable)
@@ -138,8 +146,16 @@ router.post(
           isLate,
           status,
         })
-        .returning();
-      record = inserted[0]!;
+        .$returningId();
+      const recordId = inserted[0]?.id;
+      const insertedRows = recordId
+        ? await db
+            .select()
+            .from(attendanceTable)
+            .where(eq(attendanceTable.id, recordId))
+            .limit(1)
+        : [];
+      record = insertedRows[0]!;
     }
     res.json(serializeRecord(record, emp.name));
   },
@@ -148,10 +164,12 @@ router.post(
 router.post(
   "/attendance/check-out",
   requireAuth(["employee"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const user = getUser(req);
-    if (!user.employeeId)
-      return res.status(400).json({ message: "No employee profile" });
+    if (!user.employeeId) {
+      res.status(400).json({ message: "No employee profile" });
+      return;
+    }
     const empRows = await db
       .select()
       .from(employeesTable)
@@ -175,7 +193,8 @@ router.post(
       .limit(1);
 
     if (!rows.length || !rows[0]!.checkInTime) {
-      return res.status(400).json({ message: "You haven't checked in for this shift" });
+      res.status(400).json({ message: "You haven't checked in for this shift" });
+      return;
     }
     const rec = rows[0]!;
     const worked = Math.floor(
@@ -203,7 +222,7 @@ router.post(
       nextIsLate = false;
     }
 
-    const updated = await db
+    await db
       .update(attendanceTable)
       .set({
         checkOutTime: now,
@@ -211,24 +230,29 @@ router.post(
         status: nextStatus,
         isLate: nextIsLate,
       })
+      .where(eq(attendanceTable.id, rec.id));
+    const updatedRows = await db
+      .select()
+      .from(attendanceTable)
       .where(eq(attendanceTable.id, rec.id))
-      .returning();
-
-    res.json(serializeRecord(updated[0]!, emp.name));
+      .limit(1);
+    res.json(serializeRecord(updatedRows[0]!, emp.name));
   },
 );
 
 router.get(
   "/attendance/today",
   requireAuth(["employee"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const user = getUser(req);
-    if (!user.employeeId)
-      return res.json({
+    if (!user.employeeId) {
+      res.json({
         hasCheckedIn: false,
         hasCheckedOut: false,
         record: null,
       });
+      return;
+    }
     const empRows = await db
       .select()
       .from(employeesTable)
@@ -247,11 +271,12 @@ router.get(
       )
       .limit(1);
     if (!rows.length) {
-      return res.json({
+      res.json({
         hasCheckedIn: false,
         hasCheckedOut: false,
         record: null,
       });
+      return;
     }
     const r = rows[0]!;
     res.json({
@@ -285,9 +310,12 @@ function monthRange(month?: string): {
   return { start, end, year: y, month: m };
 }
 
-router.get("/attendance/me", requireAuth(["employee"]), async (req, res) => {
+router.get("/attendance/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
-  if (!user.employeeId) return res.json([]);
+  if (!user.employeeId) {
+    res.json([]);
+    return;
+  }
   const empRows = await db
     .select()
     .from(employeesTable)
@@ -312,15 +340,17 @@ router.get("/attendance/me", requireAuth(["employee"]), async (req, res) => {
 router.get(
   "/attendance/employee/:id",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     const empRows = await db
       .select()
       .from(employeesTable)
       .where(eq(employeesTable.id, id))
       .limit(1);
-    if (!empRows.length)
-      return res.status(404).json({ message: "Employee not found" });
+    if (!empRows.length) {
+      res.status(404).json({ message: "Employee not found" });
+      return;
+    }
     const emp = empRows[0]!;
     const { start, end } = monthRange(req.query.month as string | undefined);
     const rows = await db
@@ -341,7 +371,7 @@ router.get(
 router.get(
   "/attendance/today-summary",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const dateParam = typeof req.query.date === "string" ? req.query.date : "";
     const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(dateParam);
     const targetDate = isValidDate ? dateParam : ymd(new Date());
@@ -452,15 +482,18 @@ router.get(
 router.get(
   "/attendance/calendar",
   requireAuth(),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const user = getUser(req);
     const queryEmpId = req.query.employeeId
       ? Number(req.query.employeeId)
       : user.employeeId;
-    if (!queryEmpId)
-      return res.status(400).json({ message: "employeeId required" });
+    if (!queryEmpId) {
+      res.status(400).json({ message: "employeeId required" });
+      return;
+    }
     if (user.role === "employee" && user.employeeId !== queryEmpId) {
-      return res.status(403).json({ message: "Forbidden" });
+      res.status(403).json({ message: "Forbidden" });
+      return;
     }
     const empRows = await db
       .select()
@@ -468,7 +501,10 @@ router.get(
       .where(eq(employeesTable.id, queryEmpId))
       .limit(1);
     const emp = empRows[0];
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    if (!emp) {
+      res.status(404).json({ message: "Employee not found" });
+      return;
+    }
 
     const { start, end, year, month } = monthRange(
       req.query.month as string | undefined,
@@ -553,10 +589,11 @@ router.get(
 router.get(
   "/attendance/employee/:id/lates",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ message: "Invalid employee id" });
+      res.status(400).json({ message: "Invalid employee id" });
+      return;
     }
     const empRows = await db
       .select()
@@ -564,7 +601,10 @@ router.get(
       .where(eq(employeesTable.id, id))
       .limit(1);
     const emp = empRows[0];
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    if (!emp) {
+      res.status(404).json({ message: "Employee not found" });
+      return;
+    }
 
     const settings = await getSettings();
     const holidaySet = toHolidaySet(settings);
@@ -594,16 +634,18 @@ router.get(
 router.post(
   "/attendance/:id/excuse",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ message: "Invalid attendance id" });
+      res.status(400).json({ message: "Invalid attendance id" });
+      return;
     }
     const excused = req.body?.excused;
     if (typeof excused !== "boolean") {
-      return res
+      res
         .status(400)
         .json({ message: "Body must contain { excused: boolean }" });
+      return;
     }
     const rows = await db
       .select({
@@ -617,14 +659,21 @@ router.post(
       )
       .where(eq(attendanceTable.id, id))
       .limit(1);
-    if (!rows.length)
-      return res.status(404).json({ message: "Attendance record not found" });
-    const updated = await db
+    if (!rows.length) {
+      res.status(404).json({ message: "Attendance record not found" });
+      return;
+    }
+    await db
       .update(attendanceTable)
       .set({ excused })
       .where(eq(attendanceTable.id, id))
-      .returning();
-    res.json(serializeRecord(updated[0]!, rows[0]!.employeeName));
+      ;
+    const updatedRows = await db
+      .select()
+      .from(attendanceTable)
+      .where(eq(attendanceTable.id, id))
+      .limit(1);
+    res.json(serializeRecord(updatedRows[0]!, rows[0]!.employeeName));
   },
 );
 
@@ -632,12 +681,14 @@ router.post(
 router.post(
   "/attendance/override",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const { employeeId, date, status, notes } = req.body ?? {};
-    if (!employeeId || !date || !status)
-      return res
+    if (!employeeId || !date || !status) {
+      res
         .status(400)
         .json({ message: "employeeId, date and status required" });
+      return;
+    }
     const allowed = [
       "present",
       "late",
@@ -646,8 +697,10 @@ router.post(
       "half_day",
       "remote_work",
     ];
-    if (!allowed.includes(status))
-      return res.status(400).json({ message: "Invalid status" });
+    if (!allowed.includes(status)) {
+      res.status(400).json({ message: "Invalid status" });
+      return;
+    }
 
     const empRows = await db
       .select()
@@ -655,7 +708,10 @@ router.post(
       .where(eq(employeesTable.id, Number(employeeId)))
       .limit(1);
     const emp = empRows[0];
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    if (!emp) {
+      res.status(404).json({ message: "Employee not found" });
+      return;
+    }
 
     const existing = await db
       .select()
@@ -670,16 +726,20 @@ router.post(
 
     let record;
     if (existing.length) {
-      const updated = await db
+      await db
         .update(attendanceTable)
         .set({
           status,
           isLate: status === "late",
           notes: notes ?? existing[0]!.notes,
         })
+        .where(eq(attendanceTable.id, existing[0]!.id));
+      const updatedRows = await db
+        .select()
+        .from(attendanceTable)
         .where(eq(attendanceTable.id, existing[0]!.id))
-        .returning();
-      record = updated[0]!;
+        .limit(1);
+      record = updatedRows[0]!;
     } else {
       const inserted = await db
         .insert(attendanceTable)
@@ -690,8 +750,16 @@ router.post(
           isLate: status === "late",
           notes: notes ?? null,
         })
-        .returning();
-      record = inserted[0]!;
+        .$returningId();
+      const recordId = inserted[0]?.id;
+      const insertedRows = recordId
+        ? await db
+            .select()
+            .from(attendanceTable)
+            .where(eq(attendanceTable.id, recordId))
+            .limit(1)
+        : [];
+      record = insertedRows[0]!;
     }
 
     res.json(serializeRecord(record, emp.name));

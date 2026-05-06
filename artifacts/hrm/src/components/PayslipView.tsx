@@ -26,9 +26,9 @@ type Payslip = {
   otherDeductions: number;
   netSalary: number;
   salaryBreakdown?: {
-    earnings: Array<{ label: string; amount: number }>;
-    deductions: Array<{ label: string; amount: number }>;
-  };
+    earnings?: Array<{ label: string; amount: number }>;
+    deductions?: Array<{ label: string; amount: number }>;
+  } | null;
   generatedAt: string;
 };
 

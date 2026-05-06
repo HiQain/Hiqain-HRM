@@ -142,10 +142,12 @@ router.get(
 router.get(
   "/dashboard/employee",
   requireAuth(["employee"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const user = getUser(req);
-    if (!user.employeeId)
-      return res.status(400).json({ message: "No employee profile" });
+    if (!user.employeeId) {
+      res.status(400).json({ message: "No employee profile" });
+      return;
+    }
 
     const empRows = await db
       .select({ employee: employeesTable, email: usersTable.email })

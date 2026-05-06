@@ -18,6 +18,7 @@ import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
 import { getSettings } from "./settings";
 
 const router: IRouter = Router();
+const PRIMARY_PAYROLL_BANK_NAME = "Bank Al Habib";
 
 function subtractDay(d: Date): Date {
   const r = new Date(d.getTime());
@@ -31,11 +32,21 @@ function serializeEmployee(
 ) {
   const joining = parseDate(e.joiningDate);
   const probationEnd = subtractDay(addMonths(joining, e.probationMonths));
+  const primaryBankAccountTitle =
+    e.primaryBankAccountTitle ?? e.bankAccountTitle ?? null;
+  const primaryBankAccountNumber =
+    e.primaryBankAccountNumber ?? e.bankAccountNumber ?? null;
+  const primaryBankName =
+    e.primaryBankName ?? e.bankName ?? PRIMARY_PAYROLL_BANK_NAME;
+  const primaryBankIban = e.primaryBankIban ?? e.bankIban ?? null;
+  const primaryBankBranchCode =
+    e.primaryBankBranchCode ?? e.bankBranchCode ?? null;
   return {
     id: e.id,
     userId: e.userId,
     name: e.name,
     email,
+    personalEmail: e.personalEmail,
     phone: e.phone,
     position: e.position,
     department: e.department,
@@ -58,6 +69,8 @@ function serializeEmployee(
     // New fields
     employeeCode: e.employeeCode,
     leftDate: e.leftDate,
+    emergencyContactName: e.emergencyContactName,
+    emergencyContactNumber: e.emergencyContactNumber,
     emergencyContact: e.emergencyContact,
     cnic: e.cnic,
     lastQualification: e.lastQualification,
@@ -70,13 +83,82 @@ function serializeEmployee(
     employmentContractName: e.employmentContractName,
     cnicDocumentUrl: e.cnicDocumentUrl,
     cnicDocumentName: e.cnicDocumentName,
-    bankAccountTitle: e.bankAccountTitle,
-    bankAccountNumber: e.bankAccountNumber,
-    bankName: e.bankName,
-    bankIban: e.bankIban,
-    bankBranchCode: e.bankBranchCode,
+    cnicFrontDocumentUrl: e.cnicFrontDocumentUrl,
+    cnicFrontDocumentName: e.cnicFrontDocumentName,
+    cnicBackDocumentUrl: e.cnicBackDocumentUrl,
+    cnicBackDocumentName: e.cnicBackDocumentName,
+    qualificationDocumentUrl: e.qualificationDocumentUrl,
+    qualificationDocumentName: e.qualificationDocumentName,
+    lastPayslipOneUrl: e.lastPayslipOneUrl,
+    lastPayslipOneName: e.lastPayslipOneName,
+    lastPayslipTwoUrl: e.lastPayslipTwoUrl,
+    lastPayslipTwoName: e.lastPayslipTwoName,
+    lastPayslipThreeUrl: e.lastPayslipThreeUrl,
+    lastPayslipThreeName: e.lastPayslipThreeName,
+    bankAccountTitle: primaryBankAccountTitle,
+    bankAccountNumber: primaryBankAccountNumber,
+    bankName: primaryBankName,
+    bankIban: primaryBankIban,
+    bankBranchCode: primaryBankBranchCode,
+    primaryBankAccountTitle,
+    primaryBankAccountNumber,
+    primaryBankName,
+    primaryBankIban,
+    primaryBankBranchCode,
+    secondaryBankAccountTitle: e.secondaryBankAccountTitle,
+    secondaryBankAccountNumber: e.secondaryBankAccountNumber,
+    secondaryBankName: e.secondaryBankName,
+    secondaryBankIban: e.secondaryBankIban,
+    secondaryBankBranchCode: e.secondaryBankBranchCode,
     providentFundPercent:
       e.providentFundPercent != null ? Number(e.providentFundPercent) : null,
+  };
+}
+
+function getEmployeeBankValues(data: Record<string, unknown>) {
+  const primaryBankAccountTitle =
+    (data.primaryBankAccountTitle as string | null | undefined) ??
+    (data.bankAccountTitle as string | null | undefined) ??
+    null;
+  const primaryBankAccountNumber =
+    (data.primaryBankAccountNumber as string | null | undefined) ??
+    (data.bankAccountNumber as string | null | undefined) ??
+    null;
+  const primaryBankIban =
+    (data.primaryBankIban as string | null | undefined) ??
+    (data.bankIban as string | null | undefined) ??
+    null;
+  const primaryBankBranchCode =
+    (data.primaryBankBranchCode as string | null | undefined) ??
+    (data.bankBranchCode as string | null | undefined) ??
+    null;
+  const secondaryBankAccountTitle =
+    (data.secondaryBankAccountTitle as string | null | undefined) ?? null;
+  const secondaryBankAccountNumber =
+    (data.secondaryBankAccountNumber as string | null | undefined) ?? null;
+  const secondaryBankName =
+    (data.secondaryBankName as string | null | undefined) ?? null;
+  const secondaryBankIban =
+    (data.secondaryBankIban as string | null | undefined) ?? null;
+  const secondaryBankBranchCode =
+    (data.secondaryBankBranchCode as string | null | undefined) ?? null;
+
+  return {
+    bankAccountTitle: primaryBankAccountTitle,
+    bankAccountNumber: primaryBankAccountNumber,
+    bankName: PRIMARY_PAYROLL_BANK_NAME,
+    bankIban: primaryBankIban,
+    bankBranchCode: primaryBankBranchCode,
+    primaryBankAccountTitle,
+    primaryBankAccountNumber,
+    primaryBankName: PRIMARY_PAYROLL_BANK_NAME,
+    primaryBankIban,
+    primaryBankBranchCode,
+    secondaryBankAccountTitle,
+    secondaryBankAccountNumber,
+    secondaryBankName,
+    secondaryBankIban,
+    secondaryBankBranchCode,
   };
 }
 
@@ -105,21 +187,24 @@ function proRatedQuota(quota: number, joiningDate: string): number {
   return Math.round((quota * monthsRemaining) / 12);
 }
 
-router.post("/employees", requireAuth(["admin", "hr"]), async (req, res) => {
+router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const parsed = CreateEmployeeBody.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: "Invalid employee payload" });
+    res.status(400).json({ message: "Invalid employee payload" });
+    return;
   }
   const data = parsed.data;
   const actor = getUser(req);
   const email = data.email.toLowerCase();
   const settings = await getSettings();
+  const bankValues = getEmployeeBankValues(data as Record<string, unknown>);
 
   // Only admins can create another admin (HR cannot escalate privileges).
   if (data.role === "admin" && actor.role !== "admin") {
-    return res
+    res
       .status(403)
       .json({ message: "Only admins can create another admin." });
+    return;
   }
   const resolvedRole: "admin" | "hr" | "employee" =
     data.role === "admin" ? "admin" : data.role === "hr" ? "hr" : "employee";
@@ -130,7 +215,8 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res) => {
     .where(eq(usersTable.email, email))
     .limit(1);
   if (existing.length) {
-    return res.status(400).json({ message: "Email already exists" });
+    res.status(400).json({ message: "Email already exists" });
+    return;
   }
 
   const passwordHash = await hashPassword(data.password);
@@ -142,8 +228,12 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res) => {
       role: resolvedRole,
       mustChangePassword: true,
     })
-    .returning();
-  const user = insertedUser[0]!;
+    .$returningId();
+  const userId = insertedUser[0]?.id;
+  if (!userId) {
+    res.status(500).json({ message: "Failed to create user" });
+    return;
+  }
 
   // Auto-generate employee code if not provided
   const allEmps = await db.select({ id: employeesTable.id }).from(employeesTable);
@@ -167,8 +257,9 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res) => {
   const insertedEmp = await db
     .insert(employeesTable)
     .values({
-      userId: user.id,
+      userId,
       name: data.name,
+      personalEmail: (data as any).personalEmail ?? null,
       phone: data.phone ?? null,
       position: data.position ?? null,
       department: data.department ?? null,
@@ -188,6 +279,8 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res) => {
       education: data.education ?? null,
       address: data.address ?? null,
       employeeCode: (data as any).employeeCode ?? autoCode,
+      emergencyContactName: (data as any).emergencyContactName ?? null,
+      emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
       emergencyContact: (data as any).emergencyContact ?? null,
       cnic: (data as any).cnic ?? null,
       lastQualification: (data as any).lastQualification ?? null,
@@ -199,21 +292,48 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res) => {
       immediateFamily: (data as any).immediateFamily ?? null,
       cnicDocumentUrl: (data as any).cnicDocumentUrl ?? null,
       cnicDocumentName: (data as any).cnicDocumentName ?? null,
-      bankAccountTitle: (data as any).bankAccountTitle ?? null,
-      bankAccountNumber: (data as any).bankAccountNumber ?? null,
-      bankName: (data as any).bankName ?? null,
-      bankIban: (data as any).bankIban ?? null,
-      bankBranchCode: (data as any).bankBranchCode ?? null,
+      cnicFrontDocumentUrl: (data as any).cnicFrontDocumentUrl ?? null,
+      cnicFrontDocumentName: (data as any).cnicFrontDocumentName ?? null,
+      cnicBackDocumentUrl: (data as any).cnicBackDocumentUrl ?? null,
+      cnicBackDocumentName: (data as any).cnicBackDocumentName ?? null,
+      qualificationDocumentUrl:
+        (data as any).qualificationDocumentUrl ?? null,
+      qualificationDocumentName:
+        (data as any).qualificationDocumentName ?? null,
+      lastPayslipOneUrl: (data as any).lastPayslipOneUrl ?? null,
+      lastPayslipOneName: (data as any).lastPayslipOneName ?? null,
+      lastPayslipTwoUrl: (data as any).lastPayslipTwoUrl ?? null,
+      lastPayslipTwoName: (data as any).lastPayslipTwoName ?? null,
+      lastPayslipThreeUrl: (data as any).lastPayslipThreeUrl ?? null,
+      lastPayslipThreeName: (data as any).lastPayslipThreeName ?? null,
+      ...bankValues,
     })
-    .returning();
-  res.status(201).json(serializeEmployee(insertedEmp[0]!, email));
+    .$returningId();
+  const employeeId = insertedEmp[0]?.id;
+  if (!employeeId) {
+    res.status(500).json({ message: "Failed to create employee" });
+    return;
+  }
+  const insertedRows = await db
+    .select()
+    .from(employeesTable)
+    .where(eq(employeesTable.id, employeeId))
+    .limit(1);
+  const employee = insertedRows[0];
+  if (!employee) {
+    res.status(500).json({ message: "Created employee could not be loaded" });
+    return;
+  }
+  res.status(201).json(serializeEmployee(employee, email));
 });
 
-router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res) => {
+router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const members = req.body?.members;
   if (!Array.isArray(members) || members.length === 0) {
-    return res.status(400).json({ message: "members array required" });
+    res.status(400).json({ message: "members array required" });
+    return;
   }
+  const settings = await getSettings();
   let created = 0;
   let failed = 0;
   const errors: Array<{ row: number; email: string | null; message: string }> = [];
@@ -232,6 +352,7 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res) =>
     }
     const data = parsed.data;
     const email = data.email.toLowerCase();
+    const bankValues = getEmployeeBankValues(data as Record<string, unknown>);
     const exists = await db
       .select()
       .from(usersTable)
@@ -260,31 +381,52 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res) =>
           role: safeRole,
           mustChangePassword: true,
         })
-        .returning();
-      const user = insertedUser[0]!;
+        .$returningId();
+      const userId = insertedUser[0]?.id;
+      if (!userId) {
+        throw new Error("Failed to create user");
+      }
       const allEmps = await db.select({ id: employeesTable.id }).from(employeesTable);
       const autoCode = `EMP-${String(allEmps.length + 1).padStart(3, "0")}`;
+      const joiningDateStr = data.joiningDate as unknown as string;
+      const baseCasual =
+        data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
+      const baseSick = data.sickLeaveQuota ?? settings.defaultSickLeaveQuota;
+      const baseAnnual =
+        data.annualLeaveQuota ?? settings.defaultAnnualLeaveQuota;
       await db.insert(employeesTable).values({
-        userId: user.id,
+        userId,
         name: data.name,
+        personalEmail: (data as any).personalEmail ?? null,
         phone: data.phone ?? null,
         position: data.position ?? null,
         department: data.department ?? null,
         positionType: data.positionType ?? "onsite",
-        joiningDate: data.joiningDate as unknown as string,
-        probationMonths: data.probationMonths,
-        officeStartTime: data.officeStartTime,
-        officeEndTime: data.officeEndTime,
-        gracePeriodMinutes: data.gracePeriodMinutes,
+        joiningDate: joiningDateStr,
+        probationMonths:
+          data.probationMonths ?? settings.defaultProbationMonths,
+        officeStartTime:
+          data.officeStartTime ?? settings.defaultOfficeStartTime,
+        officeEndTime: data.officeEndTime ?? settings.defaultOfficeEndTime,
+        gracePeriodMinutes:
+          data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
         basicSalary: String(data.basicSalary),
         allowances: String(data.allowances ?? 0),
-        casualLeaveQuota: data.casualLeaveQuota ?? 10,
-        sickLeaveQuota: data.sickLeaveQuota ?? 10,
-        annualLeaveQuota: data.annualLeaveQuota ?? 14,
+        casualLeaveQuota: settings.proRatedQuotas
+          ? proRatedQuota(baseCasual, joiningDateStr)
+          : baseCasual,
+        sickLeaveQuota: settings.proRatedQuotas
+          ? proRatedQuota(baseSick, joiningDateStr)
+          : baseSick,
+        annualLeaveQuota: settings.proRatedQuotas
+          ? proRatedQuota(baseAnnual, joiningDateStr)
+          : baseAnnual,
         dateOfBirth: (data.dateOfBirth as unknown as string) ?? null,
         education: data.education ?? null,
         address: data.address ?? null,
         employeeCode: autoCode,
+        emergencyContactName: (data as any).emergencyContactName ?? null,
+        emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
         emergencyContact: (data as any).emergencyContact ?? null,
         cnic: (data as any).cnic ?? null,
         lastQualification: (data as any).lastQualification ?? null,
@@ -296,11 +438,21 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res) =>
         immediateFamily: (data as any).immediateFamily ?? null,
         cnicDocumentUrl: (data as any).cnicDocumentUrl ?? null,
         cnicDocumentName: (data as any).cnicDocumentName ?? null,
-        bankAccountTitle: (data as any).bankAccountTitle ?? null,
-        bankAccountNumber: (data as any).bankAccountNumber ?? null,
-        bankName: (data as any).bankName ?? null,
-        bankIban: (data as any).bankIban ?? null,
-        bankBranchCode: (data as any).bankBranchCode ?? null,
+        cnicFrontDocumentUrl: (data as any).cnicFrontDocumentUrl ?? null,
+        cnicFrontDocumentName: (data as any).cnicFrontDocumentName ?? null,
+        cnicBackDocumentUrl: (data as any).cnicBackDocumentUrl ?? null,
+        cnicBackDocumentName: (data as any).cnicBackDocumentName ?? null,
+        qualificationDocumentUrl:
+          (data as any).qualificationDocumentUrl ?? null,
+        qualificationDocumentName:
+          (data as any).qualificationDocumentName ?? null,
+        lastPayslipOneUrl: (data as any).lastPayslipOneUrl ?? null,
+        lastPayslipOneName: (data as any).lastPayslipOneName ?? null,
+        lastPayslipTwoUrl: (data as any).lastPayslipTwoUrl ?? null,
+        lastPayslipTwoName: (data as any).lastPayslipTwoName ?? null,
+        lastPayslipThreeUrl: (data as any).lastPayslipThreeUrl ?? null,
+        lastPayslipThreeName: (data as any).lastPayslipThreeName ?? null,
+        ...bankValues,
       });
       created += 1;
     } catch (err) {
@@ -335,7 +487,8 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
   const id = Number(req.params.id);
   const user = getUser(req);
   if (user.role === "employee" && user.employeeId !== id) {
-    return res.status(403).json({ message: "Forbidden" });
+    res.status(403).json({ message: "Forbidden" });
+    return;
   }
   const rows = await db
     .select({ employee: employeesTable, email: usersTable.email })
@@ -344,7 +497,10 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
     .where(eq(employeesTable.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row) return res.status(404).json({ message: "Employee not found" });
+  if (!row) {
+    res.status(404).json({ message: "Employee not found" });
+    return;
+  }
 
   const events = await db
     .select()
@@ -386,18 +542,20 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
   });
 });
 
-router.patch("/employees/:id", requireAuth(), async (req, res) => {
+router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const parsed = UpdateEmployeeBody.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: "Invalid payload" });
+    res.status(400).json({ message: "Invalid payload" });
+    return;
   }
   const data = parsed.data;
   const actor = getUser(req);
 
   if (actor.role === "employee") {
     if (actor.employeeId !== id) {
-      return res.status(403).json({ message: "Forbidden" });
+      res.status(403).json({ message: "Forbidden" });
+      return;
     }
     const payload = data as Record<string, unknown>;
     const allowedKeys = Object.keys(payload).filter(
@@ -407,9 +565,10 @@ router.patch("/employees/:id", requireAuth(), async (req, res) => {
       allowedKeys.length > 0 &&
       allowedKeys.every((key) => key === "avatarUrl");
     if (!avatarOnly) {
-      return res.status(403).json({
+      res.status(403).json({
         message: "Employees can only update their profile photo.",
       });
+      return;
     }
   }
 
@@ -421,6 +580,8 @@ router.patch("/employees/:id", requireAuth(), async (req, res) => {
   const previous = previousRows[0];
 
   const updates: Partial<typeof employeesTable.$inferInsert> = {};
+  const extra = data as Record<string, unknown>;
+  const extraText = extra as Record<string, string | null | undefined>;
   if (data.name !== undefined) updates.name = data.name;
   if (data.phone !== undefined) updates.phone = data.phone;
   if (data.position !== undefined) updates.position = data.position;
@@ -450,35 +611,80 @@ router.patch("/employees/:id", requireAuth(), async (req, res) => {
     updates.dateOfBirth = data.dateOfBirth as unknown as string | null;
   if (data.education !== undefined) updates.education = data.education;
   if (data.address !== undefined) updates.address = data.address;
+  if (extraText.personalEmail !== undefined)
+    updates.personalEmail = extraText.personalEmail;
   // New fields
-  const extra = data as any;
-  if (extra.employeeCode !== undefined) updates.employeeCode = extra.employeeCode;
-  if (extra.leftDate !== undefined) updates.leftDate = extra.leftDate;
-  if (extra.emergencyContact !== undefined) updates.emergencyContact = extra.emergencyContact;
-  if (extra.cnic !== undefined) updates.cnic = extra.cnic;
-  if (extra.lastQualification !== undefined) updates.lastQualification = extra.lastQualification;
-  if (extra.previousCompany !== undefined) updates.previousCompany = extra.previousCompany;
+  if (extraText.employeeCode !== undefined) updates.employeeCode = extraText.employeeCode;
+  if (extraText.leftDate !== undefined) updates.leftDate = extraText.leftDate;
+  if (extraText.emergencyContactName !== undefined)
+    updates.emergencyContactName = extraText.emergencyContactName;
+  if (extraText.emergencyContactNumber !== undefined)
+    updates.emergencyContactNumber = extraText.emergencyContactNumber;
+  if (extraText.emergencyContact !== undefined)
+    updates.emergencyContact = extraText.emergencyContact;
+  if (extraText.cnic !== undefined) updates.cnic = extraText.cnic;
+  if (extraText.lastQualification !== undefined)
+    updates.lastQualification = extraText.lastQualification;
+  if (extraText.previousCompany !== undefined)
+    updates.previousCompany = extraText.previousCompany;
   if (extra.lastPay !== undefined) updates.lastPay = extra.lastPay != null ? String(extra.lastPay) : null;
-  if (extra.benefits !== undefined) updates.benefits = extra.benefits;
-  if (extra.notes !== undefined) updates.notes = extra.notes;
-  if (extra.immediateFamily !== undefined) updates.immediateFamily = extra.immediateFamily;
-  if (extra.avatarUrl !== undefined) updates.avatarUrl = extra.avatarUrl;
-  if (extra.employmentContractUrl !== undefined)
-    updates.employmentContractUrl = extra.employmentContractUrl;
-  if (extra.employmentContractName !== undefined)
-    updates.employmentContractName = extra.employmentContractName;
-  if (extra.cnicDocumentUrl !== undefined)
-    updates.cnicDocumentUrl = extra.cnicDocumentUrl;
-  if (extra.cnicDocumentName !== undefined)
-    updates.cnicDocumentName = extra.cnicDocumentName;
-  if (extra.bankAccountTitle !== undefined)
-    updates.bankAccountTitle = extra.bankAccountTitle;
-  if (extra.bankAccountNumber !== undefined)
-    updates.bankAccountNumber = extra.bankAccountNumber;
-  if (extra.bankName !== undefined) updates.bankName = extra.bankName;
-  if (extra.bankIban !== undefined) updates.bankIban = extra.bankIban;
-  if (extra.bankBranchCode !== undefined)
-    updates.bankBranchCode = extra.bankBranchCode;
+  if (extraText.benefits !== undefined) updates.benefits = extraText.benefits;
+  if (extraText.notes !== undefined) updates.notes = extraText.notes;
+  if (extraText.immediateFamily !== undefined)
+    updates.immediateFamily = extraText.immediateFamily;
+  if (extraText.avatarUrl !== undefined) updates.avatarUrl = extraText.avatarUrl;
+  if (extraText.employmentContractUrl !== undefined)
+    updates.employmentContractUrl = extraText.employmentContractUrl;
+  if (extraText.employmentContractName !== undefined)
+    updates.employmentContractName = extraText.employmentContractName;
+  if (extraText.cnicDocumentUrl !== undefined)
+    updates.cnicDocumentUrl = extraText.cnicDocumentUrl;
+  if (extraText.cnicDocumentName !== undefined)
+    updates.cnicDocumentName = extraText.cnicDocumentName;
+  if (extraText.cnicFrontDocumentUrl !== undefined)
+    updates.cnicFrontDocumentUrl = extraText.cnicFrontDocumentUrl;
+  if (extraText.cnicFrontDocumentName !== undefined)
+    updates.cnicFrontDocumentName = extraText.cnicFrontDocumentName;
+  if (extraText.cnicBackDocumentUrl !== undefined)
+    updates.cnicBackDocumentUrl = extraText.cnicBackDocumentUrl;
+  if (extraText.cnicBackDocumentName !== undefined)
+    updates.cnicBackDocumentName = extraText.cnicBackDocumentName;
+  if (extraText.qualificationDocumentUrl !== undefined)
+    updates.qualificationDocumentUrl = extraText.qualificationDocumentUrl;
+  if (extraText.qualificationDocumentName !== undefined)
+    updates.qualificationDocumentName = extraText.qualificationDocumentName;
+  if (extraText.lastPayslipOneUrl !== undefined)
+    updates.lastPayslipOneUrl = extraText.lastPayslipOneUrl;
+  if (extraText.lastPayslipOneName !== undefined)
+    updates.lastPayslipOneName = extraText.lastPayslipOneName;
+  if (extraText.lastPayslipTwoUrl !== undefined)
+    updates.lastPayslipTwoUrl = extraText.lastPayslipTwoUrl;
+  if (extraText.lastPayslipTwoName !== undefined)
+    updates.lastPayslipTwoName = extraText.lastPayslipTwoName;
+  if (extraText.lastPayslipThreeUrl !== undefined)
+    updates.lastPayslipThreeUrl = extraText.lastPayslipThreeUrl;
+  if (extraText.lastPayslipThreeName !== undefined)
+    updates.lastPayslipThreeName = extraText.lastPayslipThreeName;
+  const hasBankPayload = [
+    "bankAccountTitle",
+    "bankAccountNumber",
+    "bankName",
+    "bankIban",
+    "bankBranchCode",
+    "primaryBankAccountTitle",
+    "primaryBankAccountNumber",
+    "primaryBankName",
+    "primaryBankIban",
+    "primaryBankBranchCode",
+    "secondaryBankAccountTitle",
+    "secondaryBankAccountNumber",
+    "secondaryBankName",
+    "secondaryBankIban",
+    "secondaryBankBranchCode",
+  ].some((key) => extra[key] !== undefined);
+  if (hasBankPayload) {
+    Object.assign(updates, getEmployeeBankValues(extra));
+  }
   if (extra.providentFundPercent !== undefined)
     updates.providentFundPercent =
       extra.providentFundPercent != null ? String(extra.providentFundPercent) : null;
@@ -507,11 +713,14 @@ router.patch("/employees/:id", requireAuth(), async (req, res) => {
     .where(eq(employeesTable.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row) return res.status(404).json({ message: "Employee not found" });
+  if (!row) {
+    res.status(404).json({ message: "Employee not found" });
+    return;
+  }
   res.json(serializeEmployee(row.employee, row.email));
 });
 
-router.delete("/employees/:id", requireAuth(["admin"]), async (req, res) => {
+router.delete("/employees/:id", requireAuth(["admin"]), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const rows = await db
     .select()
@@ -519,16 +728,20 @@ router.delete("/employees/:id", requireAuth(["admin"]), async (req, res) => {
     .where(eq(employeesTable.id, id))
     .limit(1);
   const emp = rows[0];
-  if (!emp) return res.status(404).json({ message: "Employee not found" });
+  if (!emp) {
+    res.status(404).json({ message: "Employee not found" });
+    return;
+  }
   await db.delete(usersTable).where(eq(usersTable.id, emp.userId));
   res.json({ success: true });
 });
 
-router.get("/employees/:id/journey", requireAuth(), async (req, res) => {
+router.get("/employees/:id/journey", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const user = getUser(req);
   if (user.role === "employee" && user.employeeId !== id) {
-    return res.status(403).json({ message: "Forbidden" });
+    res.status(403).json({ message: "Forbidden" });
+    return;
   }
   const rows = await db
     .select({ employee: employeesTable, email: usersTable.email })
@@ -537,7 +750,10 @@ router.get("/employees/:id/journey", requireAuth(), async (req, res) => {
     .where(eq(employeesTable.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row) return res.status(404).json({ message: "Employee not found" });
+  if (!row) {
+    res.status(404).json({ message: "Employee not found" });
+    return;
+  }
 
   const employee = serializeEmployee(row.employee, row.email);
   const joining = parseDate(row.employee.joiningDate);
@@ -673,11 +889,12 @@ router.get("/employees/:id/journey", requireAuth(), async (req, res) => {
 router.post(
   "/employees/:id/salary-events",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     const parsed = CreateSalaryEventBody.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid payload" });
+      res.status(400).json({ message: "Invalid payload" });
+      return;
     }
     // Resolve amount based on amountMode (fixed | percentage)
     const mode = parsed.data.amountMode ?? "fixed";
@@ -686,9 +903,10 @@ router.post(
     if (mode === "percentage") {
       const pct = parsed.data.percentValue;
       if (pct === undefined || pct === null) {
-        return res
+        res
           .status(400)
           .json({ message: "percentValue is required when amountMode is 'percentage'" });
+        return;
       }
       const empRows = await db
         .select()
@@ -697,16 +915,18 @@ router.post(
         .limit(1);
       const emp = empRows[0];
       if (!emp) {
-        return res.status(404).json({ message: "Employee not found" });
+        res.status(404).json({ message: "Employee not found" });
+        return;
       }
       const basic = Number(emp.basicSalary);
       resolvedAmount = Math.round(((basic * pct) / 100) * 100) / 100;
       percentValue = pct;
     } else {
       if (parsed.data.amount === undefined || parsed.data.amount === null) {
-        return res
+        res
           .status(400)
           .json({ message: "amount is required when amountMode is 'fixed'" });
+        return;
       }
       resolvedAmount = parsed.data.amount;
     }
@@ -722,8 +942,22 @@ router.post(
         date: parsed.data.date as unknown as string,
         reason: parsed.data.reason ?? null,
       })
-      .returning();
-    const e = inserted[0]!;
+      .$returningId();
+    const eventId = inserted[0]?.id;
+    if (!eventId) {
+      res.status(500).json({ message: "Failed to create salary event" });
+      return;
+    }
+    const eventRows = await db
+      .select()
+      .from(salaryEventsTable)
+      .where(eq(salaryEventsTable.id, eventId))
+      .limit(1);
+    const e = eventRows[0];
+    if (!e) {
+      res.status(500).json({ message: "Created salary event could not be loaded" });
+      return;
+    }
 
     // If increment, update the employee's basicSalary
     if (parsed.data.type === "increment") {
@@ -758,12 +992,13 @@ router.post(
 router.patch(
   "/employees/:id/salary-events/:eventId",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     const eventId = Number(req.params.eventId);
     const parsed = UpdateSalaryEventBody.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid payload" });
+      res.status(400).json({ message: "Invalid payload" });
+      return;
     }
 
     const existingRows = await db
@@ -773,7 +1008,8 @@ router.patch(
       .limit(1);
     const existing = existingRows[0];
     if (!existing) {
-      return res.status(404).json({ message: "Salary event not found" });
+      res.status(404).json({ message: "Salary event not found" });
+      return;
     }
 
     const updates: Partial<typeof salaryEventsTable.$inferInsert> = {};

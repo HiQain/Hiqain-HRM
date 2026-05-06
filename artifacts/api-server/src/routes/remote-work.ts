@@ -77,12 +77,15 @@ async function serialize(
   };
 }
 
-router.get("/remote-work", requireAuth(), async (req, res) => {
+router.get("/remote-work", requireAuth(), async (req, res): Promise<void> => {
   const user = getUser(req);
   const status = req.query.status as string | undefined;
   const filters = [];
   if (user.role === "employee") {
-    if (!user.employeeId) return res.json([]);
+    if (!user.employeeId) {
+      res.json([]);
+      return;
+    }
     filters.push(eq(remoteWorkRequestsTable.employeeId, user.employeeId));
   }
   if (status === "pending" || status === "approved" || status === "rejected") {
@@ -109,10 +112,12 @@ router.get("/remote-work", requireAuth(), async (req, res) => {
   res.json(out);
 });
 
-router.post("/remote-work", requireAuth(["employee"]), async (req, res) => {
+router.post("/remote-work", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
-  if (!user.employeeId)
-    return res.status(400).json({ message: "No employee profile" });
+  if (!user.employeeId) {
+    res.status(400).json({ message: "No employee profile" });
+    return;
+  }
   const {
     date,
     reason,
@@ -121,7 +126,8 @@ router.post("/remote-work", requireAuth(["employee"]), async (req, res) => {
     mentionedEmployeeIds,
   } = req.body ?? {};
   if (!date || !reason || typeof reason !== "string" || !reason.trim()) {
-    return res.status(400).json({ message: "date and reason are required" });
+    res.status(400).json({ message: "date and reason are required" });
+    return;
   }
 
   const empRows = await db
@@ -141,9 +147,10 @@ router.post("/remote-work", requireAuth(["employee"]), async (req, res) => {
       ),
     );
   if (existing.some((r) => r.status !== "rejected")) {
-    return res
+    res
       .status(400)
       .json({ message: "A remote work request for this date already exists" });
+    return;
   }
 
   const attachmentsArr = normalizeAttachments(req.body ?? {}) ?? [];
@@ -162,14 +169,29 @@ router.post("/remote-work", requireAuth(["employee"]), async (req, res) => {
         : [],
       status: "pending",
     })
-    .returning();
-  res.status(201).json(await serialize(inserted[0]!, emp.name));
+    .$returningId();
+  const requestId = inserted[0]?.id;
+  if (!requestId) {
+    res.status(500).json({ message: "Failed to create request" });
+    return;
+  }
+  const requestRows = await db
+    .select()
+    .from(remoteWorkRequestsTable)
+    .where(eq(remoteWorkRequestsTable.id, requestId))
+    .limit(1);
+  const request = requestRows[0];
+  if (!request) {
+    res.status(500).json({ message: "Created request could not be loaded" });
+    return;
+  }
+  res.status(201).json(await serialize(request, emp.name));
 });
 
 router.patch(
   "/remote-work/:id",
   requireAuth(["employee"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const user = getUser(req);
     const id = Number(req.params.id);
     const existing = await db
@@ -178,16 +200,23 @@ router.patch(
       .where(eq(remoteWorkRequestsTable.id, id))
       .limit(1);
     const row = existing[0];
-    if (!row) return res.status(404).json({ message: "Request not found" });
-    if (row.employeeId !== user.employeeId)
-      return res.status(403).json({ message: "Not your request" });
-    if (row.status !== "pending")
-      return res
+    if (!row) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
+    if (row.employeeId !== user.employeeId) {
+      res.status(403).json({ message: "Not your request" });
+      return;
+    }
+    if (row.status !== "pending") {
+      res
         .status(400)
         .json({ message: "Only pending requests can be edited" });
+      return;
+    }
 
     const body = req.body ?? {};
-    const updated = await db
+    await db
       .update(remoteWorkRequestsTable)
       .set({
         date: body.date ?? row.date,
@@ -206,21 +235,30 @@ router.patch(
           ? body.mentionedEmployeeIds
           : (row.mentionedEmployeeIds ?? []),
       })
+      .where(eq(remoteWorkRequestsTable.id, id));
+    const updatedRows = await db
+      .select()
+      .from(remoteWorkRequestsTable)
       .where(eq(remoteWorkRequestsTable.id, id))
-      .returning();
+      .limit(1);
+    const updated = updatedRows[0];
+    if (!updated) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
     const empRows = await db
       .select()
       .from(employeesTable)
-      .where(eq(employeesTable.id, updated[0]!.employeeId))
+      .where(eq(employeesTable.id, updated.employeeId))
       .limit(1);
-    res.json(await serialize(updated[0]!, empRows[0]?.name ?? ""));
+    res.json(await serialize(updated, empRows[0]?.name ?? ""));
   },
 );
 
 router.delete(
   "/remote-work/:id",
   requireAuth(["employee"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const user = getUser(req);
     const id = Number(req.params.id);
     const existing = await db
@@ -229,13 +267,20 @@ router.delete(
       .where(eq(remoteWorkRequestsTable.id, id))
       .limit(1);
     const row = existing[0];
-    if (!row) return res.status(404).json({ message: "Request not found" });
-    if (row.employeeId !== user.employeeId)
-      return res.status(403).json({ message: "Not your request" });
-    if (row.status !== "pending")
-      return res
+    if (!row) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
+    if (row.employeeId !== user.employeeId) {
+      res.status(403).json({ message: "Not your request" });
+      return;
+    }
+    if (row.status !== "pending") {
+      res
         .status(400)
         .json({ message: "Only pending requests can be cancelled" });
+      return;
+    }
     await db
       .delete(remoteWorkRequestsTable)
       .where(eq(remoteWorkRequestsTable.id, id));
@@ -246,15 +291,27 @@ router.delete(
 router.post(
   "/remote-work/:id/approve",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
-    const updated = await db
+    const updateResult = await db
       .update(remoteWorkRequestsTable)
       .set({ status: "approved", reviewedAt: new Date() })
       .where(eq(remoteWorkRequestsTable.id, id))
-      .returning();
-    const row = updated[0];
-    if (!row) return res.status(404).json({ message: "Request not found" });
+      ;
+    if (!updateResult[0].affectedRows) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
+    const updatedRows = await db
+      .select()
+      .from(remoteWorkRequestsTable)
+      .where(eq(remoteWorkRequestsTable.id, id))
+      .limit(1);
+    const row = updatedRows[0];
+    if (!row) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
 
     const existing = await db
       .select()
@@ -292,15 +349,27 @@ router.post(
 router.post(
   "/remote-work/:id/reject",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
-    const updated = await db
+    const updateResult = await db
       .update(remoteWorkRequestsTable)
       .set({ status: "rejected", reviewedAt: new Date() })
       .where(eq(remoteWorkRequestsTable.id, id))
-      .returning();
-    const row = updated[0];
-    if (!row) return res.status(404).json({ message: "Request not found" });
+      ;
+    if (!updateResult[0].affectedRows) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
+    const updatedRows = await db
+      .select()
+      .from(remoteWorkRequestsTable)
+      .where(eq(remoteWorkRequestsTable.id, id))
+      .limit(1);
+    const row = updatedRows[0];
+    if (!row) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
     const empRows = await db
       .select()
       .from(employeesTable)

@@ -14,6 +14,7 @@ import {
 import {
   useGetTodayAttendanceSummary,
   getGetTodayAttendanceSummaryQueryKey,
+  useListEmployees,
   useOverrideAttendance,
   type AttendanceOverrideRequestStatus,
 } from "@workspace/api-client-react";
@@ -54,9 +55,12 @@ function shiftDate(ymd: string, days: number): string {
 
 export function AdminAttendancePage() {
   const today = ymdLocal(new Date());
+  const { data: employees } = useListEmployees();
   const [date, setDate] = useState<string>(today);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [sortByJoiningDate, setSortByJoiningDate] = useState(false);
 
   const params = { date };
   const { data, isLoading } = useGetTodayAttendanceSummary(params, {
@@ -92,6 +96,31 @@ export function AdminAttendancePage() {
 
   const isToday = date === today;
   const isPast = date < today;
+  const employeeMeta = useMemo(
+    () =>
+      new Map(
+        (employees ?? []).map((employee) => [
+          employee.id,
+          {
+            department: employee.department ?? "",
+            joiningDate: employee.joiningDate ?? "",
+            employeeCode: employee.employeeCode ?? "",
+          },
+        ]),
+      ),
+    [employees],
+  );
+  const departments = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (employees ?? [])
+            .map((employee) => employee.department?.trim())
+            .filter((department): department is string => Boolean(department)),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [employees],
+  );
 
   const filtered = useMemo(() => {
     if (!data?.records) return [];
@@ -110,8 +139,43 @@ export function AdminAttendancePage() {
         (r.employeeName ?? "").toLowerCase().includes(q),
       );
     }
-    return list;
-  }, [data, search, statusFilter]);
+    if (departmentFilter !== "all") {
+      list = list.filter(
+        (record) =>
+          employeeMeta.get(record.employeeId)?.department === departmentFilter,
+      );
+    }
+    return [...list].sort((a, b) => {
+      const aMeta = employeeMeta.get(a.employeeId);
+      const bMeta = employeeMeta.get(b.employeeId);
+      if (sortByJoiningDate) {
+        const joiningCompare = (aMeta?.joiningDate ?? "").localeCompare(
+          bMeta?.joiningDate ?? "",
+        );
+        if (joiningCompare !== 0) return joiningCompare;
+      }
+      const codeCompare = (aMeta?.employeeCode ?? "").localeCompare(
+        bMeta?.employeeCode ?? "",
+        undefined,
+        { numeric: true, sensitivity: "base" },
+      );
+      if (codeCompare !== 0) return codeCompare;
+      return (a.employeeName ?? "").localeCompare(b.employeeName ?? "");
+    });
+  }, [
+    data,
+    search,
+    statusFilter,
+    departmentFilter,
+    sortByJoiningDate,
+    employeeMeta,
+  ]);
+
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    statusFilter !== "all" ||
+    departmentFilter !== "all" ||
+    sortByJoiningDate;
 
   return (
     <div className="space-y-8">
@@ -173,17 +237,55 @@ export function AdminAttendancePage() {
       </div>
 
       <div className="space-y-3 rounded-xl border border-border bg-card shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative w-full max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search employee..."
-              className="pl-9"
-            />
+        <div className="flex flex-col gap-3 border-b border-border p-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
+            <div className="relative w-full">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search employee..."
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={departmentFilter}
+              onValueChange={setDepartmentFilter}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All departments</SelectItem>
+                {departments.map((department) => (
+                  <SelectItem key={department} value={department}>
+                    {department}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant={sortByJoiningDate ? "default" : "outline"}
+              onClick={() => setSortByJoiningDate((current) => !current)}
+            >
+              Date of joining
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={!hasActiveFilters}
+              onClick={() => {
+                setSearch("");
+                setStatusFilter("all");
+                setDepartmentFilter("all");
+                setSortByJoiningDate(false);
+              }}
+            >
+              Clear filters
+            </Button>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-nowrap items-center gap-2 self-start overflow-x-auto 2xl:self-auto">
             <FilterChip
               label="All"
               active={statusFilter === "all"}

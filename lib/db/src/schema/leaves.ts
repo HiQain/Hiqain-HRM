@@ -1,41 +1,40 @@
 import {
-  pgTable,
-  serial,
-  integer,
   date,
+  int,
+  json,
+  mysqlEnum,
+  mysqlTable,
   timestamp,
   text,
-  jsonb,
-} from "drizzle-orm/pg-core";
+  varchar,
+} from "drizzle-orm/mysql-core";
 import { employeesTable } from "./employees";
 
-export const leaveRequestsTable = pgTable("leave_requests", {
-  id: serial("id").primaryKey(),
-  employeeId: integer("employee_id")
+export const leaveRequestsTable = mysqlTable("leave_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id")
     .notNull()
     .references(() => employeesTable.id, { onDelete: "cascade" }),
-  type: text("type", { enum: ["sick", "casual", "annual"] }).notNull(),
-  startDate: date("start_date").notNull(),
-  endDate: date("end_date").notNull(),
-  days: integer("days").notNull(),
+  type: mysqlEnum("type", ["sick", "casual", "annual"]).notNull(),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  endDate: date("end_date", { mode: "string" }).notNull(),
+  days: int("days").notNull(),
   reason: text("reason").notNull(),
-  attachmentUrl: text("attachment_url"),
-  attachmentName: text("attachment_name"),
-  attachments: jsonb("attachments")
+  attachmentUrl: varchar("attachment_url", { length: 1024 }),
+  attachmentName: varchar("attachment_name", { length: 255 }),
+  attachments: json("attachments")
     .$type<{ url: string; name: string }[]>()
     .notNull()
     .default([]),
-  mentionedEmployeeIds: jsonb("mentioned_employee_ids")
+  mentionedEmployeeIds: json("mentioned_employee_ids")
     .$type<number[]>()
     .notNull()
     .default([]),
-  status: text("status", { enum: ["pending", "approved", "rejected"] })
+  status: mysqlEnum("status", ["pending", "approved", "rejected"])
     .notNull()
     .default("pending"),
-  appliedAt: timestamp("applied_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  appliedAt: timestamp("applied_at").notNull().defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
 });
 
 export type LeaveRequest = typeof leaveRequestsTable.$inferSelect;

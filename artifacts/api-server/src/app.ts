@@ -1,14 +1,11 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { ensureSeed } from "./lib/seed";
-import { pool } from "@workspace/db";
-
-const PgStore = connectPgSimple(session);
+import { ensureSessionTable, MySqlSessionStore } from "./lib/mysqlSessionStore";
 
 const app: Express = express();
 
@@ -42,26 +39,11 @@ if (!sessionSecret) {
 
 app.set("trust proxy", 1);
 
-// Ensure session store table exists (connect-pg-simple's createTableIfMissing
-// requires reading a table.sql file that isn't present after esbuild bundling,
-// so we create it ourselves here).
-await pool.query(`
-  CREATE TABLE IF NOT EXISTS "user_sessions" (
-    "sid" varchar NOT NULL COLLATE "default",
-    "sess" json NOT NULL,
-    "expire" timestamp(6) NOT NULL,
-    CONSTRAINT "user_sessions_pkey" PRIMARY KEY ("sid")
-  ) WITH (OIDS=FALSE);
-  CREATE INDEX IF NOT EXISTS "IDX_user_sessions_expire" ON "user_sessions" ("expire");
-`);
+await ensureSessionTable();
 
 app.use(
   session({
-    store: new PgStore({
-      pool,
-      tableName: "user_sessions",
-      createTableIfMissing: false,
-    }),
+    store: new MySqlSessionStore(),
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,

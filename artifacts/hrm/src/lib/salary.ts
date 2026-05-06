@@ -12,26 +12,24 @@ type SalaryComponentLike = {
   valueType: string;
   value: number;
   isDeduction?: boolean;
+  isTaxable?: boolean;
 };
+import {
+  getFrontendTaxYearConfigs,
+  type TaxYearConfig,
+} from "@/lib/runtimeConfig";
 
-const SALARY_TAX_SLABS: Record<number, TaxSlab[]> = {
-  2025: [
-    { upTo: 600000, baseTax: 0, rate: 0, threshold: 0 },
-    { upTo: 1200000, baseTax: 0, rate: 0.05, threshold: 600000 },
-    { upTo: 2200000, baseTax: 30000, rate: 0.15, threshold: 1200000 },
-    { upTo: 3200000, baseTax: 180000, rate: 0.25, threshold: 2200000 },
-    { upTo: 4100000, baseTax: 430000, rate: 0.3, threshold: 3200000 },
-    { baseTax: 700000, rate: 0.35, threshold: 4100000 },
-  ],
-  2026: [
-    { upTo: 600000, baseTax: 0, rate: 0, threshold: 0 },
-    { upTo: 1200000, baseTax: 0, rate: 0.01, threshold: 600000 },
-    { upTo: 2200000, baseTax: 6000, rate: 0.11, threshold: 1200000 },
-    { upTo: 3200000, baseTax: 116000, rate: 0.23, threshold: 2200000 },
-    { upTo: 4100000, baseTax: 346000, rate: 0.3, threshold: 3200000 },
-    { baseTax: 616000, rate: 0.35, threshold: 4100000 },
-  ],
-} as const;
+const TAX_YEAR_CONFIGS = getFrontendTaxYearConfigs();
+
+function getTaxConfigForYear(taxYear: number): TaxYearConfig | undefined {
+  const exact = TAX_YEAR_CONFIGS.find((item) => item.taxYear === taxYear);
+  if (exact) return exact;
+
+  return [...TAX_YEAR_CONFIGS]
+    .sort((a, b) => a.taxYear - b.taxYear)
+    .reverse()
+    .find((item) => item.taxYear <= taxYear);
+}
 
 export function getPakistanTaxYear(month: number, year: number): number {
   return month >= 7 ? year + 1 : year;
@@ -44,15 +42,20 @@ export function getPakistanMonthlySalaryTax(
 ): number {
   const annualSalary = Math.max(0, monthlyTaxableSalary) * 12;
   const taxYear = getPakistanTaxYear(month, year);
-  const slabs =
-    SALARY_TAX_SLABS[taxYear as keyof typeof SALARY_TAX_SLABS] ??
-    SALARY_TAX_SLABS[2026];
+  const config = getTaxConfigForYear(taxYear);
+  if (!config) return 0;
+
+  const slabs = config.slabs;
   const slab = slabs.find((item) => item.upTo == null || annualSalary <= item.upTo);
   if (!slab) return 0;
 
   let annualTax = slab.baseTax + Math.max(0, annualSalary - slab.threshold) * slab.rate;
-  if (taxYear >= 2026 && annualSalary > 10000000) {
-    annualTax *= 1.09;
+  if (
+    config.surchargeThreshold != null &&
+    config.surchargeRate != null &&
+    annualSalary > config.surchargeThreshold
+  ) {
+    annualTax *= 1 + config.surchargeRate;
   }
   return Math.round((annualTax / 12) * 100) / 100;
 }
@@ -85,6 +88,7 @@ export function getDefaultAllowanceBreakdown(defaultAllowances: number) {
       valueType: "fixed",
       value: homeRent,
       isDeduction: false,
+      isTaxable: true,
     },
     {
       id: -2,
@@ -93,6 +97,7 @@ export function getDefaultAllowanceBreakdown(defaultAllowances: number) {
       valueType: "fixed",
       value: utilityBills,
       isDeduction: false,
+      isTaxable: true,
     },
   ].filter((item) => item.value > 0);
 }
@@ -123,7 +128,9 @@ export function computeSalaryStructurePreview({
 
   const resolvedBasicSalary = designationFixed > 0 ? designationFixed : basicSalary;
   let componentAllowances = 0;
+  let nonTaxableAllowances = 0;
   let commission = 0;
+  let nonTaxableCommission = 0;
   let componentDeductions = 0;
   let providentFund = 0;
 
@@ -140,10 +147,12 @@ export function computeSalaryStructurePreview({
     }
     if (component.kind === "designation") continue;
     if (component.kind === "commission") {
-      commission += value;
+      if (component.isTaxable === false) nonTaxableCommission += value;
+      else commission += value;
       continue;
     }
-    componentAllowances += value;
+    if (component.isTaxable === false) nonTaxableAllowances += value;
+    else componentAllowances += value;
   }
 
   if (providentFund <= 0 && (providentFundPercent ?? 0) > 0) {
@@ -159,9 +168,11 @@ export function computeSalaryStructurePreview({
     defaultAllowances,
     taxableSalary: roundCurrency(taxableSalary),
     componentAllowances: roundCurrency(componentAllowances),
+    nonTaxableAllowances: roundCurrency(nonTaxableAllowances),
     totalAllowances:
-      roundCurrency(defaultAllowances + componentAllowances),
+      roundCurrency(defaultAllowances + componentAllowances + nonTaxableAllowances),
     commission: roundCurrency(commission),
+    nonTaxableCommission: roundCurrency(nonTaxableCommission),
     providentFund: roundCurrency(providentFund),
     componentDeductions: roundCurrency(componentDeductions),
     tax,

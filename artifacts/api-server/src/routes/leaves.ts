@@ -134,12 +134,15 @@ async function serialize(
   };
 }
 
-router.get("/leaves", requireAuth(), async (req, res) => {
+router.get("/leaves", requireAuth(), async (req, res): Promise<void> => {
   const user = getUser(req);
   const status = req.query.status as string | undefined;
   const filters = [];
   if (user.role === "employee") {
-    if (!user.employeeId) return res.json([]);
+    if (!user.employeeId) {
+      res.json([]);
+      return;
+    }
     filters.push(eq(leaveRequestsTable.employeeId, user.employeeId));
   }
   if (status === "pending" || status === "approved" || status === "rejected") {
@@ -166,18 +169,22 @@ router.get("/leaves", requireAuth(), async (req, res) => {
   res.json(out);
 });
 
-router.post("/leaves", requireAuth(["employee"]), async (req, res) => {
+router.post("/leaves", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
-  if (!user.employeeId)
-    return res.status(400).json({ message: "No employee profile" });
+  if (!user.employeeId) {
+    res.status(400).json({ message: "No employee profile" });
+    return;
+  }
   const parsed = ApplyLeaveBody.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: "Invalid payload" });
+    res.status(400).json({ message: "Invalid payload" });
+    return;
   }
   const start = parseDate(parsed.data.startDate as unknown as string);
   const end = parseDate(parsed.data.endDate as unknown as string);
   if (end < start) {
-    return res.status(400).json({ message: "End date must be after start date" });
+    res.status(400).json({ message: "End date must be after start date" });
+    return;
   }
   const days = daysBetweenInclusive(start, end);
   const empRows = await db
@@ -220,9 +227,10 @@ router.post("/leaves", requireAuth(["employee"]), async (req, res) => {
   const quotaTotal =
     t === "sick" ? q.sick : t === "casual" ? q.casual : q.annual;
   if (usedTotal + days > quotaTotal) {
-    return res.status(400).json({
+    res.status(400).json({
       message: `Insufficient ${t} leave balance. Available: ${Math.max(0, quotaTotal - usedTotal)} day(s), requested: ${days}.`,
     });
+    return;
   }
 
   // Block if any day in the range already has a present/late attendance record
@@ -240,9 +248,10 @@ router.post("/leaves", requireAuth(["employee"]), async (req, res) => {
     (a) => a.status === "present" || a.status === "late",
   );
   if (blocking) {
-    return res.status(400).json({
+    res.status(400).json({
       message: `You already have an attendance record marked as ${blocking.status} on ${blocking.date}. Cannot apply leave for that day.`,
     });
+    return;
   }
 
   const attachmentsArr = normalizeAttachments(req.body ?? {}) ?? [];
@@ -262,11 +271,26 @@ router.post("/leaves", requireAuth(["employee"]), async (req, res) => {
       mentionedEmployeeIds: parsed.data.mentionedEmployeeIds ?? [],
       status: "pending",
     })
-    .returning();
-  res.status(201).json(await serialize(inserted[0]!, emp.name));
+    .$returningId();
+  const requestId = inserted[0]?.id;
+  if (!requestId) {
+    res.status(500).json({ message: "Failed to create leave request" });
+    return;
+  }
+  const insertedRows = await db
+    .select()
+    .from(leaveRequestsTable)
+    .where(eq(leaveRequestsTable.id, requestId))
+    .limit(1);
+  const request = insertedRows[0];
+  if (!request) {
+    res.status(500).json({ message: "Created leave request could not be loaded" });
+    return;
+  }
+  res.status(201).json(await serialize(request, emp.name));
 });
 
-router.patch("/leaves/:id", requireAuth(["employee"]), async (req, res) => {
+router.patch("/leaves/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -275,13 +299,20 @@ router.patch("/leaves/:id", requireAuth(["employee"]), async (req, res) => {
     .where(eq(leaveRequestsTable.id, id))
     .limit(1);
   const row = existing[0];
-  if (!row) return res.status(404).json({ message: "Leave not found" });
-  if (row.employeeId !== user.employeeId)
-    return res.status(403).json({ message: "Not your request" });
-  if (row.status !== "pending")
-    return res
+  if (!row) {
+    res.status(404).json({ message: "Leave not found" });
+    return;
+  }
+  if (row.employeeId !== user.employeeId) {
+    res.status(403).json({ message: "Not your request" });
+    return;
+  }
+  if (row.status !== "pending") {
+    res
       .status(400)
       .json({ message: "Only pending requests can be edited" });
+    return;
+  }
 
   const body = req.body ?? {};
   const newType = (body.type ?? row.type) as "sick" | "casual" | "annual";
@@ -289,13 +320,15 @@ router.patch("/leaves/:id", requireAuth(["employee"]), async (req, res) => {
     ? ymd(parseDate(body.startDate))
     : row.startDate;
   const newEnd = body.endDate ? ymd(parseDate(body.endDate)) : row.endDate;
-  if (parseDate(newEnd) < parseDate(newStart))
-    return res
+  if (parseDate(newEnd) < parseDate(newStart)) {
+    res
       .status(400)
       .json({ message: "End date must be after start date" });
+    return;
+  }
   const days = daysBetweenInclusive(parseDate(newStart), parseDate(newEnd));
 
-  const updated = await db
+  await db
     .update(leaveRequestsTable)
     .set({
       type: newType,
@@ -317,17 +350,26 @@ router.patch("/leaves/:id", requireAuth(["employee"]), async (req, res) => {
         ? body.mentionedEmployeeIds
         : (row.mentionedEmployeeIds ?? []),
     })
+    .where(eq(leaveRequestsTable.id, id));
+  const updatedRows = await db
+    .select()
+    .from(leaveRequestsTable)
     .where(eq(leaveRequestsTable.id, id))
-    .returning();
+    .limit(1);
+  const updated = updatedRows[0];
+  if (!updated) {
+    res.status(404).json({ message: "Leave not found" });
+    return;
+  }
   const empRows = await db
     .select()
     .from(employeesTable)
-    .where(eq(employeesTable.id, updated[0]!.employeeId))
+    .where(eq(employeesTable.id, updated.employeeId))
     .limit(1);
-  res.json(await serialize(updated[0]!, empRows[0]?.name ?? ""));
+  res.json(await serialize(updated, empRows[0]?.name ?? ""));
 });
 
-router.delete("/leaves/:id", requireAuth(["employee"]), async (req, res) => {
+router.delete("/leaves/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -336,30 +378,48 @@ router.delete("/leaves/:id", requireAuth(["employee"]), async (req, res) => {
     .where(eq(leaveRequestsTable.id, id))
     .limit(1);
   const row = existing[0];
-  if (!row) return res.status(404).json({ message: "Leave not found" });
-  if (row.employeeId !== user.employeeId)
-    return res.status(403).json({ message: "Not your request" });
-  if (row.status !== "pending")
-    return res
+  if (!row) {
+    res.status(404).json({ message: "Leave not found" });
+    return;
+  }
+  if (row.employeeId !== user.employeeId) {
+    res.status(403).json({ message: "Not your request" });
+    return;
+  }
+  if (row.status !== "pending") {
+    res
       .status(400)
       .json({ message: "Only pending requests can be cancelled" });
+    return;
+  }
   await db.delete(leaveRequestsTable).where(eq(leaveRequestsTable.id, id));
   res.json({ ok: true });
 });
 
 async function setStatus(id: number, status: "approved" | "rejected") {
-  const updated = await db
+  const result = await db
     .update(leaveRequestsTable)
     .set({ status, reviewedAt: new Date() })
     .where(eq(leaveRequestsTable.id, id))
-    .returning();
-  return updated[0];
+    ;
+  if (!result[0].affectedRows) {
+    return null;
+  }
+  const rows = await db
+    .select()
+    .from(leaveRequestsTable)
+    .where(eq(leaveRequestsTable.id, id))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
-router.post("/leaves/:id/approve", requireAuth(["admin", "hr"]), async (req, res) => {
+router.post("/leaves/:id/approve", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const updated = await setStatus(id, "approved");
-  if (!updated) return res.status(404).json({ message: "Leave not found" });
+  if (!updated) {
+    res.status(404).json({ message: "Leave not found" });
+    return;
+  }
 
   // Auto-mark attendance for approved leave days, including office check-in/out times
   const start = parseDate(updated.startDate);
@@ -412,10 +472,13 @@ router.post("/leaves/:id/approve", requireAuth(["admin", "hr"]), async (req, res
   res.json(await serialize(updated, emp.name));
 });
 
-router.post("/leaves/:id/reject", requireAuth(["admin", "hr"]), async (req, res) => {
+router.post("/leaves/:id/reject", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const updated = await setStatus(id, "rejected");
-  if (!updated) return res.status(404).json({ message: "Leave not found" });
+  if (!updated) {
+    res.status(404).json({ message: "Leave not found" });
+    return;
+  }
   const empRows = await db
     .select()
     .from(employeesTable)
@@ -424,10 +487,10 @@ router.post("/leaves/:id/reject", requireAuth(["admin", "hr"]), async (req, res)
   res.json(await serialize(updated, empRows[0]?.name ?? ""));
 });
 
-router.get("/leaves/balance", requireAuth(["employee"]), async (req, res) => {
+router.get("/leaves/balance", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
-    return res.json({
+    res.json({
       sick: 0,
       casual: 0,
       annual: 0,
@@ -435,6 +498,7 @@ router.get("/leaves/balance", requireAuth(["employee"]), async (req, res) => {
       casualUsed: 0,
       annualUsed: 0,
     });
+    return;
   }
   const empRows = await db
     .select()

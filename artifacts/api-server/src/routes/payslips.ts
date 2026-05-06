@@ -29,8 +29,14 @@ type PayslipBreakdownLine = {
   amount: number;
 };
 
+const PAYROLL_MONTHLY_DIVISOR = 30;
+
 function roundAmount(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function isComponentTaxable(component: typeof salaryComponentsTable.$inferSelect) {
+  return component.isTaxable === 1;
 }
 
 function resolveComponentValue(
@@ -55,10 +61,8 @@ function buildPayslipBreakdown(
   const defaultAllowances = Number(employee.allowances);
   const homeRent = roundAmount(defaultAllowances / 2);
   const utilityBills = roundAmount(defaultAllowances - homeRent);
-  const totalWorkingDays = Number(payslip.totalWorkingDays);
   const absentDays = Number(payslip.absentDays);
   const lateAbsenceDays = Number(payslip.lateAbsenceDays);
-  const perDay = totalWorkingDays > 0 ? basicSalary / totalWorkingDays : 0;
 
   const earnings: PayslipBreakdownLine[] = [
     { label: "Basic Salary", amount: basicSalary },
@@ -70,8 +74,11 @@ function buildPayslipBreakdown(
 
   const deductions: PayslipBreakdownLine[] = [];
   let commissionTotal = 0;
+  let taxableCommissionTotal = 0;
   let componentDeductionTotal = 0;
   let providentFundFromComponent = 0;
+  let taxableRecurringComponentTotal = 0;
+  let nonTaxableRecurringComponentTotal = 0;
 
   for (const component of components) {
     const amount = roundAmount(resolveComponentValue(component, basicSalary));
@@ -91,10 +98,19 @@ function buildPayslipBreakdown(
     }
 
     if (component.kind === "designation") continue;
-    earnings.push({ label: component.label, amount });
+    earnings.push({
+      label: isComponentTaxable(component)
+        ? component.label
+        : `${component.label} (non-taxable)`,
+      amount,
+    });
     if (component.kind === "commission") {
       commissionTotal += amount;
+      if (isComponentTaxable(component)) taxableCommissionTotal += amount;
+      continue;
     }
+    if (isComponentTaxable(component)) taxableRecurringComponentTotal += amount;
+    else nonTaxableRecurringComponentTotal += amount;
   }
 
   const additionalBonus = roundAmount(Number(payslip.bonus) - commissionTotal);
@@ -110,17 +126,14 @@ function buildPayslipBreakdown(
     deductions.push({ label: "Provident Fund", amount: providentFundFromProfile });
   }
 
-  const recurringCommission = roundAmount(
-    components
-      .filter((component) => component.isDeduction === 0 && component.kind === "commission")
-      .reduce(
-        (sum, component) => sum + resolveComponentValue(component, basicSalary),
-        0,
-      ),
-  );
+  const recurringTaxableCompensation =
+    basicSalary + defaultAllowances + taxableRecurringComponentTotal;
+  const recurringGrossCompensation =
+    basicSalary + defaultAllowances + taxableRecurringComponentTotal;
+  const recurringGrossPerDay = recurringGrossCompensation / PAYROLL_MONTHLY_DIVISOR;
   const payrollTax = roundAmount(
     computePakistanMonthlySalaryTax(
-      basicSalary + Number(payslip.allowances) + recurringCommission,
+      recurringTaxableCompensation + taxableCommissionTotal + additionalBonus,
       payslip.month,
       payslip.year,
     ),
@@ -129,12 +142,12 @@ function buildPayslipBreakdown(
     deductions.push({ label: "Payroll Tax", amount: payrollTax });
   }
 
-  const absenceDeduction = roundAmount(perDay * absentDays);
+  const absenceDeduction = roundAmount(recurringGrossPerDay * absentDays);
   if (absenceDeduction > 0) {
     deductions.push({ label: "Absence Deduction", amount: absenceDeduction });
   }
 
-  const latePenaltyDeduction = roundAmount(perDay * lateAbsenceDays);
+  const latePenaltyDeduction = roundAmount(recurringGrossPerDay * lateAbsenceDays);
   if (latePenaltyDeduction > 0) {
     deductions.push({ label: "Late Penalty", amount: latePenaltyDeduction });
   }
@@ -202,10 +215,11 @@ function serialize(
   };
 }
 
-router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res) => {
+router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const parsed = GeneratePayslipBody.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: "Invalid payload" });
+    res.status(400).json({ message: "Invalid payload" });
+    return;
   }
   const { employeeId, month, year, latePenaltyDays, bonus: bodyBonus, otherDeductions: bodyOther } = parsed.data;
   const settings = await getSettings();
@@ -216,8 +230,10 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .where(eq(employeesTable.id, employeeId))
     .limit(1);
-  if (!empRows.length)
-    return res.status(404).json({ message: "Employee not found" });
+  if (!empRows.length) {
+    res.status(404).json({ message: "Employee not found" });
+    return;
+  }
   const emp = empRows[0]!.employee;
   const email = empRows[0]!.email;
 
@@ -311,8 +327,11 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
   const basicSalary = baseDesignation;
   let allowances = Number(emp.allowances);
   let componentBonus = 0;
+  let taxableComponentBonus = 0;
+  let nonTaxableExtraAmount = 0;
   let componentDeductions = 0;
   let providentFundFromComponent = 0;
+  let taxableRecurringAllowanceAdditions = 0;
   const isTaxComponent = (label: string) => /\btax\b/i.test(label);
 
   for (const c of components) {
@@ -327,8 +346,21 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
       continue;
     }
     if (c.kind === "designation") continue; // already in base
-    if (c.kind === "commission") componentBonus += v;
-    else allowances += v; // allowance / other
+    if (c.kind === "commission") {
+      if (isComponentTaxable(c)) {
+        componentBonus += v;
+        taxableComponentBonus += v;
+      } else {
+        nonTaxableExtraAmount += v;
+      }
+      continue;
+    }
+    if (isComponentTaxable(c)) {
+      allowances += v; // taxable recurring allowance / other
+      taxableRecurringAllowanceAdditions += v;
+    } else {
+      nonTaxableExtraAmount += v;
+    }
   }
 
   // PF from employee.providentFundPercent (if no PF component already set)
@@ -336,15 +368,13 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
     providentFundFromComponent <= 0 && emp.providentFundPercent != null
       ? (Number(emp.providentFundPercent) / 100) * baseDesignation
       : 0;
-  const taxDeduction = computePakistanMonthlySalaryTax(
-    basicSalary + allowances + componentBonus,
-    month,
-    year,
-  );
+  const bonus =
+    eventBonus + componentBonus + nonTaxableExtraAmount + Number(bodyBonus ?? 0);
 
-  const bonus = eventBonus + componentBonus + Number(bodyBonus ?? 0);
-
-  const perDay = totalWorkingDays > 0 ? baseDesignation / totalWorkingDays : 0;
+  const recurringGrossCompensation = basicSalary + allowances;
+  const recurringTaxableCompensation =
+    basicSalary + Number(emp.allowances) + taxableRecurringAllowanceAdditions;
+  const perDay = recurringGrossCompensation / PAYROLL_MONTHLY_DIVISOR;
   const absenceDeduction = perDay * absentDays;
 
   // Late → absence policy: forgive `lateGraceCount` lates, then 1 absence
@@ -358,6 +388,14 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
       ? Math.max(0, Number(latePenaltyDays))
       : computedPenaltyDays;
   const lateDeduction = perDay * effectivePenaltyDays;
+  const taxDeduction = computePakistanMonthlySalaryTax(
+    recurringTaxableCompensation +
+      taxableComponentBonus +
+      eventBonus +
+      Number(bodyBonus ?? 0),
+    month,
+    year,
+  );
 
   // Loan installments: pay off active loans for this month
   const activeLoans = await db
@@ -452,7 +490,7 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
 
   let payslip: typeof payslipsTable.$inferSelect;
   if (existing.length) {
-    const updated = await db
+    await db
       .update(payslipsTable)
       .set({
         totalWorkingDays,
@@ -470,9 +508,13 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
         netSalary: String(netSalary),
         generatedAt: new Date(),
       })
+      .where(eq(payslipsTable.id, existing[0]!.id));
+    const updatedRows = await db
+      .select()
+      .from(payslipsTable)
       .where(eq(payslipsTable.id, existing[0]!.id))
-      .returning();
-    payslip = updated[0]!;
+      .limit(1);
+    payslip = updatedRows[0]!;
   } else {
     const inserted = await db
       .insert(payslipsTable)
@@ -494,8 +536,16 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
         otherDeductions: String(otherDeductions),
         netSalary: String(netSalary),
       })
-      .returning();
-    payslip = inserted[0]!;
+      .$returningId();
+    const payslipId = inserted[0]?.id;
+    const insertedRows = payslipId
+      ? await db
+          .select()
+          .from(payslipsTable)
+          .where(eq(payslipsTable.id, payslipId))
+          .limit(1)
+      : [];
+    payslip = insertedRows[0]!;
   }
 
   // Persist new installments + close any loans that are fully paid
@@ -526,9 +576,12 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
   res.status(201).json(out);
 });
 
-router.get("/payslips/me", requireAuth(["employee"]), async (req, res) => {
+router.get("/payslips/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
   const user = getUser(req);
-  if (!user.employeeId) return res.json([]);
+  if (!user.employeeId) {
+    res.json([]);
+    return;
+  }
   const empRows = await db
     .select({ employee: employeesTable, email: usersTable.email })
     .from(employeesTable)
@@ -561,7 +614,7 @@ router.get("/payslips/me", requireAuth(["employee"]), async (req, res) => {
 router.get(
   "/payslips/employee/:id",
   requireAuth(["admin", "hr"]),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     const empRows = await db
       .select({ employee: employeesTable, email: usersTable.email })
@@ -569,8 +622,10 @@ router.get(
       .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
       .where(eq(employeesTable.id, id))
       .limit(1);
-    if (!empRows.length)
-      return res.status(404).json({ message: "Employee not found" });
+    if (!empRows.length) {
+      res.status(404).json({ message: "Employee not found" });
+      return;
+    }
     const emp = empRows[0]!;
     const components = await db
       .select()
@@ -595,7 +650,7 @@ router.get(
   },
 );
 
-router.get("/payslips/:id", requireAuth(), async (req, res) => {
+router.get("/payslips/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const user = getUser(req);
   const rows = await db
@@ -609,11 +664,14 @@ router.get("/payslips/:id", requireAuth(), async (req, res) => {
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .where(eq(payslipsTable.id, id))
     .limit(1);
-  if (!rows.length)
-    return res.status(404).json({ message: "Payslip not found" });
+  if (!rows.length) {
+    res.status(404).json({ message: "Payslip not found" });
+    return;
+  }
   const row = rows[0]!;
   if (user.role === "employee" && user.employeeId !== row.p.employeeId) {
-    return res.status(403).json({ message: "Forbidden" });
+    res.status(403).json({ message: "Forbidden" });
+    return;
   }
   const components = await db
     .select()

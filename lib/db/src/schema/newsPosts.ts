@@ -1,24 +1,22 @@
 import {
-  pgTable,
-  serial,
-  text,
-  integer,
+  int,
+  mysqlTable,
   timestamp,
-} from "drizzle-orm/pg-core";
+  text,
+  varchar,
+} from "drizzle-orm/mysql-core";
 import { usersTable } from "./users";
 
-export const newsPostsTable = pgTable("news_posts", {
-  id: serial("id").primaryKey(),
-  authorId: integer("author_id")
+export const newsPostsTable = mysqlTable("news_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  authorId: int("author_id")
     .notNull()
     .references(() => usersTable.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
   body: text("body").notNull().default(""),
-  attachmentUrl: text("attachment_url"),
-  attachmentName: text("attachment_name"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  attachmentUrl: varchar("attachment_url", { length: 1024 }),
+  attachmentName: varchar("attachment_name", { length: 255 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type NewsPost = typeof newsPostsTable.$inferSelect;

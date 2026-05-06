@@ -23,15 +23,18 @@ import { FilePreview } from "@/components/FilePreview";
 import { formatHMRange12, formatDateCalendar } from "@/lib/utils";
 import {
   filterHolidays,
+  filterHolidaysByYear,
+  getCurrentHolidayYear,
   getHighlightedHoliday,
   getMonthLabel,
+  normalizeHolidayCountry,
   sortHolidays,
   type HolidayFilter,
 } from "@/lib/holidays";
 
 const WEEK_DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type Country = "us" | "pk";
+type Country = "us" | "pk" | "other";
 
 function parseTime(t: string): number {
   const [h, m] = t.split(":").map((n) => Number(n));
@@ -69,6 +72,7 @@ export function MySettingsPage() {
     query: { queryKey: getGetSettingsQueryKey() },
   });
   const [holidayFilter, setHolidayFilter] = useState<HolidayFilter>("all");
+  const currentHolidayYear = getCurrentHolidayYear();
 
   // Use employee's own office hours if available, else fall back to defaults.
   const startTime =
@@ -98,41 +102,39 @@ export function MySettingsPage() {
   }, [data, startTime, endTime]);
 
   const holidays = useMemo(() => {
-    if (!data) return [] as { date: string; name: string; country: "us" | "pk" }[];
+    if (!data) return [] as { date: string; name: string; country: Country }[];
     return sortHolidays(
-      data.publicHolidays.map((h) => {
-      const raw = (h.country as Country) ?? "other";
-      let country: "us" | "pk";
-      if (raw === "us" || raw === "pk") {
-        country = raw;
-      } else {
-        country = /eid|muharram|ashura|ramadan|iqbal|jinnah|pakistan|kashmir/i.test(
-          h.name,
-        )
-          ? "pk"
-          : "us";
-      }
-      return {
+      data.publicHolidays.map((h) => ({
         date: h.date as unknown as string,
         name: h.name,
-        country,
-      };
-        }),
+        country: normalizeHolidayCountry(
+          h.country as Country | undefined,
+          h.name,
+        ),
+      })),
     );
   }, [data]);
 
   const counts = useMemo(
     () => ({
-      all: holidays.length,
-      us: holidays.filter((h) => h.country === "us").length,
-      pk: holidays.filter((h) => h.country === "pk").length,
+      all: filterHolidaysByYear(holidays, currentHolidayYear).length,
+      us: filterHolidaysByYear(holidays, currentHolidayYear).filter(
+        (h) => h.country === "us",
+      ).length,
+      pk: filterHolidaysByYear(holidays, currentHolidayYear).filter(
+        (h) => h.country === "pk",
+      ).length,
     }),
-    [holidays],
+    [currentHolidayYear, holidays],
   );
 
   const filteredHolidays = useMemo(
-    () => filterHolidays(holidays, holidayFilter),
-    [holidays, holidayFilter],
+    () =>
+      filterHolidays(
+        filterHolidaysByYear(holidays, currentHolidayYear),
+        holidayFilter,
+      ),
+    [currentHolidayYear, holidays, holidayFilter],
   );
 
   const allHolidays = useMemo(
@@ -248,7 +250,7 @@ export function MySettingsPage() {
         />
       </Section>
 
-      <Section title="Public holidays" icon={CalendarDays}>
+      <Section title={`Public holidays (${currentHolidayYear})`} icon={CalendarDays}>
         <div className="space-y-3">
           <div className="inline-flex rounded-md border border-border bg-muted p-0.5 text-xs">
             <FilterTab

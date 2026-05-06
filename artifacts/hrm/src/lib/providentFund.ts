@@ -40,8 +40,16 @@ function addYears(dateStr: string, years: number) {
 }
 
 function getPfAmountFromPayslip(payslip: Payslip) {
+  const deductions =
+    (
+      payslip as Payslip & {
+        salaryBreakdown?: {
+          deductions?: Array<{ label: string; amount?: number | null }>;
+        } | null;
+      }
+    ).salaryBreakdown?.deductions ?? [];
   return round2(
-    (payslip.salaryBreakdown?.deductions ?? [])
+    deductions
       .filter((line) => /provident fund/i.test(line.label))
       .reduce((sum, line) => sum + Number(line.amount ?? 0), 0),
   );

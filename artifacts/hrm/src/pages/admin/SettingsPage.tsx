@@ -8,8 +8,6 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
-  Plus,
-  Trash2,
   Upload,
   FileText,
   X,
@@ -24,18 +22,20 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RichTextEditor } from "@/components/RichTextEditor";
-import { DateField } from "@/components/DateField";
 import { getApiUrl } from "@/lib/api";
 import {
   filterHolidays,
+  filterHolidaysByYear,
+  getCurrentHolidayYear,
   getHighlightedHoliday,
   getMonthLabel,
+  normalizeHolidayCountry,
   sortHolidays,
   type HolidayFilter,
 } from "@/lib/holidays";
 import { formatDateCalendar } from "@/lib/utils";
 
-type Country = "us" | "pk";
+type Country = "us" | "pk" | "other";
 
 const WEEK_DAYS = [
   { value: 0, label: "Sun" },
@@ -101,13 +101,8 @@ export function AdminSettingsPage() {
   const [companyMode, setCompanyMode] = useState<"text" | "file">("text");
   const [uploadingAttendance, setUploadingAttendance] = useState(false);
   const [uploadingCompany, setUploadingCompany] = useState(false);
-  const [holidays, setHolidays] = useState<
-    { date: string; name: string; country: Country }[]
-  >([]);
   const [holidayFilter, setHolidayFilter] = useState<HolidayFilter>("all");
-  const [newHolidayDate, setNewHolidayDate] = useState("");
-  const [newHolidayName, setNewHolidayName] = useState("");
-  const [newHolidayCountry, setNewHolidayCountry] = useState<"us" | "pk">("us");
+  const currentHolidayYear = getCurrentHolidayYear();
 
   useEffect(() => {
     if (data) {
@@ -138,32 +133,27 @@ export function AdminSettingsPage() {
         lateDeductionFraction: data.lateDeductionFraction,
         lateAbsenceEvery: data.lateAbsenceEvery,
       });
-      setHolidays(
-        sortHolidays(
-          data.publicHolidays.map((h) => {
-          const raw = (h.country as Country) ?? "other";
-          let country: "us" | "pk";
-          if (raw === "us" || raw === "pk") {
-            country = raw;
-          } else {
-            country = /eid|muharram|ashura|ramadan|iqbal|jinnah|pakistan|kashmir/i.test(
-              h.name,
-            )
-              ? "pk"
-              : "us";
-          }
-          return {
-            date: h.date as unknown as string,
-            name: h.name,
-            country,
-          };
-            }),
-        ),
-      );
       setAttendanceMode(data.attendancePolicyFileUrl ? "file" : "text");
       setCompanyMode(data.companyPolicyFileUrl ? "file" : "text");
     }
   }, [data]);
+
+  const holidays = useMemo(
+    () =>
+      data
+        ? sortHolidays(
+          data.publicHolidays.map((h) => ({
+            date: h.date as unknown as string,
+            name: h.name,
+            country: normalizeHolidayCountry(
+              h.country as Country | undefined,
+              h.name,
+            ),
+          })),
+        )
+        : [],
+    [data],
+  );
 
   const dailyHours = data?.dailyHours ?? 0;
   const weeklyHours = data?.weeklyHours ?? 0;
@@ -179,44 +169,28 @@ export function AdminSettingsPage() {
   };
 
   const filteredHolidays = useMemo(() => {
-    return filterHolidays(sortHolidays(holidays), holidayFilter);
-  }, [holidays, holidayFilter]);
+    return filterHolidays(
+      filterHolidaysByYear(sortHolidays(holidays), currentHolidayYear),
+      holidayFilter,
+    );
+  }, [currentHolidayYear, holidays, holidayFilter]);
 
   const counts = useMemo(
     () => ({
-      all: holidays.length,
-      us: holidays.filter((h) => h.country === "us").length,
-      pk: holidays.filter((h) => h.country === "pk").length,
+      all: filterHolidaysByYear(holidays, currentHolidayYear).length,
+      us: filterHolidaysByYear(holidays, currentHolidayYear).filter(
+        (h) => h.country === "us",
+      ).length,
+      pk: filterHolidaysByYear(holidays, currentHolidayYear).filter(
+        (h) => h.country === "pk",
+      ).length,
     }),
-    [holidays],
+    [currentHolidayYear, holidays],
   );
   const highlightedHoliday = useMemo(
     () => getHighlightedHoliday(filteredHolidays),
     [filteredHolidays],
   );
-
-  const addHoliday = () => {
-    if (!newHolidayDate || !newHolidayName.trim()) {
-      toast.error("Provide both a date and a name");
-      return;
-    }
-    setHolidays((h) =>
-      sortHolidays([
-        ...h,
-        {
-          date: newHolidayDate,
-          name: newHolidayName.trim(),
-          country: newHolidayCountry,
-        },
-      ]),
-    );
-    setNewHolidayDate("");
-    setNewHolidayName("");
-  };
-
-  const removeHoliday = (date: string, name: string) => {
-    setHolidays((h) => h.filter((x) => !(x.date === date && x.name === name)));
-  };
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -233,7 +207,6 @@ export function AdminSettingsPage() {
         companyMode === "file" ? form.companyPolicyFileUrl : "",
       companyPolicyFileName:
         companyMode === "file" ? form.companyPolicyFileName : "",
-      publicHolidays: holidays,
     };
     update.mutate(
       { data: payload },
@@ -405,11 +378,10 @@ export function AdminSettingsPage() {
                     type="button"
                     key={d.value}
                     onClick={() => toggleWeeklyOff(d.value)}
-                    className={`rounded-md border px-3 py-1.5 text-xs transition ${
-                      active
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card text-foreground hover:bg-muted"
-                    }`}
+                    className={`rounded-md border px-3 py-1.5 text-xs transition ${active
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-foreground hover:bg-muted"
+                      }`}
                   >
                     {d.label}
                   </button>
@@ -598,18 +570,6 @@ export function AdminSettingsPage() {
 
         {/* Late penalty */}
         <Section title="Late → absence policy">
-          <p className="mb-3 text-xs text-muted-foreground">
-            Converts repeated lates into absence days on the payslip.
-            HR/admin can still override or forgive on each payslip, and on
-            each employee's Salary tab.
-            <br />
-            Formula:{" "}
-            <code>
-              floor((lateCount − grace) ÷ everyN) = absence days
-            </code>
-            . Default: grace 2, every 3 → 5 lates becomes 1 absence; 8
-            lates becomes 2 absences.
-          </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Lates forgiven per month (grace)">
               <Input
@@ -690,7 +650,7 @@ export function AdminSettingsPage() {
         </Section>
 
         {/* Public holidays */}
-        <Section title="Public holidays">
+        <Section title={`Public holidays (${currentHolidayYear})`}>
           <div className="space-y-3">
             <div className="inline-flex rounded-md border border-border bg-muted p-0.5 text-xs">
               <FilterTab
@@ -709,30 +669,9 @@ export function AdminSettingsPage() {
                 label={`Pakistan (${counts.pk})`}
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-[180px_1fr_140px_auto]">
-              <DateField
-                value={newHolidayDate}
-                onChange={setNewHolidayDate}
-              />
-              <Input
-                placeholder="Holiday name"
-                value={newHolidayName}
-                onChange={(e) => setNewHolidayName(e.target.value)}
-              />
-              <select
-                value={newHolidayCountry}
-                onChange={(e) =>
-                  setNewHolidayCountry(e.target.value as "us" | "pk")
-                }
-                className="h-9 rounded-md border border-input bg-card px-2 text-sm"
-              >
-                <option value="us">US</option>
-                <option value="pk">Pakistan</option>
-              </select>
-              <Button type="button" onClick={addHoliday} className="gap-2">
-                <Plus className="h-4 w-4" /> Add
-              </Button>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Holidays are generated automatically year-wise from the built-in holiday rules. They are shown here for reference and are not stored in the database.
+            </p>
 
             {filteredHolidays.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -742,7 +681,6 @@ export function AdminSettingsPage() {
               <HolidayBoard
                 items={filteredHolidays}
                 highlighted={highlightedHoliday}
-                onRemove={removeHoliday}
               />
             )}
           </div>
@@ -778,11 +716,10 @@ function FilterTab({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded px-2.5 py-1 text-xs transition ${
-        active
-          ? "bg-card text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
-      }`}
+      className={`rounded px-2.5 py-1 text-xs transition ${active
+        ? "bg-card text-foreground shadow-sm"
+        : "text-muted-foreground hover:text-foreground"
+        }`}
     >
       {label}
     </button>
@@ -810,11 +747,9 @@ function CountryBadge({ country }: { country: Country }) {
 function HolidayBoard({
   items,
   highlighted,
-  onRemove,
 }: {
   items: { date: string; name: string; country: Country }[];
   highlighted?: { date: string; name: string; country: Country };
-  onRemove: (date: string, name: string) => void;
 }) {
   const grouped = items.reduce<Record<string, typeof items>>((acc, item) => {
     const key = getMonthLabel(item.date);
@@ -851,7 +786,7 @@ function HolidayBoard({
             {monthItems.map((h) => (
               <li
                 key={`${h.date}-${h.name}`}
-                className="flex items-start justify-between gap-3 px-4 py-3 text-sm"
+                className="flex items-start gap-3 px-4 py-3 text-sm"
               >
                 <div className="flex items-center gap-3">
                   <CountryBadge country={h.country} />
@@ -859,15 +794,6 @@ function HolidayBoard({
                     {formatDateCalendar(h.date)} - {h.name}
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-rose-600"
-                  onClick={() => onRemove(h.date, h.name)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
               </li>
             ))}
           </ul>
@@ -889,22 +815,20 @@ function PolicyModeToggle({
       <button
         type="button"
         onClick={() => onChange("text")}
-        className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 ${
-          mode === "text"
-            ? "bg-card text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
+        className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 ${mode === "text"
+          ? "bg-card text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
+          }`}
       >
         <Type className="h-3.5 w-3.5" /> Write notes
       </button>
       <button
         type="button"
         onClick={() => onChange("file")}
-        className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 ${
-          mode === "file"
-            ? "bg-card text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
+        className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 ${mode === "file"
+          ? "bg-card text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
+          }`}
       >
         <Paperclip className="h-3.5 w-3.5" /> Upload file
       </button>

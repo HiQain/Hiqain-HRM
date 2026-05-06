@@ -70,6 +70,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PasswordField } from "@/components/PasswordField";
+import { createEmployeeCsvTemplateHref } from "@/lib/onboarding";
 
 function computeProRatedQuota(quota: number, joiningDate: string, enabled?: boolean) {
   if (!enabled || !joiningDate) return quota;
@@ -79,6 +80,23 @@ function computeProRatedQuota(quota: number, joiningDate: string, enabled?: bool
   if (joining.getFullYear() !== today.getFullYear()) return quota;
   const monthsRemaining = 12 - joining.getMonth();
   return Math.max(0, Math.round((quota * monthsRemaining) / 12));
+}
+
+const DEFAULT_EMPLOYEE_PASSWORD = "password";
+const PRIMARY_PAYROLL_BANK = "Bank Al Habib";
+
+function splitTotalSalary(totalSalary: number) {
+  const safeTotal = Math.max(0, totalSalary);
+  const basicSalary = Math.round(safeTotal / 2);
+  const allowances = safeTotal - basicSalary;
+  return { basicSalary, allowances };
+}
+
+function splitAllowanceBreakdown(allowances: number) {
+  const safeAllowances = Math.max(0, allowances);
+  const homeRent = Math.round(safeAllowances / 2);
+  const utilityBills = safeAllowances - homeRent;
+  return { homeRent, utilityBills };
 }
 
 export function EmployeesPage() {
@@ -351,10 +369,13 @@ function NewEmployeeSheet({
   const qc = useQueryClient();
   const create = useCreateEmployee();
   const defaultForm = useMemo(
-    () => ({
+    () => {
+      const defaultTotalSalary = 100000;
+      const { basicSalary, allowances } = splitTotalSalary(defaultTotalSalary);
+      return {
       name: "",
       email: "",
-      password: "password",
+      password: DEFAULT_EMPLOYEE_PASSWORD,
       role: "employee" as "admin" | "hr" | "employee",
       phone: "",
       position: "",
@@ -365,8 +386,9 @@ function NewEmployeeSheet({
       officeStartTime: settings?.defaultOfficeStartTime ?? "09:00",
       officeEndTime: settings?.defaultOfficeEndTime ?? "18:00",
       gracePeriodMinutes: settings?.defaultGracePeriodMinutes ?? 15,
-      basicSalary: 100000,
-      allowances: 0,
+      totalSalary: defaultTotalSalary,
+      basicSalary,
+      allowances,
       casualLeaveQuota: computeProRatedQuota(
         settings?.defaultCasualLeaveQuota ?? 6,
         new Date().toISOString().slice(0, 10),
@@ -383,23 +405,43 @@ function NewEmployeeSheet({
         settings?.proRatedQuotas,
       ),
       dateOfBirth: "",
+      employeeCode: "",
+      personalEmail: "",
       lastQualification: "",
       address: "",
       cnic: "",
+      emergencyContactName: "",
+      emergencyContactNumber: "",
       emergencyContact: "",
       previousCompany: "",
       lastPay: "",
-      benefits: "",
       notes: "",
-      immediateFamily: "",
       cnicDocumentUrl: "",
       cnicDocumentName: "",
-      bankAccountTitle: "",
-      bankAccountNumber: "",
-      bankName: "",
-      bankIban: "",
-      bankBranchCode: "",
-    }),
+      cnicFrontDocumentUrl: "",
+      cnicFrontDocumentName: "",
+      cnicBackDocumentUrl: "",
+      cnicBackDocumentName: "",
+      qualificationDocumentUrl: "",
+      qualificationDocumentName: "",
+      lastPayslipOneUrl: "",
+      lastPayslipOneName: "",
+      lastPayslipTwoUrl: "",
+      lastPayslipTwoName: "",
+      lastPayslipThreeUrl: "",
+      lastPayslipThreeName: "",
+      primaryBankAccountTitle: "",
+      primaryBankAccountNumber: "",
+      primaryBankName: PRIMARY_PAYROLL_BANK,
+      primaryBankIban: "",
+      primaryBankBranchCode: "",
+      secondaryBankAccountTitle: "",
+      secondaryBankAccountNumber: "",
+      secondaryBankName: "",
+      secondaryBankIban: "",
+      secondaryBankBranchCode: "",
+    };
+    },
     [settings],
   );
   const [form, setForm] = useState(defaultForm);
@@ -415,6 +457,10 @@ function NewEmployeeSheet({
     [form.joiningDate],
   );
   const pfPercent = Number(settings?.defaultProvidentFundPercent ?? 0);
+  const allowanceBreakdown = useMemo(
+    () => splitAllowanceBreakdown(Number(form.allowances) || 0),
+    [form.allowances],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -454,6 +500,7 @@ function NewEmployeeSheet({
           email: form.email.trim(),
           password: form.password,
           role: form.role,
+          personalEmail: form.personalEmail.trim() || undefined,
           phone: form.phone || undefined,
           position: form.position || undefined,
           department: form.department || undefined,
@@ -471,22 +518,47 @@ function NewEmployeeSheet({
           dateOfBirth: form.dateOfBirth
             ? (form.dateOfBirth as unknown as string)
             : undefined,
+          employeeCode: form.employeeCode || undefined,
           lastQualification: form.lastQualification || undefined,
           address: form.address || undefined,
           cnic: form.cnic || undefined,
-          emergencyContact: form.emergencyContact || undefined,
+          emergencyContactName: form.emergencyContactName || undefined,
+          emergencyContactNumber: form.emergencyContactNumber || undefined,
+          emergencyContact:
+            form.emergencyContactNumber || form.emergencyContact || undefined,
           previousCompany: form.previousCompany || undefined,
           lastPay: form.lastPay ? Number(form.lastPay) : undefined,
-          benefits: form.benefits || undefined,
           notes: form.notes || undefined,
-          immediateFamily: form.immediateFamily || undefined,
           cnicDocumentUrl: form.cnicDocumentUrl || undefined,
           cnicDocumentName: form.cnicDocumentName || undefined,
-          bankAccountTitle: form.bankAccountTitle || undefined,
-          bankAccountNumber: form.bankAccountNumber || undefined,
-          bankName: form.bankName || undefined,
-          bankIban: form.bankIban || undefined,
-          bankBranchCode: form.bankBranchCode || undefined,
+          cnicFrontDocumentUrl: form.cnicFrontDocumentUrl || undefined,
+          cnicFrontDocumentName: form.cnicFrontDocumentName || undefined,
+          cnicBackDocumentUrl: form.cnicBackDocumentUrl || undefined,
+          cnicBackDocumentName: form.cnicBackDocumentName || undefined,
+          qualificationDocumentUrl:
+            form.qualificationDocumentUrl || undefined,
+          qualificationDocumentName:
+            form.qualificationDocumentName || undefined,
+          lastPayslipOneUrl: form.lastPayslipOneUrl || undefined,
+          lastPayslipOneName: form.lastPayslipOneName || undefined,
+          lastPayslipTwoUrl: form.lastPayslipTwoUrl || undefined,
+          lastPayslipTwoName: form.lastPayslipTwoName || undefined,
+          lastPayslipThreeUrl: form.lastPayslipThreeUrl || undefined,
+          lastPayslipThreeName: form.lastPayslipThreeName || undefined,
+          primaryBankAccountTitle: form.primaryBankAccountTitle || undefined,
+          primaryBankAccountNumber:
+            form.primaryBankAccountNumber || undefined,
+          primaryBankName: PRIMARY_PAYROLL_BANK,
+          primaryBankIban: form.primaryBankIban || undefined,
+          primaryBankBranchCode: form.primaryBankBranchCode || undefined,
+          secondaryBankAccountTitle:
+            form.secondaryBankAccountTitle || undefined,
+          secondaryBankAccountNumber:
+            form.secondaryBankAccountNumber || undefined,
+          secondaryBankName: form.secondaryBankName || undefined,
+          secondaryBankIban: form.secondaryBankIban || undefined,
+          secondaryBankBranchCode:
+            form.secondaryBankBranchCode || undefined,
         } as any,
       },
       {
@@ -509,10 +581,10 @@ function NewEmployeeSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-5xl">
         <SheetHeader>
-          <SheetTitle>Add a new employee</SheetTitle>
+          <SheetTitle>Add employee</SheetTitle>
           <SheetDescription>
-            They'll get a temporary password and be asked to set a new one on
-            first sign-in.
+            A temporary password will be assigned and the employee will be
+            prompted to change it at first sign-in.
           </SheetDescription>
         </SheetHeader>
         <form onSubmit={onSubmit} className="mt-6 space-y-6 px-1">
@@ -536,7 +608,8 @@ function NewEmployeeSheet({
                 </div>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Defaults current month aur joining date ke hisaab se calculate ho rahe hain.
+                Defaults are calculated using the selected joining date and the
+                current leave policy.
               </p>
             </div>
             <div className="rounded-xl border border-border bg-muted/20 p-4">
@@ -547,7 +620,7 @@ function NewEmployeeSheet({
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Basic split</span>
                   <span className="font-semibold">
-                    {settings?.basicSalaryPercent ?? 50}% basic / {settings?.allowancePercent ?? 50}% allowance
+                    50% basic / 25% home rent / 25% utility bills
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
@@ -560,10 +633,18 @@ function NewEmployeeSheet({
             </div>
           </div>
 
-          <div className="grid items-start gap-6 xl:grid-cols-2">
           <div className="space-y-6">
-          <Section title="Account details">
+          <Section title="User details">
             <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Employee code">
+                <Input
+                  value={form.employeeCode ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, employeeCode: e.target.value })
+                  }
+                  placeholder="e.g. EMP-001"
+                />
+              </Field>
               <Field label="Full name" required>
                 <Input
                   required
@@ -608,11 +689,21 @@ function NewEmployeeSheet({
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Phone">
+              <Field label="Phone number">
                 <Input
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="+923XXXXXXXXX"
+                />
+              </Field>
+              <Field label="Personal email">
+                <Input
+                  type="email"
+                  value={form.personalEmail}
+                  onChange={(e) =>
+                    setForm({ ...form, personalEmail: e.target.value })
+                  }
+                  placeholder="name@example.com"
                 />
               </Field>
               <Field label="Date of birth">
@@ -621,6 +712,132 @@ function NewEmployeeSheet({
                   onChange={(v) => setForm({ ...form, dateOfBirth: v })}
                 />
               </Field>
+            </div>
+          </Section>
+
+          <Section title="Employment details">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Position">
+                <Input
+                  value={form.position}
+                  onChange={(e) =>
+                    setForm({ ...form, position: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Department">
+                <Input
+                  list="department-options"
+                  value={form.department}
+                  onChange={(e) =>
+                    setForm({ ...form, department: e.target.value })
+                  }
+                  placeholder="Select or type a department"
+                />
+                {departments.length > 0 && (
+                  <datalist id="department-options">
+                    {departments.map((department) => (
+                      <option key={department} value={department} />
+                    ))}
+                  </datalist>
+                )}
+              </Field>
+              <Field label="Work location" required>
+                <Select
+                  value={form.positionType}
+                  onValueChange={(v) =>
+                    setForm({ ...form, positionType: v as "onsite" | "remote" })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="onsite">Onsite</SelectItem>
+                    <SelectItem value="remote">Remote</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Joining date" required>
+                <DateField
+                  required
+                  value={form.joiningDate}
+                  onChange={(v) => setForm({ ...form, joiningDate: v })}
+                />
+              </Field>
+              <Field label="Probation period (months)" required>
+                <Input
+                  required
+                  type="number"
+                  min={0}
+                  value={form.probationMonths}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      probationMonths: Number(e.target.value),
+                    })
+                  }
+                />
+              </Field>
+              <Field label="CNIC">
+                <Input
+                  value={form.cnic}
+                  onChange={(e) => setForm({ ...form, cnic: e.target.value })}
+                  placeholder="XXXXX-XXXXXXX-X"
+                />
+              </Field>
+              <div className="sm:col-span-2 grid gap-3 sm:grid-cols-2">
+                <Field label="Front CNIC">
+                  <SimpleUploadField
+                    fileUrl={form.cnicFrontDocumentUrl}
+                    fileName={form.cnicFrontDocumentName}
+                    onUploaded={(file) =>
+                      setForm((current) => ({
+                        ...current,
+                        cnicFrontDocumentUrl: file.url,
+                        cnicFrontDocumentName: file.name,
+                      }))
+                    }
+                    onClear={() =>
+                      setForm((current) => ({
+                        ...current,
+                        cnicFrontDocumentUrl: "",
+                        cnicFrontDocumentName: "",
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Back CNIC">
+                  <SimpleUploadField
+                    fileUrl={form.cnicBackDocumentUrl}
+                    fileName={form.cnicBackDocumentName}
+                    onUploaded={(file) =>
+                      setForm((current) => ({
+                        ...current,
+                        cnicBackDocumentUrl: file.url,
+                        cnicBackDocumentName: file.name,
+                      }))
+                    }
+                    onClear={() =>
+                      setForm((current) => ({
+                        ...current,
+                        cnicBackDocumentUrl: "",
+                        cnicBackDocumentName: "",
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Address">
+                  <Input
+                    value={form.address}
+                    onChange={(e) =>
+                      setForm({ ...form, address: e.target.value })
+                    }
+                  />
+                </Field>
+              </div>
             </div>
           </Section>
 
@@ -663,262 +880,53 @@ function NewEmployeeSheet({
             </div>
           </Section>
 
-          <Section title="Background">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Emergency contact">
-                <Input
-                  value={form.emergencyContact}
-                  onChange={(e) =>
-                    setForm({ ...form, emergencyContact: e.target.value })
-                  }
-                  placeholder="+923XXXXXXXXX"
-                />
-              </Field>
-              <Field label="Previous company">
-                <Input
-                  value={form.previousCompany}
-                  onChange={(e) =>
-                    setForm({ ...form, previousCompany: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Last pay (PKR)">
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.lastPay}
-                  onChange={(e) =>
-                    setForm({ ...form, lastPay: e.target.value })
-                  }
-                />
-              </Field>
-              <div className="sm:col-span-2">
-                <Field label="Immediate family">
-                  <Input
-                    value={form.immediateFamily}
-                    onChange={(e) =>
-                      setForm({ ...form, immediateFamily: e.target.value })
-                    }
-                    placeholder="e.g. Spouse, 2 children"
-                  />
-                </Field>
-              </div>
-              <div className="sm:col-span-2">
-                <Field label="Benefits">
-                  <Input
-                    value={form.benefits}
-                    onChange={(e) =>
-                      setForm({ ...form, benefits: e.target.value })
-                    }
-                    placeholder="e.g. Health insurance, fuel allowance"
-                  />
-                </Field>
-              </div>
-              <div className="sm:col-span-2">
-                <Field label="Notes">
-                  <Input
-                    value={form.notes}
-                    onChange={(e) =>
-                      setForm({ ...form, notes: e.target.value })
-                    }
-                    placeholder="Optional internal note"
-                  />
-                </Field>
-              </div>
-            </div>
-          </Section>
-
-          <Section title="Bank details">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Account title">
-                <Input
-                  value={form.bankAccountTitle}
-                  onChange={(e) =>
-                    setForm({ ...form, bankAccountTitle: e.target.value })
-                  }
-                  placeholder="Muhammad Ali"
-                />
-              </Field>
-              <Field label="Account number">
-                <Input
-                  value={form.bankAccountNumber}
-                  onChange={(e) =>
-                    setForm({ ...form, bankAccountNumber: e.target.value })
-                  }
-                  placeholder="0035123456789"
-                />
-              </Field>
-              <Field label="Bank name">
-                <Input
-                  value={form.bankName}
-                  onChange={(e) =>
-                    setForm({ ...form, bankName: e.target.value })
-                  }
-                  placeholder="Meezan Bank"
-                />
-              </Field>
-              <Field label="IBAN">
-                <Input
-                  value={form.bankIban}
-                  onChange={(e) =>
-                    setForm({ ...form, bankIban: e.target.value })
-                  }
-                  placeholder="PK36MEZN0001234567890123"
-                />
-              </Field>
-              <Field label="Branch code">
-                <Input
-                  value={form.bankBranchCode}
-                  onChange={(e) =>
-                    setForm({ ...form, bankBranchCode: e.target.value })
-                  }
-                  placeholder="0123"
-                />
-              </Field>
-            </div>
-          </Section>
-          </div>
-
-          <div className="space-y-6">
-          <Section title="Personal information">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Position">
-                <Input
-                  value={form.position}
-                  onChange={(e) =>
-                    setForm({ ...form, position: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Department">
-                <Input
-                  list="department-options"
-                  value={form.department}
-                  onChange={(e) =>
-                    setForm({ ...form, department: e.target.value })
-                  }
-                  placeholder="Select or type department"
-                />
-                {departments.length > 0 && (
-                  <datalist id="department-options">
-                    {departments.map((department) => (
-                      <option key={department} value={department} />
-                    ))}
-                  </datalist>
-                )}
-              </Field>
-              <Field label="CNIC">
-                <Input
-                  value={form.cnic}
-                  onChange={(e) => setForm({ ...form, cnic: e.target.value })}
-                  placeholder="XXXXX-XXXXXXX-X"
-                />
-              </Field>
-              <div className="sm:col-span-2">
-                <Field label="CNIC document">
-                  <SimpleUploadField
-                    fileUrl={form.cnicDocumentUrl}
-                    fileName={form.cnicDocumentName}
-                    onUploaded={(file) =>
-                      setForm((current) => ({
-                        ...current,
-                        cnicDocumentUrl: file.url,
-                        cnicDocumentName: file.name,
-                      }))
-                    }
-                    onClear={() =>
-                      setForm((current) => ({
-                        ...current,
-                        cnicDocumentUrl: "",
-                        cnicDocumentName: "",
-                      }))
-                    }
-                  />
-                </Field>
-              </div>
-              <Field label="Last qualification">
-                <Input
-                  value={form.lastQualification}
-                  onChange={(e) =>
-                    setForm({ ...form, lastQualification: e.target.value })
-                  }
-                  placeholder="e.g. BS Computer Science"
-                />
-              </Field>
-              <Field label="Work location" required>
-                <Select
-                  value={form.positionType}
-                  onValueChange={(v) =>
-                    setForm({ ...form, positionType: v as "onsite" | "remote" })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="onsite">Onsite</SelectItem>
-                    <SelectItem value="remote">Remote</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Joining date" required>
-                <DateField
-                  required
-                  value={form.joiningDate}
-                  onChange={(v) => setForm({ ...form, joiningDate: v })}
-                />
-              </Field>
-              <Field label="Probation (months)" required>
-                <Input
-                  required
-                  type="number"
-                  min={0}
-                  value={form.probationMonths}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      probationMonths: Number(e.target.value),
-                    })
-                  }
-                />
-              </Field>
-              <div className="sm:col-span-2">
-                <Field label="Address">
-                  <Input
-                    value={form.address}
-                    onChange={(e) =>
-                      setForm({ ...form, address: e.target.value })
-                    }
-                  />
-                </Field>
-              </div>
-            </div>
-          </Section>
-
           <Section title="Compensation">
             <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Total salary (PKR)" required>
+                <Input
+                  required
+                  type="number"
+                  min={0}
+                  value={form.totalSalary}
+                  onChange={(e) => {
+                    const totalSalary = Number(e.target.value);
+                    const split = splitTotalSalary(totalSalary);
+                    setForm({
+                      ...form,
+                      totalSalary,
+                      basicSalary: split.basicSalary,
+                      allowances: split.allowances,
+                    });
+                  }}
+                />
+              </Field>
               <Field label="Basic salary (PKR)" required>
                 <Input
                   required
                   type="number"
-                  min={0}
                   value={form.basicSalary}
-                  onChange={(e) =>
-                    setForm({ ...form, basicSalary: Number(e.target.value) })
-                  }
+                  readOnly
                 />
               </Field>
-              <Field label="Allowances (PKR)">
+              <Field label="Home rent (PKR)">
                 <Input
                   type="number"
-                  min={0}
-                  value={form.allowances}
-                  onChange={(e) =>
-                    setForm({ ...form, allowances: Number(e.target.value) })
-                  }
+                  value={allowanceBreakdown.homeRent}
+                  readOnly
+                />
+              </Field>
+              <Field label="Utility bills (PKR)">
+                <Input
+                  type="number"
+                  value={allowanceBreakdown.utilityBills}
+                  readOnly
                 />
               </Field>
             </div>
+            <p className="-mt-1 text-sm text-muted-foreground">
+              The total salary is split automatically into 50% basic salary and
+              25% home rent plus 25% utility bills.
+            </p>
             <div className="grid items-start gap-3 md:grid-cols-3">
               <Field label="Casual leave" required>
                 <Input
@@ -964,7 +972,270 @@ function NewEmployeeSheet({
               </Field>
             </div>
           </Section>
-          </div>
+
+          <Section
+            title="Primary bank details"
+            description="This payroll account is always maintained with Bank Al Habib."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Account title">
+                <Input
+                  value={form.primaryBankAccountTitle}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      primaryBankAccountTitle: e.target.value,
+                    })
+                  }
+                  placeholder="Muhammad Ali"
+                />
+              </Field>
+              <Field label="Account number">
+                <Input
+                  value={form.primaryBankAccountNumber}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      primaryBankAccountNumber: e.target.value,
+                    })
+                  }
+                  placeholder="0035123456789"
+                />
+              </Field>
+              <Field label="Bank name">
+                <Input
+                  value={PRIMARY_PAYROLL_BANK}
+                  readOnly
+                />
+              </Field>
+              <Field label="IBAN">
+                <Input
+                  value={form.primaryBankIban}
+                  onChange={(e) =>
+                    setForm({ ...form, primaryBankIban: e.target.value })
+                  }
+                  placeholder="PK12BAGB0001234567890123"
+                />
+              </Field>
+              <Field label="Branch code">
+                <Input
+                  value={form.primaryBankBranchCode}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      primaryBankBranchCode: e.target.value,
+                    })
+                  }
+                  placeholder="0123"
+                />
+              </Field>
+            </div>
+          </Section>
+
+          <Section
+            title="Secondary bank details"
+            description="This account can belong to any bank and can be used before probation completion when needed."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Account title">
+                <Input
+                  value={form.secondaryBankAccountTitle}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      secondaryBankAccountTitle: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Account number">
+                <Input
+                  value={form.secondaryBankAccountNumber}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      secondaryBankAccountNumber: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Bank name">
+                <Input
+                  value={form.secondaryBankName}
+                  onChange={(e) =>
+                    setForm({ ...form, secondaryBankName: e.target.value })
+                  }
+                  placeholder="Meezan Bank"
+                />
+                </Field>
+              <Field label="IBAN">
+                <Input
+                  value={form.secondaryBankIban}
+                  onChange={(e) =>
+                    setForm({ ...form, secondaryBankIban: e.target.value })
+                  }
+                  placeholder="PK36MEZN0001234567890123"
+                />
+              </Field>
+              <Field label="Branch code">
+                <Input
+                  value={form.secondaryBankBranchCode}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      secondaryBankBranchCode: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+            </div>
+          </Section>
+
+          <Section title="Background">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Emergency contact name">
+                <Input
+                  value={form.emergencyContactName}
+                  onChange={(e) =>
+                    setForm({ ...form, emergencyContactName: e.target.value })
+                  }
+                  placeholder="Muhammad Ali"
+                />
+              </Field>
+              <Field label="Emergency contact number">
+                <Input
+                  value={form.emergencyContactNumber}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      emergencyContactNumber: e.target.value,
+                    })
+                  }
+                  placeholder="+923XXXXXXXXX"
+                />
+              </Field>
+              <Field label="Last qualification">
+                <Input
+                  value={form.lastQualification}
+                  onChange={(e) =>
+                    setForm({ ...form, lastQualification: e.target.value })
+                  }
+                  placeholder="e.g. BS Computer Science"
+                />
+              </Field>
+              <Field label="Upload qualification">
+                <SimpleUploadField
+                  fileUrl={form.qualificationDocumentUrl}
+                  fileName={form.qualificationDocumentName}
+                  onUploaded={(file) =>
+                    setForm((current) => ({
+                      ...current,
+                      qualificationDocumentUrl: file.url,
+                      qualificationDocumentName: file.name,
+                    }))
+                  }
+                  onClear={() =>
+                    setForm((current) => ({
+                      ...current,
+                      qualificationDocumentUrl: "",
+                      qualificationDocumentName: "",
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="Previous company">
+                <Input
+                  value={form.previousCompany}
+                  onChange={(e) =>
+                    setForm({ ...form, previousCompany: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Last pay (PKR)">
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.lastPay}
+                  onChange={(e) =>
+                    setForm({ ...form, lastPay: e.target.value })
+                  }
+                />
+              </Field>
+              <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3">
+                <Field label="Last 3 months payslip 1">
+                  <SimpleUploadField
+                    fileUrl={form.lastPayslipOneUrl}
+                    fileName={form.lastPayslipOneName}
+                    onUploaded={(file) =>
+                      setForm((current) => ({
+                        ...current,
+                        lastPayslipOneUrl: file.url,
+                        lastPayslipOneName: file.name,
+                      }))
+                    }
+                    onClear={() =>
+                      setForm((current) => ({
+                        ...current,
+                        lastPayslipOneUrl: "",
+                        lastPayslipOneName: "",
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Last 3 months payslip 2">
+                  <SimpleUploadField
+                    fileUrl={form.lastPayslipTwoUrl}
+                    fileName={form.lastPayslipTwoName}
+                    onUploaded={(file) =>
+                      setForm((current) => ({
+                        ...current,
+                        lastPayslipTwoUrl: file.url,
+                        lastPayslipTwoName: file.name,
+                      }))
+                    }
+                    onClear={() =>
+                      setForm((current) => ({
+                        ...current,
+                        lastPayslipTwoUrl: "",
+                        lastPayslipTwoName: "",
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Last 3 months payslip 3">
+                  <SimpleUploadField
+                    fileUrl={form.lastPayslipThreeUrl}
+                    fileName={form.lastPayslipThreeName}
+                    onUploaded={(file) =>
+                      setForm((current) => ({
+                        ...current,
+                        lastPayslipThreeUrl: file.url,
+                        lastPayslipThreeName: file.name,
+                      }))
+                    }
+                    onClear={() =>
+                      setForm((current) => ({
+                        ...current,
+                        lastPayslipThreeUrl: "",
+                        lastPayslipThreeName: "",
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Notes">
+                  <Input
+                    value={form.notes}
+                    onChange={(e) =>
+                      setForm({ ...form, notes: e.target.value })
+                    }
+                    placeholder="Optional internal note"
+                  />
+                </Field>
+              </div>
+            </div>
+          </Section>
           </div>
 
           <SheetFooter className="gap-2">
@@ -1067,9 +1338,11 @@ function BulkUploadSheet({
     | {
         created: number;
         errors: { row: number; email?: string | null; message: string }[];
+        generatedPasswords: { row: number; email: string; password: string }[];
       }
     | null
   >(null);
+  const templateHref = useMemo(() => createEmployeeCsvTemplateHref(), []);
 
   const reset = () => {
     setRows([]);
@@ -1102,10 +1375,22 @@ function BulkUploadSheet({
 
   const onUpload = () => {
     if (rows.length === 0) return;
-    const members = rows.map((r) => ({
+    const generatedPasswords: { row: number; email: string; password: string }[] = [];
+    const members = rows.map((r, index) => {
+      const email = r["email"] ?? "";
+      const password = str(r["password"]) ?? DEFAULT_EMPLOYEE_PASSWORD;
+      if (!str(r["password"]) && email) {
+        generatedPasswords.push({
+          row: index + 2,
+          email,
+          password,
+        });
+      }
+
+      return {
       name: r["name"] ?? "",
-      email: r["email"] ?? "",
-      password: str(r["password"]) ?? "welcome123",
+      email,
+      password,
       role: ((): "admin" | "hr" | "employee" => {
         const v = str(r["role"])?.toLowerCase();
         if (v === "admin") return "admin";
@@ -1139,23 +1424,28 @@ function BulkUploadSheet({
         ) ?? (settings?.defaultGracePeriodMinutes ?? 15),
       basicSalary: num(r["basicSalary"], 0) ?? 0,
       allowances: num(r["allowances"], 0) ?? 0,
-      casualLeaveQuota:
-        num(
-          r["casualLeaveQuota"],
-          settings?.defaultCasualLeaveQuota ?? 6,
-        ) ?? (settings?.defaultCasualLeaveQuota ?? 6),
-      sickLeaveQuota:
+      casualLeaveQuota: computeProRatedQuota(
+        num(r["casualLeaveQuota"], settings?.defaultCasualLeaveQuota ?? 6) ??
+          (settings?.defaultCasualLeaveQuota ?? 6),
+        (str(r["joiningDate"]) ?? new Date().toISOString().slice(0, 10)),
+        settings?.proRatedQuotas,
+      ),
+      sickLeaveQuota: computeProRatedQuota(
         num(r["sickLeaveQuota"], settings?.defaultSickLeaveQuota ?? 6) ??
-        (settings?.defaultSickLeaveQuota ?? 6),
-      annualLeaveQuota:
-        num(
-          r["annualLeaveQuota"],
-          settings?.defaultAnnualLeaveQuota ?? 12,
-        ) ?? (settings?.defaultAnnualLeaveQuota ?? 12),
+          (settings?.defaultSickLeaveQuota ?? 6),
+        (str(r["joiningDate"]) ?? new Date().toISOString().slice(0, 10)),
+        settings?.proRatedQuotas,
+      ),
+      annualLeaveQuota: computeProRatedQuota(
+        num(r["annualLeaveQuota"], settings?.defaultAnnualLeaveQuota ?? 12) ??
+          (settings?.defaultAnnualLeaveQuota ?? 12),
+        (str(r["joiningDate"]) ?? new Date().toISOString().slice(0, 10)),
+        settings?.proRatedQuotas,
+      ),
       dateOfBirth: str(r["dateOfBirth"]) as unknown as string | undefined,
       education: str(r["education"]),
       address: str(r["address"]),
-    }));
+    };});
     bulk.mutate(
       { data: { members } },
       {
@@ -1163,6 +1453,7 @@ function BulkUploadSheet({
           setResult({
             created: res.created,
             errors: res.errors,
+            generatedPasswords,
           });
           if (res.created > 0) {
             toast.success(`Imported ${res.created} employee(s)`);
@@ -1209,11 +1500,11 @@ function BulkUploadSheet({
               </div>
               <Button asChild variant="outline" size="sm" className="gap-2">
                 <a
-                  href={`${import.meta.env.BASE_URL}sample-employees.csv`}
+                  href={templateHref}
                   download="sample-employees.csv"
                 >
                   <Download className="h-4 w-4" />
-                  Download sample
+                  Download template
                 </a>
               </Button>
             </div>
@@ -1281,6 +1572,21 @@ function BulkUploadSheet({
                   </ul>
                 </div>
               )}
+              {result.generatedPasswords.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-amber-700">
+                    Generated temporary passwords:
+                  </p>
+                  <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto text-xs text-amber-700">
+                    {result.generatedPasswords.map((item) => (
+                      <li key={`${item.row}-${item.email}`}>
+                        Row {item.row} ({item.email}):{" "}
+                        <span className="font-mono">{item.password}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1308,9 +1614,11 @@ function BulkUploadSheet({
 
 function Section({
   title,
+  description,
   children,
 }: {
   title: string;
+  description?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -1318,6 +1626,9 @@ function Section({
       <p className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {title}
       </p>
+      {description ? (
+        <p className="-mt-2 mb-4 text-sm text-muted-foreground">{description}</p>
+      ) : null}
       <div className="space-y-3">{children}</div>
     </div>
   );
@@ -1355,6 +1666,11 @@ function SimpleUploadField({
   onClear: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const normalizedLabel = fileName || "Document";
+  const lowerAsset = `${fileUrl} ${normalizedLabel}`.toLowerCase();
+  const isImageAsset =
+    /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(lowerAsset) ||
+    lowerAsset.includes("image/");
 
   const onPick = async (file: File) => {
     setUploading(true);
@@ -1378,32 +1694,65 @@ function SimpleUploadField({
   };
 
   return fileUrl ? (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
-      <a
-        href={fileUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="truncate font-medium text-primary hover:underline"
-      >
-        {fileName || "Document"}
-      </a>
-      <div className="flex items-center gap-2">
-        <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs hover:bg-muted">
-          {uploading ? "Uploading..." : "Replace"}
-          <input
-            type="file"
-            className="hidden"
-            disabled={uploading}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void onPick(file);
-              e.target.value = "";
-            }}
+    <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3 text-sm">
+      {isImageAsset ? (
+        <a
+          href={fileUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="block overflow-hidden rounded-lg border border-border bg-card"
+        >
+          <img
+            src={fileUrl}
+            alt={normalizedLabel}
+            className="h-48 w-full object-contain bg-muted/30"
           />
-        </label>
-        <Button type="button" variant="ghost" size="icon" onClick={onClear}>
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        </a>
+      ) : (
+        <a
+          href={fileUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="block truncate rounded-lg border border-border bg-card px-3 py-3 font-medium text-primary hover:underline"
+        >
+          {normalizedLabel}
+        </a>
+      )}
+
+      <div className="space-y-2">
+        <a
+          href={fileUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="block truncate text-sm font-medium text-primary hover:underline"
+        >
+          {normalizedLabel}
+        </a>
+        <div className="flex items-center gap-2">
+          <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">
+            {uploading ? "Uploading..." : "Replace"}
+            <input
+              type="file"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void onPick(file);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-rose-600 hover:text-rose-700"
+            onClick={onClear}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </Button>
+        </div>
       </div>
     </div>
   ) : (

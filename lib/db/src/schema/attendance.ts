@@ -1,44 +1,40 @@
 import {
-  pgTable,
-  serial,
-  integer,
+  boolean,
   date,
+  int,
+  mysqlEnum,
+  mysqlTable,
   timestamp,
   text,
-  boolean,
   uniqueIndex,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/mysql-core";
 import { employeesTable } from "./employees";
 
-export const attendanceTable = pgTable(
+export const attendanceTable = mysqlTable(
   "attendance",
   {
-    id: serial("id").primaryKey(),
-    employeeId: integer("employee_id")
+    id: int("id").autoincrement().primaryKey(),
+    employeeId: int("employee_id")
       .notNull()
       .references(() => employeesTable.id, { onDelete: "cascade" }),
-    date: date("date").notNull(),
-    checkInTime: timestamp("check_in_time", { withTimezone: true }),
-    checkOutTime: timestamp("check_out_time", { withTimezone: true }),
-    workedMinutes: integer("worked_minutes"),
-    status: text("status", {
-      enum: [
-        "present",
-        "late",
-        "absent",
-        "on_leave",
-        "half_day",
-        "remote_work",
-      ],
-    })
+    date: date("date", { mode: "string" }).notNull(),
+    checkInTime: timestamp("check_in_time"),
+    checkOutTime: timestamp("check_out_time"),
+    workedMinutes: int("worked_minutes"),
+    status: mysqlEnum("status", [
+      "present",
+      "late",
+      "absent",
+      "on_leave",
+      "half_day",
+      "remote_work",
+    ])
       .notNull()
       .default("present"),
     isLate: boolean("is_late").notNull().default(false),
     excused: boolean("excused").notNull().default(false),
     notes: text("notes"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
     uniqEmpDate: uniqueIndex("attendance_emp_date_unique").on(
