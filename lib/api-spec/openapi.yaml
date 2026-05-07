@@ -537,6 +537,28 @@ paths:
                 items:
                   $ref: "#/components/schemas/AttendanceRecord"
 
+  /views/monthly:
+    get:
+      operationId: getMonthlyAdminView
+      tags: [reports]
+      summary: Get an admin/HR monthly attendance and salary grid for all employees
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+        - name: year
+          in: query
+          required: true
+          schema: { type: integer, minimum: 2000, maximum: 2100 }
+      responses:
+        "200":
+          description: Monthly attendance and salary view data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyAdminViewResponse"
+
   /remote-work:
     get:
       operationId: listRemoteWorkRequests
@@ -2726,6 +2748,134 @@ components:
         upcomingAnniversaries:
           type: array
           items: { $ref: "#/components/schemas/FeedItem" }
+    MonthlyViewDay:
+      type: object
+      required: [date, dayNumber, dayName, isOffDay]
+      properties:
+        date: { type: string, format: date }
+        dayNumber: { type: integer }
+        dayName: { type: string }
+        isOffDay: { type: boolean }
+    MonthlyAttendanceDayCell:
+      type: object
+      required: [date, status, label, excused, isOffDay]
+      properties:
+        date: { type: string, format: date }
+        status: { type: string }
+        label: { type: string }
+        checkInTime: { type: string, nullable: true, format: date-time }
+        checkOutTime: { type: string, nullable: true, format: date-time }
+        workedMinutes: { type: integer, nullable: true }
+        excused: { type: boolean }
+        notes: { type: string, nullable: true }
+        isOffDay: { type: boolean }
+    MonthlyAttendanceRow:
+      type: object
+      required:
+        - employeeId
+        - doj
+        - employeeName
+        - designation
+        - probationEndDate
+        - employmentStatus
+        - annualLeaves
+        - casualLeaves
+        - sickLeaves
+        - absentDays
+        - lateDays
+        - totalOffDays
+        - dayCells
+      properties:
+        employeeId: { type: integer }
+        doj: { type: string, format: date }
+        employeeName: { type: string }
+        designation: { type: string }
+        probationEndDate: { type: string, format: date }
+        employmentStatus: { type: string, enum: [active, left] }
+        annualLeaves: { type: integer }
+        casualLeaves: { type: integer }
+        sickLeaves: { type: integer }
+        absentDays: { type: integer }
+        lateDays: { type: integer }
+        totalOffDays: { type: integer }
+        dayCells:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthlyAttendanceDayCell"
+    MonthlySalaryRow:
+      type: object
+      required:
+        - employeeId
+        - doj
+        - employeeName
+        - designation
+        - department
+        - payrollStatus
+        - employmentStatus
+        - basicSalary
+        - allowances
+        - grossSalary
+        - totalWorkingDays
+        - presentDays
+        - paidLeaveDays
+        - absentDays
+        - lateCount
+        - latePenaltyDays
+        - bonus
+        - loanDeduction
+        - otherDeductions
+        - payrollTax
+        - netSalary
+      properties:
+        employeeId: { type: integer }
+        doj: { type: string, format: date }
+        employeeName: { type: string }
+        designation: { type: string }
+        department: { type: string }
+        payrollStatus: { type: string, enum: [generated, pending] }
+        employmentStatus: { type: string, enum: [active, left] }
+        basicSalary: { type: number }
+        allowances: { type: number }
+        grossSalary: { type: number }
+        totalWorkingDays: { type: integer }
+        presentDays: { type: integer }
+        paidLeaveDays: { type: integer }
+        absentDays: { type: integer }
+        lateCount: { type: integer }
+        latePenaltyDays: { type: number }
+        bonus: { type: number }
+        loanDeduction: { type: number }
+        otherDeductions: { type: number }
+        payrollTax: { type: number }
+        netSalary: { type: number }
+        generatedAt: { type: string, nullable: true, format: date-time }
+    MonthlyAdminViewResponse:
+      type: object
+      required: [month, year, days, attendance, salary]
+      properties:
+        month: { type: integer }
+        year: { type: integer }
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthlyViewDay"
+        attendance:
+          type: object
+          required: [totalOffDays, rows]
+          properties:
+            totalOffDays: { type: integer }
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/MonthlyAttendanceRow"
+        salary:
+          type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/MonthlySalaryRow"
     NewsPost:
       type: object
       required: [id, authorId, authorName, title, body, createdAt]

@@ -20,6 +20,7 @@ import { AdminPayslipsPage } from "@/pages/admin/PayslipsPage";
 import { AdminSalaryPage } from "@/pages/admin/SalaryPage";
 import { AdminSettingsPage } from "@/pages/admin/SettingsPage";
 import { AdminInventoryPage } from "@/pages/admin/InventoryPage";
+import { AdminMonthlyViewPage } from "@/pages/admin/MonthlyViewPage";
 import { EmployeeDashboard } from "@/pages/employee/EmployeeDashboard";
 import { EmployeeProfilePage } from "@/pages/employee/EmployeeProfilePage";
 import { MyAttendancePage } from "@/pages/employee/MyAttendancePage";
@@ -86,6 +87,7 @@ function AuthGate() {
           <Route path="/admin/requests" component={AdminRequestsPage} />
           <Route path="/admin/payslips" component={AdminPayslipsPage} />
           <Route path="/admin/salary" component={AdminSalaryPage} />
+          <Route path="/admin/view" component={AdminMonthlyViewPage} />
           <Route path="/admin/inventory" component={AdminInventoryPage} />
           <Route path="/admin/feed" component={FeedPage} />
           <Route path="/admin/settings" component={AdminSettingsPage} />

@@ -1082,6 +1082,87 @@ export const GetEmployeeLateRecordsResponse = zod.array(GetEmployeeLateRecordsRe
 
 
 /**
+ * @summary Get an admin/HR monthly attendance and salary grid for all employees
+ */
+export const getMonthlyAdminViewQueryMonthMax = 12;
+
+export const getMonthlyAdminViewQueryYearMin = 2000;
+export const getMonthlyAdminViewQueryYearMax = 2100;
+
+
+
+export const GetMonthlyAdminViewQueryParams = zod.object({
+  "month": zod.coerce.number().min(1).max(getMonthlyAdminViewQueryMonthMax),
+  "year": zod.coerce.number().min(getMonthlyAdminViewQueryYearMin).max(getMonthlyAdminViewQueryYearMax)
+})
+
+export const GetMonthlyAdminViewResponse = zod.object({
+  "month": zod.number(),
+  "year": zod.number(),
+  "days": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "dayNumber": zod.number(),
+  "dayName": zod.string(),
+  "isOffDay": zod.boolean()
+})),
+  "attendance": zod.object({
+  "totalOffDays": zod.number(),
+  "rows": zod.array(zod.object({
+  "employeeId": zod.number(),
+  "doj": zod.coerce.date(),
+  "employeeName": zod.string(),
+  "designation": zod.string(),
+  "probationEndDate": zod.coerce.date(),
+  "employmentStatus": zod.enum(['active', 'left']),
+  "annualLeaves": zod.number(),
+  "casualLeaves": zod.number(),
+  "sickLeaves": zod.number(),
+  "absentDays": zod.number(),
+  "lateDays": zod.number(),
+  "totalOffDays": zod.number(),
+  "dayCells": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "status": zod.string(),
+  "label": zod.string(),
+  "checkInTime": zod.coerce.date().nullish(),
+  "checkOutTime": zod.coerce.date().nullish(),
+  "workedMinutes": zod.number().nullish(),
+  "excused": zod.boolean(),
+  "notes": zod.string().nullish(),
+  "isOffDay": zod.boolean()
+}))
+}))
+}),
+  "salary": zod.object({
+  "rows": zod.array(zod.object({
+  "employeeId": zod.number(),
+  "doj": zod.coerce.date(),
+  "employeeName": zod.string(),
+  "designation": zod.string(),
+  "department": zod.string(),
+  "payrollStatus": zod.enum(['generated', 'pending']),
+  "employmentStatus": zod.enum(['active', 'left']),
+  "basicSalary": zod.number(),
+  "allowances": zod.number(),
+  "grossSalary": zod.number(),
+  "totalWorkingDays": zod.number(),
+  "presentDays": zod.number(),
+  "paidLeaveDays": zod.number(),
+  "absentDays": zod.number(),
+  "lateCount": zod.number(),
+  "latePenaltyDays": zod.number(),
+  "bonus": zod.number(),
+  "loanDeduction": zod.number(),
+  "otherDeductions": zod.number(),
+  "payrollTax": zod.number(),
+  "netSalary": zod.number(),
+  "generatedAt": zod.coerce.date().nullish()
+}))
+})
+})
+
+
+/**
  * @summary List remote work requests (admin sees all, employee sees own)
  */
 export const ListRemoteWorkRequestsQueryParams = zod.object({

@@ -1299,6 +1299,107 @@ export interface FeedResponse {
   upcomingAnniversaries: FeedItem[];
 }
 
+export interface MonthlyViewDay {
+  date: string;
+  dayNumber: number;
+  dayName: string;
+  isOffDay: boolean;
+}
+
+export interface MonthlyAttendanceDayCell {
+  date: string;
+  status: string;
+  label: string;
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  workedMinutes?: number | null;
+  excused: boolean;
+  notes?: string | null;
+  isOffDay: boolean;
+}
+
+export type MonthlyAttendanceRowEmploymentStatus = typeof MonthlyAttendanceRowEmploymentStatus[keyof typeof MonthlyAttendanceRowEmploymentStatus];
+
+
+export const MonthlyAttendanceRowEmploymentStatus = {
+  active: 'active',
+  left: 'left',
+} as const;
+
+export interface MonthlyAttendanceRow {
+  employeeId: number;
+  doj: string;
+  employeeName: string;
+  designation: string;
+  probationEndDate: string;
+  employmentStatus: MonthlyAttendanceRowEmploymentStatus;
+  annualLeaves: number;
+  casualLeaves: number;
+  sickLeaves: number;
+  absentDays: number;
+  lateDays: number;
+  totalOffDays: number;
+  dayCells: MonthlyAttendanceDayCell[];
+}
+
+export type MonthlySalaryRowPayrollStatus = typeof MonthlySalaryRowPayrollStatus[keyof typeof MonthlySalaryRowPayrollStatus];
+
+
+export const MonthlySalaryRowPayrollStatus = {
+  generated: 'generated',
+  pending: 'pending',
+} as const;
+
+export type MonthlySalaryRowEmploymentStatus = typeof MonthlySalaryRowEmploymentStatus[keyof typeof MonthlySalaryRowEmploymentStatus];
+
+
+export const MonthlySalaryRowEmploymentStatus = {
+  active: 'active',
+  left: 'left',
+} as const;
+
+export interface MonthlySalaryRow {
+  employeeId: number;
+  doj: string;
+  employeeName: string;
+  designation: string;
+  department: string;
+  payrollStatus: MonthlySalaryRowPayrollStatus;
+  employmentStatus: MonthlySalaryRowEmploymentStatus;
+  basicSalary: number;
+  allowances: number;
+  grossSalary: number;
+  totalWorkingDays: number;
+  presentDays: number;
+  paidLeaveDays: number;
+  absentDays: number;
+  lateCount: number;
+  latePenaltyDays: number;
+  bonus: number;
+  loanDeduction: number;
+  otherDeductions: number;
+  payrollTax: number;
+  netSalary: number;
+  generatedAt?: string | null;
+}
+
+export type MonthlyAdminViewResponseAttendance = {
+  totalOffDays: number;
+  rows: MonthlyAttendanceRow[];
+};
+
+export type MonthlyAdminViewResponseSalary = {
+  rows: MonthlySalaryRow[];
+};
+
+export interface MonthlyAdminViewResponse {
+  month: number;
+  year: number;
+  days: MonthlyViewDay[];
+  attendance: MonthlyAdminViewResponseAttendance;
+  salary: MonthlyAdminViewResponseSalary;
+}
+
 export interface NewsPost {
   id: number;
   authorId: number;
@@ -1352,6 +1453,19 @@ export type GetEmployeeLateRecordsParams = {
  * YYYY-MM; defaults to current month
  */
 month?: string;
+};
+
+export type GetMonthlyAdminViewParams = {
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month: number;
+/**
+ * @minimum 2000
+ * @maximum 2100
+ */
+year: number;
 };
 
 export type ListRemoteWorkRequestsParams = {

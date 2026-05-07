@@ -14,6 +14,7 @@ import salaryComponentsRouter from "./salary-components";
 import newsRouter from "./news";
 import loansRouter from "./loans";
 import inventoryRouter from "./inventory";
+import monthlyViewRouter from "./monthly-view";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(salaryComponentsRouter);
 router.use(newsRouter);
 router.use(loansRouter);
 router.use(inventoryRouter);
+router.use(monthlyViewRouter);
 
 export default router;

@@ -53,6 +53,7 @@ import type {
   GetAttendanceCalendarParams,
   GetEmployeeAttendanceParams,
   GetEmployeeLateRecordsParams,
+  GetMonthlyAdminViewParams,
   GetMyAttendanceParams,
   GetTodayAttendanceSummaryParams,
   HealthStatus,
@@ -69,6 +70,7 @@ import type {
   LoanEligibility,
   LoginRequest,
   MentionableMember,
+  MonthlyAdminViewResponse,
   NewsPost,
   Payslip,
   RemoteWorkRequest,
@@ -2196,6 +2198,90 @@ export function useGetEmployeeLateRecords<TData = Awaited<ReturnType<typeof getE
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetEmployeeLateRecordsQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetMonthlyAdminViewUrl = (params: GetMonthlyAdminViewParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/views/monthly?${stringifiedParams}` : `/api/views/monthly`
+}
+
+/**
+ * @summary Get an admin/HR monthly attendance and salary grid for all employees
+ */
+export const getMonthlyAdminView = async (params: GetMonthlyAdminViewParams, options?: RequestInit): Promise<MonthlyAdminViewResponse> => {
+
+  return customFetch<MonthlyAdminViewResponse>(getGetMonthlyAdminViewUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMonthlyAdminViewQueryKey = (params?: GetMonthlyAdminViewParams,) => {
+    return [
+    `/api/views/monthly`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMonthlyAdminViewQueryOptions = <TData = Awaited<ReturnType<typeof getMonthlyAdminView>>, TError = ErrorType<unknown>>(params: GetMonthlyAdminViewParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMonthlyAdminView>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMonthlyAdminViewQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMonthlyAdminView>>> = ({ signal }) => getMonthlyAdminView(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMonthlyAdminView>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMonthlyAdminViewQueryResult = NonNullable<Awaited<ReturnType<typeof getMonthlyAdminView>>>
+export type GetMonthlyAdminViewQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get an admin/HR monthly attendance and salary grid for all employees
+ */
+
+export function useGetMonthlyAdminView<TData = Awaited<ReturnType<typeof getMonthlyAdminView>>, TError = ErrorType<unknown>>(
+ params: GetMonthlyAdminViewParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMonthlyAdminView>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMonthlyAdminViewQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

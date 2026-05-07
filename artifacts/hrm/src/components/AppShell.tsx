@@ -47,6 +47,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: "Leave Requests", href: "/admin/leaves", icon: CalendarRange },
   { label: "Requests", href: "/admin/requests", icon: Inbox },
   { label: "Salary", href: "/admin/salary", icon: Wallet },
+  { label: "View", href: "/admin/view", icon: LayoutGrid },
   { label: "Inventory", href: "/admin/inventory", icon: Package },
   { label: "Payslips", href: "/admin/payslips", icon: Receipt },
   { label: "News Feed", href: "/admin/feed", icon: PartyPopper },
@@ -136,7 +137,7 @@ export function AppShell({
         </div>
       </div>
 
-      <div className="flex">
+      <div className="flex min-w-0 overflow-x-hidden">
         {/* Sidebar (desktop) */}
         <aside
           className={cn(
@@ -204,8 +205,8 @@ export function AppShell({
         )}
 
         {/* Main */}
-        <main className={cn("flex-1", desktopOpen && "lg:pl-64")}>
-          <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
+        <main className={cn("min-w-0 flex-1 overflow-x-hidden", desktopOpen && "lg:pl-64")}>
+          <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
             {children}
           </div>
         </main>
