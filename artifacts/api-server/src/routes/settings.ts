@@ -172,7 +172,12 @@ function parseTime(t: string): number {
 }
 
 function computeDailyHours(start: string, end: string): number {
-  const diffMin = Math.max(0, parseTime(end) - parseTime(start));
+  const startMinutes = parseTime(start);
+  const endMinutes = parseTime(end);
+  const diffMin =
+    endMinutes <= startMinutes
+      ? 24 * 60 - startMinutes + endMinutes
+      : endMinutes - startMinutes;
   return Math.round((diffMin / 60) * 100) / 100;
 }
 

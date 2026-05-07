@@ -68,169 +68,169 @@ function getBreakdownRows(p: Payslip) {
 function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const w = doc.internal.pageSize.getWidth();
-  const h = doc.internal.pageSize.getHeight();
-  const margin = 40;
-  const innerW = w - margin * 2;
+  const margin = 42;
+  const contentW = w - margin * 2;
+  const leftColW = contentW / 2;
+  const halfGap = 10;
+  const pageBottom = doc.internal.pageSize.getHeight() - margin;
+  const lineColor: [number, number, number] = [205, 213, 224];
+  const mutedColor: [number, number, number] = [98, 109, 124];
+  const strongColor: [number, number, number] = [31, 41, 55];
+  let y = margin;
+
+  const drawBox = (x: number, top: number, width: number, height: number) => {
+    doc.setDrawColor(...lineColor);
+    doc.setLineWidth(0.8);
+    doc.rect(x, top, width, height);
+  };
+
+  const drawCell = (
+    x: number,
+    top: number,
+    width: number,
+    height: number,
+    label: string,
+    value: string,
+    align: "left" | "right" = "left",
+  ) => {
+    drawBox(x, top, width, height);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...mutedColor);
+    doc.text(label, x + 14, top + 16);
+    doc.setFont("courier", "normal");
+    doc.setFontSize(10.5);
+    doc.setTextColor(...strongColor);
+    const textX = align === "right" ? x + width - 14 : x + 14;
+    doc.text(value || "-", textX, top + 36, {
+      align: align === "right" ? "right" : "left",
+      maxWidth: width - 28,
+    });
+  };
+
+  const drawSlipRow = (
+    x: number,
+    top: number,
+    width: number,
+    label: string,
+    value?: string | null,
+  ) => {
+    drawBox(x, top, width, 28);
+    doc.setFont("courier", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...mutedColor);
+    doc.text(label || " ", x + 12, top + 18, { maxWidth: width - 110 });
+    if (value) {
+      doc.setTextColor(...strongColor);
+      doc.text(value, x + width - 12, top + 18, { align: "right" });
+    }
+  };
 
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(20, 20, 20);
+  doc.setTextColor(...strongColor);
 
-  // Outer border
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(1.5);
-  doc.rect(margin - 10, 30, innerW + 20, h - 60);
+  const breakdown = getBreakdownRows(p);
+  const earningsRows = breakdown.earnings.map((row) => [row.label, formatCurrency(row.amount)] as const);
+  const deductionRows = breakdown.deductions.map((row) => [row.label, formatCurrency(row.amount)] as const);
+  const rowCount = Math.max(earningsRows.length, deductionRows.length, 1);
+  const totalAddition = p.basicSalary + p.allowances + p.bonus;
+  const totalDeduction = p.otherDeductions + p.loanDeduction;
 
-  // Company header with logo
-  let headerY = 55;
+  // Header
+  drawBox(margin, y, contentW, 72);
   if (logoDataUrl) {
     try {
-      doc.addImage(logoDataUrl, "PNG", margin, 38, 28, 28);
+      doc.addImage(logoDataUrl, "PNG", margin + 14, y + 12, 26, 26);
     } catch {
       // ignore logo error
     }
   }
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text("HiQain", w / 2, headerY, { align: "center" });
+  doc.setFontSize(16);
+  doc.text("HiQain", w / 2, y + 26, { align: "center" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text("HR Management System", w / 2, headerY + 14, { align: "center" });
-
-  // Title
+  doc.setFontSize(10);
+  doc.text("HR Management System", w / 2, y + 42, { align: "center" });
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text(`Pay Slip for ${formatMonth(p.month, p.year)}`, w / 2, headerY + 30, { align: "center" });
+  doc.setFontSize(12);
+  doc.text(`Pay Slip for ${formatMonth(p.month, p.year)}`, w / 2, y + 58, {
+    align: "center",
+  });
+  y += 84;
 
-  // Horizontal line below title
-  doc.setLineWidth(0.5);
-  doc.line(margin - 10, headerY + 38, w - margin + 10, headerY + 38);
+  // Employee info
+  drawCell(margin, y, leftColW, 48, "EMPLOYEE CODE", empCode(p.employeeId, p.employeeCode));
+  drawCell(margin + leftColW, y, leftColW, 48, "NAME", p.employeeName);
+  y += 48;
+  drawCell(margin, y, leftColW, 48, "DESIGNATION", p.employeePosition || "-");
+  drawCell(margin + leftColW, y, leftColW, 48, "MODE OF PAYMENT", "Online");
+  y += 48;
 
-  // Employee info block
-  let y = headerY + 58;
-  const labelX = margin;
-  const col2X = w / 2 + 10;
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  doc.text("EMPLOYEE CODE", labelX, y);
-  doc.setFont("helvetica", "normal");
-  doc.text(empCode(p.employeeId, p.employeeCode), labelX + 120, y);
-
-  doc.setFont("helvetica", "bold");
-  doc.text("NAME", col2X, y);
-  doc.setFont("helvetica", "normal");
-  doc.text(p.employeeName, col2X + 80, y);
-
-  y += 22;
-  doc.setFont("helvetica", "bold");
-  doc.text("DESIGNATION", labelX, y);
-  doc.setFont("helvetica", "normal");
-  doc.text(p.employeePosition || "-", labelX + 120, y);
-
-  doc.setFont("helvetica", "bold");
-  doc.text("MODE OF PAYMENT", col2X, y);
-  doc.setFont("helvetica", "normal");
-  doc.text("Online", col2X + 120, y);
-
-  // Attendance summary row
-  y += 22;
-  doc.setFont("helvetica", "bold");
-  doc.text("ATTENDANCE", labelX, y);
-  doc.setFont("helvetica", "normal");
-  doc.text(
-    `Working ${p.totalWorkingDays} · Present ${p.presentDays} · Absent ${p.absentDays} · Late ${p.lateCount} (→ ${p.lateAbsenceDays ?? 0} day${(p.lateAbsenceDays ?? 0) === 1 ? "" : "s"})`,
-    labelX + 120,
+  // Attendance
+  const quarterW = contentW / 4;
+  drawCell(margin, y, quarterW, 52, "WORKING DAYS", String(p.totalWorkingDays));
+  drawCell(margin + quarterW, y, quarterW, 52, "PRESENT", String(p.presentDays));
+  drawCell(margin + quarterW * 2, y, quarterW, 52, "ABSENT", String(p.absentDays));
+  drawCell(
+    margin + quarterW * 3,
     y,
+    quarterW,
+    52,
+    "LATE → ABSENCE",
+    `${p.lateCount} late · ${p.lateAbsenceDays ?? 0} day${(p.lateAbsenceDays ?? 0) === 1 ? "" : "s"}`,
   );
+  y += 64;
 
-  // Horizontal line
-  y += 16;
-  doc.setLineWidth(0.5);
-  doc.line(margin - 10, y, w - margin + 10, y);
-  y += 14;
-
-  const breakdown = getBreakdownRows(p);
-
-  // Earnings / Deductions header
-  const leftX = margin;
-  const midX = w / 2;
-  const rightX = w - margin - 10;
-
+  // Breakdown headers
+  drawBox(margin, y, leftColW, 28);
+  drawBox(margin + leftColW, y, leftColW, 28);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("EARNINGS / ADDITION", leftX, y);
-  doc.line(midX - 5, y - 10, midX - 5, h - 60); // vertical divider
-  doc.text("DEDUCTIONS", midX + 10, y);
-  y += 6;
-  doc.setLineWidth(0.3);
-  doc.line(margin - 10, y, w - margin + 10, y);
-  y += 16;
+  doc.setFontSize(9.5);
+  doc.setTextColor(...mutedColor);
+  doc.text("EARNINGS / ADDITION", margin + 12, y + 18);
+  doc.text("DEDUCTIONS", margin + leftColW + 12, y + 18);
+  y += 28;
 
-  // Earnings rows
-  const totalAddition = p.basicSalary + p.allowances + p.bonus;
-  const totalDeduction = p.otherDeductions + p.loanDeduction;
-  const earningsRows = breakdown.earnings.map((row) => [row.label, row.amount] as const);
-  const deductionRows = breakdown.deductions.map((row) => [row.label, row.amount] as const);
-
-  const maxRows = Math.max(earningsRows.length, deductionRows.length);
-  const rowH = 18;
-
-  for (let i = 0; i < maxRows; i++) {
-    const rowY = y + i * rowH;
+  for (let i = 0; i < rowCount; i++) {
     const earn = earningsRows[i];
     const ded = deductionRows[i];
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-
-    if (earn) {
-      doc.text(earn[0], leftX, rowY);
-      if (earn[1] !== null) {
-        doc.text(formatCurrency(earn[1]), midX - 15, rowY, { align: "right" });
-      }
-    }
-
-    if (ded) {
-      doc.text(ded[0], midX + 10, rowY);
-      if (ded[1] !== null) {
-        doc.text(formatCurrency(ded[1]), rightX, rowY, { align: "right" });
-      }
-    }
+    drawSlipRow(margin, y, leftColW, earn?.[0] ?? "", earn?.[1] ?? null);
+    drawSlipRow(margin + leftColW, y, leftColW, ded?.[0] ?? "", ded?.[1] ?? null);
+    y += 28;
   }
 
-  y = y + maxRows * rowH + 4;
-  doc.setLineWidth(0.3);
-  doc.line(margin - 10, y, w - margin + 10, y);
-  y += 14;
-
-  // Totals row
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("TOTAL ADDITION", leftX, y);
-  doc.text(formatCurrency(totalAddition), midX - 15, y, { align: "right" });
-  doc.text("TOTAL DEDUCTION", midX + 10, y);
-  doc.text(formatCurrency(totalDeduction), rightX, y, { align: "right" });
-
-  y += 6;
-  doc.setLineWidth(0.5);
-  doc.line(margin - 10, y, w - margin + 10, y);
-  y += 18;
-
-  // Net Payment
+  // Totals
+  drawBox(margin, y, leftColW, 30);
+  drawBox(margin + leftColW, y, leftColW, 30);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text("NET PAYMENT", leftX, y);
-  doc.text(formatCurrency(p.netSalary), rightX, y, { align: "right" });
+  doc.setTextColor(...strongColor);
+  doc.text("TOTAL ADDITION", margin + 12, y + 20);
+  doc.text(formatCurrency(totalAddition), margin + leftColW - 12, y + 20, {
+    align: "right",
+  });
+  doc.text("TOTAL DEDUCTION", margin + leftColW + 12, y + 20);
+  doc.text(formatCurrency(totalDeduction), margin + contentW - 12, y + 20, {
+    align: "right",
+  });
+  y += 30;
 
-  y += 6;
-  doc.setLineWidth(0.5);
-  doc.line(margin - 10, y, w - margin + 10, y);
+  // Net payment
+  drawBox(margin, y, contentW, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("NET PAYMENT", margin + 12, y + 26);
+  doc.setFontSize(18);
+  doc.text(formatCurrency(p.netSalary), margin + contentW - 12, y + 27, {
+    align: "right",
+  });
+  y += 42;
 
-  // Footer - system generated
-  const footerY = h - 60;
+  // Footer
+  const footerY = Math.min(y + 26, pageBottom);
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
+  doc.setFontSize(9);
+  doc.setTextColor(...mutedColor);
   doc.text("System generated. No signature required.", w / 2, footerY, { align: "center" });
 
   const safeName = p.employeeName.replace(/\s+/g, "-").toLowerCase();

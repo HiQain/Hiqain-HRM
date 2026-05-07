@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import {
   useGetMyAttendance,
-  useGetMe,
   useGetAttendanceCalendar,
+  useGetEmployeeDashboard,
   useGetSettings,
   getGetMyAttendanceQueryKey,
   getGetAttendanceCalendarQueryKey,
@@ -34,6 +34,10 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate, formatDuration, formatTime } from "@/lib/utils";
+import {
+  buildScheduledHoursTargets,
+  normalizeAttendanceWorkedMinutes,
+} from "@/lib/attendanceHours";
 
 const STATUS_OPTIONS = [
   { value: "present", label: "Present" },
@@ -56,6 +60,28 @@ const DAY_BG: Record<string, string> = {
   future: "bg-white border-dashed border-slate-200 text-slate-300",
   none: "bg-white border-dashed border-slate-200 text-slate-300",
 };
+
+function resolveWorkedMinutes(record: {
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  workedMinutes?: number | null;
+  pausedMinutes?: number | null;
+  pausedAt?: string | null;
+}) {
+  if (!record.checkInTime || record.checkOutTime) {
+    return record.workedMinutes ?? 0;
+  }
+  const now = Date.now();
+  const activePauseMinutes = record.pausedAt
+    ? Math.max(0, Math.floor((now - new Date(record.pausedAt).getTime()) / 60000))
+    : 0;
+  return Math.max(
+    0,
+    Math.floor((now - new Date(record.checkInTime).getTime()) / 60000) -
+      (record.pausedMinutes ?? 0) -
+      activePauseMinutes,
+  );
+}
 
 function shiftMonth(month: string, delta: number): string {
   const [y, m] = month.split("-").map(Number);
@@ -84,8 +110,8 @@ export function MyAttendancePage() {
     { month },
     { query: { queryKey: getGetMyAttendanceQueryKey({ month }) } },
   );
-  const { data: me } = useGetMe();
-  const employeeId = me?.employeeId ?? 0;
+  const { data: dashboard } = useGetEmployeeDashboard();
+  const employeeId = dashboard?.employee.id ?? 0;
   const calendarParams = { employeeId, month };
   const { data: calendar } = useGetAttendanceCalendar(calendarParams, {
     query: {
@@ -151,13 +177,24 @@ export function MyAttendancePage() {
       <AttendanceStats
         records={data ?? []}
         calendarDays={calendar?.days ?? []}
-        weeklyTarget={settings?.weeklyHours ?? 0}
-        monthlyTarget={settings?.monthlyHours ?? 0}
+        officeStartTime={dashboard?.employee.officeStartTime}
+        officeEndTime={dashboard?.employee.officeEndTime}
+        weeklyOffDays={settings?.weeklyOffDays ?? [0, 6]}
+        publicHolidays={
+          (settings?.publicHolidays ?? []).map((holiday) => holiday.date as unknown as string)
+        }
+        month={month}
       />
       <AttendanceRuleHint />
 
       {view === "list" ? (
-        <ListView data={data} calendarDays={calendar?.days} isLoading={isLoading} />
+        <ListView
+          data={data}
+          calendarDays={calendar?.days}
+          officeStartTime={dashboard?.employee.officeStartTime}
+          officeEndTime={dashboard?.employee.officeEndTime}
+          isLoading={isLoading}
+        />
       ) : (
         <CalendarView calendar={calendar} />
       )}
@@ -168,13 +205,19 @@ export function MyAttendancePage() {
 export function AttendanceStats({
   records,
   calendarDays,
-  weeklyTarget,
-  monthlyTarget,
+  officeStartTime,
+  officeEndTime,
+  weeklyOffDays,
+  publicHolidays,
+  month,
 }: {
   records: AttendanceRecord[];
   calendarDays?: AttendanceCalendarDay[];
-  weeklyTarget: number;
-  monthlyTarget: number;
+  officeStartTime?: string | null;
+  officeEndTime?: string | null;
+  weeklyOffDays: number[];
+  publicHolidays: string[];
+  month: string;
 }) {
   const summary = useMemo(() => {
     const s = {
@@ -199,7 +242,28 @@ export function AttendanceStats({
                 day.status,
               ),
             )
-            .map((day) => day.record ?? { date: day.date, status: day.status, workedMinutes: 0 })
+            .map((day) =>
+              day.record
+                ? {
+                    ...day.record,
+                    workedMinutes: normalizeAttendanceWorkedMinutes({
+                      status: day.status,
+                      workedMinutes: resolveWorkedMinutes(day.record),
+                      officeStartTime,
+                      officeEndTime,
+                    }),
+                  }
+                : {
+                    date: day.date,
+                    status: day.status,
+                    workedMinutes: normalizeAttendanceWorkedMinutes({
+                      status: day.status,
+                      workedMinutes: 0,
+                      officeStartTime,
+                      officeEndTime,
+                    }),
+                  },
+            )
         : records;
 
     for (const r of source) {
@@ -214,26 +278,38 @@ export function AttendanceStats({
       if (d >= startOfWeek && d <= now) s.weekMinutes += minutes;
     }
     return s;
-  }, [calendarDays, records]);
+  }, [calendarDays, officeEndTime, officeStartTime, records]);
+
+  const targets = useMemo(
+    () =>
+      buildScheduledHoursTargets({
+        officeStartTime,
+        officeEndTime,
+        offDays: weeklyOffDays,
+        holidayDates: new Set(publicHolidays),
+        month,
+      }),
+    [month, officeEndTime, officeStartTime, publicHolidays, weeklyOffDays],
+  );
 
   const weekHours = (summary.weekMinutes / 60).toFixed(1);
   const monthHours = (summary.monthMinutes / 60).toFixed(1);
-  const weekValue =
-    weeklyTarget > 0 ? `${weekHours} / ${weeklyTarget} h` : `${weekHours} h`;
-  const monthValue =
-    monthlyTarget > 0 ? `${monthHours} / ${monthlyTarget} h` : `${monthHours} h`;
+  const weekTarget = targets.weekly;
+  const monthTarget = targets.monthly;
+  const weekValue = weekTarget > 0 ? `${weekHours} / ${weekTarget} h` : `${weekHours} h`;
+  const monthValue = monthTarget > 0 ? `${monthHours} / ${monthTarget} h` : `${monthHours} h`;
   const weekPct =
-    weeklyTarget > 0
+    weekTarget > 0
       ? Math.min(
           100,
-          Math.round((summary.weekMinutes / (weeklyTarget * 60)) * 100),
+          Math.round((summary.weekMinutes / (weekTarget * 60)) * 100),
         )
       : null;
   const monthPct =
-    monthlyTarget > 0
+    monthTarget > 0
       ? Math.min(
           100,
-          Math.round((summary.monthMinutes / (monthlyTarget * 60)) * 100),
+          Math.round((summary.monthMinutes / (monthTarget * 60)) * 100),
         )
       : null;
 
@@ -281,10 +357,14 @@ export function AttendanceStats({
 function ListView({
   data,
   calendarDays,
+  officeStartTime,
+  officeEndTime,
   isLoading,
 }: {
   data: AttendanceRecord[] | undefined;
   calendarDays: AttendanceCalendarDay[] | undefined;
+  officeStartTime?: string | null;
+  officeEndTime?: string | null;
   isLoading: boolean;
 }) {
   const rows = useMemo(() => {
@@ -301,11 +381,24 @@ function ListView({
           status: day.status,
           checkInTime: day.record?.checkInTime ?? null,
           checkOutTime: day.record?.checkOutTime ?? null,
-          workedMinutes: day.record?.workedMinutes ?? null,
+          workedMinutes: normalizeAttendanceWorkedMinutes({
+            status: day.status,
+            workedMinutes: day.record ? resolveWorkedMinutes(day.record) : null,
+            officeStartTime,
+            officeEndTime,
+          }),
         }));
     }
-    return data ?? [];
-  }, [calendarDays, data]);
+    return (data ?? []).map((record) => ({
+      ...record,
+      workedMinutes: normalizeAttendanceWorkedMinutes({
+        status: record.status,
+        workedMinutes: resolveWorkedMinutes(record),
+        officeStartTime,
+        officeEndTime,
+      }),
+    }));
+  }, [calendarDays, data, officeEndTime, officeStartTime]);
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm">

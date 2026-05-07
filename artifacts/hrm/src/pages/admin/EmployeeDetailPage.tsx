@@ -13,6 +13,7 @@ import {
   useCreateSalaryComponent,
   useDeleteSalaryComponent,
   useGetEmployeeAttendance,
+  useGetAttendanceCalendar,
   useGetEmployeePayslips,
   useGeneratePayslip,
   useGetEmployeeLoans,
@@ -20,11 +21,13 @@ import {
   getGetEmployeeQueryKey,
   getGetEmployeeJourneyQueryKey,
   getGetEmployeeAttendanceQueryKey,
+  getGetAttendanceCalendarQueryKey,
   getGetEmployeePayslipsQueryKey,
   getGetSettingsQueryKey,
   getListEmployeesQueryKey,
   getListGeneralRequestsQueryKey,
   getListSalaryComponentsQueryKey,
+  type AttendanceCalendarDay,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -100,6 +103,10 @@ import {
   ymdLocal,
 } from "@/lib/utils";
 import { getApiUrl } from "@/lib/api";
+import {
+  buildScheduledHoursTargets,
+  normalizeAttendanceWorkedMinutes,
+} from "@/lib/attendanceHours";
 import { buildProvidentFundSummary } from "@/lib/providentFund";
 
 const PRIMARY_PAYROLL_BANK = "Bank Al Habib";
@@ -1849,9 +1856,31 @@ function AttendanceTab({
   id: number;
   employee: {
     officeStartTime?: string | null;
+    officeEndTime?: string | null;
     gracePeriodMinutes?: number | null;
   };
 }) {
+  const resolveWorkedMinutes = (record: {
+    checkInTime?: string | null;
+    checkOutTime?: string | null;
+    workedMinutes?: number | null;
+    pausedMinutes?: number | null;
+    pausedAt?: string | null;
+  }) => {
+    if (!record.checkInTime || record.checkOutTime) {
+      return record.workedMinutes ?? 0;
+    }
+    const nowMs = Date.now();
+    const activePauseMinutes = record.pausedAt
+      ? Math.max(0, Math.floor((nowMs - new Date(record.pausedAt).getTime()) / 60000))
+      : 0;
+    return Math.max(
+      0,
+      Math.floor((nowMs - new Date(record.checkInTime).getTime()) / 60000) -
+        (record.pausedMinutes ?? 0) -
+        activePauseMinutes,
+    );
+  };
   const now = new Date();
   const [month, setMonth] = useState<string>(
     `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
@@ -1865,10 +1894,40 @@ function AttendanceTab({
       },
     },
   );
+  const calendarParams = { employeeId: id, month };
+  const { data: calendar } = useGetAttendanceCalendar(calendarParams, {
+    query: {
+      queryKey: getGetAttendanceCalendarQueryKey(calendarParams),
+    },
+  });
 
   const { data: settings } = useGetSettings({
     query: { queryKey: getGetSettingsQueryKey() },
   });
+
+  const rows = useMemo(
+    () =>
+      (calendar?.days ?? [])
+        .filter((day) =>
+          ["present", "late", "absent", "on_leave", "half_day", "remote_work"].includes(
+            day.status,
+          ),
+        )
+        .map((day: AttendanceCalendarDay) => ({
+          id: day.record?.id ?? day.date,
+          date: day.date,
+          status: day.status,
+          checkInTime: day.record?.checkInTime ?? null,
+          checkOutTime: day.record?.checkOutTime ?? null,
+          workedMinutes: normalizeAttendanceWorkedMinutes({
+            status: day.status,
+            workedMinutes: day.record ? resolveWorkedMinutes(day.record) : null,
+            officeStartTime: employee.officeStartTime,
+            officeEndTime: employee.officeEndTime,
+          }),
+        })),
+    [calendar, employee.officeEndTime, employee.officeStartTime],
+  );
 
   const summary = useMemo(() => {
     const s = {
@@ -1885,7 +1944,8 @@ function AttendanceTab({
     const diff = (day + 6) % 7;
     startOfWeek.setDate(startOfWeek.getDate() - diff);
     startOfWeek.setHours(0, 0, 0, 0);
-    for (const r of data ?? []) {
+    const source = rows.length > 0 ? rows : data ?? [];
+    for (const r of source) {
       if (r.status === "present") s.present += 1;
       else if (r.status === "late") s.late += 1;
       else if (r.status === "on_leave") s.on_leave += 1;
@@ -1896,10 +1956,30 @@ function AttendanceTab({
       if (d >= startOfWeek && d <= today) s.weekMinutes += minutes;
     }
     return s;
-  }, [data]);
+  }, [data, rows]);
 
-  const weeklyTarget = settings?.weeklyHours ?? 0;
-  const monthlyTarget = settings?.monthlyHours ?? 0;
+  const targets = useMemo(
+    () =>
+      buildScheduledHoursTargets({
+        officeStartTime: employee.officeStartTime,
+        officeEndTime: employee.officeEndTime,
+        offDays: settings?.weeklyOffDays ?? [0, 6],
+        holidayDates: new Set(
+          (settings?.publicHolidays ?? []).map((holiday) => holiday.date as unknown as string),
+        ),
+        month,
+      }),
+    [
+      employee.officeEndTime,
+      employee.officeStartTime,
+      month,
+      settings?.publicHolidays,
+      settings?.weeklyOffDays,
+    ],
+  );
+
+  const weeklyTarget = targets.weekly;
+  const monthlyTarget = targets.monthly;
   const weekHours = (summary.weekMinutes / 60).toFixed(1);
   const monthHours = (summary.monthMinutes / 60).toFixed(1);
   const weekValue =
@@ -1985,14 +2065,14 @@ function AttendanceTab({
                   Loading...
                 </TableCell>
               </TableRow>
-            ) : (data ?? []).length === 0 ? (
+            ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                   No records for this month.
                 </TableCell>
               </TableRow>
             ) : (
-              (data ?? []).map((r) => (
+              rows.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell>{formatDate(r.date)}</TableCell>
                   <TableCell><StatusBadge status={r.status} /></TableCell>

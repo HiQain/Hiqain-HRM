@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RichTextView } from "@/components/RichTextEditor";
 import { FilePreview } from "@/components/FilePreview";
 import { formatHMRange12, formatDateCalendar } from "@/lib/utils";
+import { buildScheduledHoursTargets } from "@/lib/attendanceHours";
 import {
   filterHolidays,
   filterHolidaysByYear,
@@ -35,32 +36,6 @@ import {
 const WEEK_DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 type Country = "us" | "pk" | "other";
-
-function parseTime(t: string): number {
-  const [h, m] = t.split(":").map((n) => Number(n));
-  return (h || 0) * 60 + (m || 0);
-}
-
-function computeWorkingDaysInMonth(
-  year: number,
-  monthIndex: number,
-  offDays: number[],
-  holidayDates: Set<string>,
-): number {
-  const offSet = new Set(offDays);
-  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
-  let count = 0;
-  for (let d = 1; d <= lastDay; d++) {
-    const date = new Date(year, monthIndex, d);
-    if (offSet.has(date.getDay())) continue;
-    const iso = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(
-      d,
-    ).padStart(2, "0")}`;
-    if (holidayDates.has(iso)) continue;
-    count++;
-  }
-  return count;
-}
 
 export function MySettingsPage() {
   const { data: me } = useGetMe();
@@ -82,23 +57,17 @@ export function MySettingsPage() {
 
   const personalHours = useMemo(() => {
     if (!data) return { daily: 0, weekly: 0, monthly: 0 };
-    const diffMin = Math.max(0, parseTime(endTime) - parseTime(startTime));
-    const daily = Math.round((diffMin / 60) * 100) / 100;
     const offDays = data.weeklyOffDays ?? [0, 6];
-    const workingDaysPerWeek = 7 - offDays.length;
-    const weekly = Math.round(daily * workingDaysPerWeek);
-    const today = new Date();
     const holidaySet = new Set(
       (data.publicHolidays ?? []).map((h) => h.date as unknown as string),
     );
-    const monthlyDays = computeWorkingDaysInMonth(
-      today.getFullYear(),
-      today.getMonth(),
+    return buildScheduledHoursTargets({
+      officeStartTime: startTime,
+      officeEndTime: endTime,
       offDays,
-      holidaySet,
-    );
-    const monthly = Math.round(daily * monthlyDays);
-    return { daily, weekly, monthly };
+      holidayDates: holidaySet,
+      weekAnchorDate: new Date(),
+    });
   }, [data, startTime, endTime]);
 
   const holidays = useMemo(() => {
