@@ -1,11 +1,14 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  getListEmployeesQueryKey,
   getListInventoryAssignmentsQueryKey,
   getListInventoryItemsQueryKey,
   getListInventoryRequestsQueryKey,
   useApproveInventoryRequest,
+  useCreateInventoryAssignment,
   useCreateInventoryItem,
+  useListEmployees,
   useListInventoryAssignments,
   useListInventoryItems,
   useListInventoryRequests,
@@ -31,6 +34,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -55,12 +65,26 @@ type ReviewDialogState =
   | { mode: "approve" | "reject"; request: InventoryRequest }
   | null;
 
+type AssignmentFormState = {
+  employeeId: string;
+  itemId: string;
+  quantity: string;
+  notes: string;
+};
+
 const EMPTY_STOCK_FORM: StockFormState = {
   name: "",
   category: "",
   sku: "",
   totalStock: "0",
   reorderLevel: "0",
+  notes: "",
+};
+
+const EMPTY_ASSIGNMENT_FORM: AssignmentFormState = {
+  employeeId: "",
+  itemId: "",
+  quantity: "1",
   notes: "",
 };
 
@@ -87,7 +111,14 @@ export function AdminInventoryPage() {
   const [reviewDialog, setReviewDialog] = useState<ReviewDialogState>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [reviewAdminNotes, setReviewAdminNotes] = useState("");
+  const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
+  const [assignmentForm, setAssignmentForm] = useState<AssignmentFormState>(
+    EMPTY_ASSIGNMENT_FORM,
+  );
 
+  const { data: employees } = useListEmployees({
+    query: { queryKey: getListEmployeesQueryKey() },
+  });
   const { data: items, isLoading: itemsLoading } = useListInventoryItems();
   const { data: requests, isLoading: requestsLoading } = useListInventoryRequests(
     requestStatus === "all" ? undefined : { status: requestStatus },
@@ -96,6 +127,7 @@ export function AdminInventoryPage() {
 
   const createItem = useCreateInventoryItem();
   const updateItem = useUpdateInventoryItem();
+  const createAssignment = useCreateInventoryAssignment();
   const approveRequest = useApproveInventoryRequest();
   const rejectRequest = useRejectInventoryRequest();
 
@@ -127,6 +159,11 @@ export function AdminInventoryPage() {
     setEditingItem(null);
     setStockForm(EMPTY_STOCK_FORM);
     setItemDialogOpen(true);
+  };
+
+  const openAssignmentDialog = () => {
+    setAssignmentForm(EMPTY_ASSIGNMENT_FORM);
+    setAssignmentDialogOpen(true);
   };
 
   const openEditDialog = (item: InventoryItem) => {
@@ -198,16 +235,53 @@ export function AdminInventoryPage() {
     );
   };
 
+  const submitAssignment = (event: FormEvent) => {
+    event.preventDefault();
+    if (!assignmentForm.employeeId || !assignmentForm.itemId) {
+      toast.error("Select both employee and inventory item");
+      return;
+    }
+
+    createAssignment.mutate(
+      {
+        data: {
+          employeeId: Number(assignmentForm.employeeId),
+          itemId: Number(assignmentForm.itemId),
+          quantity: Math.max(1, Number(assignmentForm.quantity || 1)),
+          notes: assignmentForm.notes.trim() || undefined,
+        },
+      },
+      {
+        onSuccess: async () => {
+          toast.success("Inventory assigned");
+          setAssignmentDialogOpen(false);
+          setAssignmentForm(EMPTY_ASSIGNMENT_FORM);
+          await invalidateInventory();
+        },
+        onError: (error: Error) => {
+          toast.error(error.message || "Could not assign inventory");
+        },
+      },
+    );
+  };
+
+  const availableItems = (items ?? []).filter((item) => item.availableStock > 0);
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Inventory"
         description="Manage stock, review employee hardware requests, and track what has been assigned to each employee."
         actions={
-          <Button onClick={openCreateDialog} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add inventory item
-          </Button>
+          <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2">
+            <Button onClick={openAssignmentDialog} variant="outline" className="w-full">
+              Assign inventory manually
+            </Button>
+            <Button onClick={openCreateDialog} className="w-full gap-2">
+              <Plus className="h-4 w-4" />
+              Add inventory item
+            </Button>
+          </div>
         }
       />
 
@@ -502,6 +576,102 @@ export function AdminInventoryPage() {
               </Button>
               <Button type="submit" disabled={createItem.isPending || updateItem.isPending}>
                 {editingItem ? "Save changes" : "Create item"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assignmentDialogOpen} onOpenChange={setAssignmentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign inventory manually</DialogTitle>
+            <DialogDescription>
+              Issue stock directly to an employee without waiting for a request.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={submitAssignment}>
+            <div className="space-y-1.5">
+              <Label>Employee</Label>
+              <Select
+                value={assignmentForm.employeeId}
+                onValueChange={(value) =>
+                  setAssignmentForm((current) => ({ ...current, employeeId: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(employees ?? []).map((employee) => (
+                    <SelectItem key={employee.id} value={String(employee.id)}>
+                      {employee.name} · {employee.employeeCode ?? "No code"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Inventory item</Label>
+              <Select
+                value={assignmentForm.itemId}
+                onValueChange={(value) =>
+                  setAssignmentForm((current) => ({ ...current, itemId: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select item" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableItems.map((item) => (
+                    <SelectItem key={item.id} value={String(item.id)}>
+                      {item.name} · {item.category} · {item.availableStock} available
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Quantity</Label>
+              <Input
+                type="number"
+                min={1}
+                value={assignmentForm.quantity}
+                onChange={(event) =>
+                  setAssignmentForm((current) => ({
+                    ...current,
+                    quantity: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea
+                value={assignmentForm.notes}
+                onChange={(event) =>
+                  setAssignmentForm((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+                placeholder="Optional issue note"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAssignmentDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createAssignment.isPending}>
+                {createAssignment.isPending ? "Assigning..." : "Assign item"}
               </Button>
             </DialogFooter>
           </form>

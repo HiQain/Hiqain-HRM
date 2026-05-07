@@ -9,8 +9,10 @@ import {
   getGetSettingsQueryKey,
 } from "@workspace/api-client-react";
 import type { AttendanceRecord } from "@workspace/api-client-react";
+import type { AttendanceCalendarDay } from "@workspace/api-client-react";
 import { CheckCircle2, Clock, XCircle, Plane, ChevronLeft, ChevronRight, CalendarDays, CalendarRange } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
@@ -82,6 +84,15 @@ export function MyAttendancePage() {
     { month },
     { query: { queryKey: getGetMyAttendanceQueryKey({ month }) } },
   );
+  const { data: me } = useGetMe();
+  const employeeId = me?.employeeId ?? 0;
+  const calendarParams = { employeeId, month };
+  const { data: calendar } = useGetAttendanceCalendar(calendarParams, {
+    query: {
+      queryKey: getGetAttendanceCalendarQueryKey(calendarParams),
+      enabled: employeeId > 0,
+    },
+  });
 
   const { data: settings } = useGetSettings({
     query: { queryKey: getGetSettingsQueryKey() },
@@ -139,14 +150,16 @@ export function MyAttendancePage() {
 
       <AttendanceStats
         records={data ?? []}
+        calendarDays={calendar?.days ?? []}
         weeklyTarget={settings?.weeklyHours ?? 0}
         monthlyTarget={settings?.monthlyHours ?? 0}
       />
+      <AttendanceRuleHint />
 
       {view === "list" ? (
-        <ListView data={data} isLoading={isLoading} />
+        <ListView data={data} calendarDays={calendar?.days} isLoading={isLoading} />
       ) : (
-        <CalendarView month={month} />
+        <CalendarView calendar={calendar} />
       )}
     </div>
   );
@@ -154,10 +167,12 @@ export function MyAttendancePage() {
 
 export function AttendanceStats({
   records,
+  calendarDays,
   weeklyTarget,
   monthlyTarget,
 }: {
   records: AttendanceRecord[];
+  calendarDays?: AttendanceCalendarDay[];
   weeklyTarget: number;
   monthlyTarget: number;
 }) {
@@ -176,9 +191,21 @@ export function AttendanceStats({
     const diff = (day + 6) % 7; // Monday-based week
     startOfWeek.setDate(startOfWeek.getDate() - diff);
     startOfWeek.setHours(0, 0, 0, 0);
-    for (const r of records) {
-      if (r.status === "present") s.present += 1;
-      else if (r.status === "late") s.late += 1;
+    const source =
+      calendarDays && calendarDays.length > 0
+        ? calendarDays
+            .filter((day) =>
+              ["present", "late", "absent", "on_leave", "half_day", "remote_work"].includes(
+                day.status,
+              ),
+            )
+            .map((day) => day.record ?? { date: day.date, status: day.status, workedMinutes: 0 })
+        : records;
+
+    for (const r of source) {
+      if (r.status === "present" || r.status === "remote_work" || r.status === "half_day") {
+        s.present += 1;
+      } else if (r.status === "late") s.late += 1;
       else if (r.status === "on_leave") s.on_leave += 1;
       else s.absent += 1;
       const minutes = r.workedMinutes ?? 0;
@@ -187,7 +214,7 @@ export function AttendanceStats({
       if (d >= startOfWeek && d <= now) s.weekMinutes += minutes;
     }
     return s;
-  }, [records]);
+  }, [calendarDays, records]);
 
   const weekHours = (summary.weekMinutes / 60).toFixed(1);
   const monthHours = (summary.monthMinutes / 60).toFixed(1);
@@ -253,11 +280,33 @@ export function AttendanceStats({
 
 function ListView({
   data,
+  calendarDays,
   isLoading,
 }: {
   data: AttendanceRecord[] | undefined;
+  calendarDays: AttendanceCalendarDay[] | undefined;
   isLoading: boolean;
 }) {
+  const rows = useMemo(() => {
+    if (calendarDays?.length) {
+      return calendarDays
+        .filter((day) =>
+          ["present", "late", "absent", "on_leave", "half_day", "remote_work"].includes(
+            day.status,
+          ),
+        )
+        .map((day) => ({
+          id: day.record?.id ?? day.date,
+          date: day.date,
+          status: day.status,
+          checkInTime: day.record?.checkInTime ?? null,
+          checkOutTime: day.record?.checkOutTime ?? null,
+          workedMinutes: day.record?.workedMinutes ?? null,
+        }));
+    }
+    return data ?? [];
+  }, [calendarDays, data]);
+
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm">
       <Table>
@@ -277,14 +326,14 @@ function ListView({
                 Loading...
               </TableCell>
             </TableRow>
-          ) : (data ?? []).length === 0 ? (
+          ) : rows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                 No records for this month yet.
               </TableCell>
             </TableRow>
           ) : (
-            (data ?? []).map((r) => (
+            rows.map((r) => (
               <TableRow key={r.id}>
                 <TableCell>{formatDate(r.date)}</TableCell>
                 <TableCell><StatusBadge status={r.status} /></TableCell>
@@ -300,17 +349,16 @@ function ListView({
   );
 }
 
-function CalendarView({ month }: { month: string }) {
-  const { data: me } = useGetMe();
-  const employeeId = me?.employeeId ?? 0;
-  const params = { employeeId, month };
-  const { data: calendar, isLoading } = useGetAttendanceCalendar(params, {
-    query: {
-      queryKey: getGetAttendanceCalendarQueryKey(params),
-      enabled: employeeId > 0,
-    },
-  });
-
+function CalendarView({
+  calendar,
+}: {
+  calendar:
+    | {
+        month: string;
+        days: AttendanceCalendarDay[];
+      }
+    | undefined;
+}) {
   const monthGrid = useMemo(() => {
     if (!calendar) return [] as Array<{ date: string; status: string } | null>;
     const [y, m] = calendar.month.split("-").map(Number);
@@ -330,7 +378,7 @@ function CalendarView({ month }: { month: string }) {
         ))}
       </div>
 
-      {isLoading || !calendar ? (
+      {!calendar ? (
         <div className="grid grid-cols-7 gap-2">
           {Array.from({ length: 35 }).map((_, i) => (
             <Skeleton key={i} className="h-24 rounded-md" />

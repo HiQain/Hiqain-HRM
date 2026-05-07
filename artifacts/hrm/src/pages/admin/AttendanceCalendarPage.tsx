@@ -12,6 +12,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
+import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
@@ -93,6 +94,8 @@ export function AdminAttendanceCalendarPage() {
 
   const effectiveEmployeeId =
     employeeId ?? (employees && employees[0] ? employees[0].id : null);
+  const selectedEmployee =
+    employees?.find((employee) => employee.id === effectiveEmployeeId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -180,6 +183,11 @@ export function AdminAttendanceCalendarPage() {
             />
           )}
         </div>
+        <AttendanceRuleHint
+          officeStartTime={selectedEmployee?.officeStartTime}
+          gracePeriodMinutes={selectedEmployee?.gracePeriodMinutes}
+          className="mt-3"
+        />
       </div>
 
       {view === "calendar" ? (

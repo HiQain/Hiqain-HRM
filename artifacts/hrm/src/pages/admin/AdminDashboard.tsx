@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useGetAdminDashboard } from "@workspace/api-client-react";
 import { PageHeader } from "@/components/PageHeader";
+import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ export function AdminDashboard() {
         title="HR Dashboard"
         description="A snapshot of your team today."
       />
+      <AttendanceRuleHint />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {isLoading || !data ? (

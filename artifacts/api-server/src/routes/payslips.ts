@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
+import { normalizeAttendanceStatus } from "../lib/attendance";
 import { ymd } from "../lib/dates";
 import {
   computePakistanMonthlySalaryTax,
@@ -266,19 +267,21 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
   let onLeave = 0;
   for (const r of attRows) {
     if (isPayrollOffDay(r.date, settings, holidaySet)) continue;
+    const normalized = normalizeAttendanceStatus(r, emp);
     // Approved late/half-day requests get marked excused: they don't count
     // as late, and half-day excused gets paid as a full present day.
     if (r.excused) {
-      if (r.status === "on_leave") onLeave += 1;
+      if (normalized.status === "on_leave") onLeave += 1;
       else present += 1;
       continue;
     }
-    if (r.status === "present" || r.status === "remote_work") present += 1;
-    else if (r.status === "late") {
+    if (normalized.status === "present" || normalized.status === "remote_work") {
+      present += 1;
+    } else if (normalized.status === "late") {
       late += 1;
       present += 1;
-    } else if (r.status === "on_leave") onLeave += 1;
-    else if (r.status === "half_day") present += 0.5;
+    } else if (normalized.status === "on_leave") onLeave += 1;
+    else if (normalized.status === "half_day") present += 0.5;
   }
   const presentDays = present;
   const paidLeaveDays = onLeave; // approved leaves are paid by default

@@ -64,7 +64,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
-import { getApiUrl } from "@/lib/api";
 import { formatCurrency, formatDate, formatMonth } from "@/lib/utils";
 import {
   computeSalaryStructurePreview,
@@ -670,26 +669,15 @@ function ManageSalaryComponentsCard({
   });
   const create = useCreateSalaryComponent();
   const remove = useDeleteSalaryComponent();
-  const { data: employees } = useListEmployees();
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<
     "commission" | "allowance" | "provident_fund" | "other" | "deduction"
   >("allowance");
   const [valueType, setValueType] = useState<"fixed" | "percentage">("fixed");
-  const [percentageBase, setPercentageBase] = useState<
-    "basic_salary" | "gross_salary"
-  >("basic_salary");
   const [value, setValue] = useState(0);
+  const [percentageOfValue, setPercentageOfValue] = useState(0);
+  const [percentageRate, setPercentageRate] = useState(0);
   const [pendingTaxDecision, setPendingTaxDecision] = useState(false);
-  const [manualAssignOpen, setManualAssignOpen] = useState(false);
-  const [manualAssignItemId, setManualAssignItemId] = useState("");
-  const [manualAssignEmployeeId, setManualAssignEmployeeId] = useState("");
-  const [manualAssignQuantity, setManualAssignQuantity] = useState("1");
-  const [manualAssignNotes, setManualAssignNotes] = useState("");
-  const [submittingManualAssign, setSubmittingManualAssign] = useState(false);
-  const [inventoryItems, setInventoryItems] = useState<
-    Array<{ id: number; name: string; availableStock: number; category: string }>
-  >([]);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getListSalaryComponentsQueryKey(employeeId) });
@@ -698,12 +686,17 @@ function ManageSalaryComponentsCard({
     setLabel("");
     setKind("allowance");
     setValueType("fixed");
-    setPercentageBase("basic_salary");
     setValue(0);
+    setPercentageOfValue(0);
+    setPercentageRate(0);
     setPendingTaxDecision(false);
   };
 
   const isDeduction = kind === "deduction";
+  const resolvedAmount =
+    valueType === "percentage"
+      ? Math.round(((percentageOfValue * percentageRate) / 100) * 100) / 100
+      : value;
 
   const createComponent = (isTaxable: boolean) => {
     if (!label.trim()) {
@@ -717,9 +710,8 @@ function ManageSalaryComponentsCard({
         data: {
           label: label.trim(),
           kind: kind === "deduction" ? "other" : kind,
-          valueType,
-          percentageBase,
-          value,
+          valueType: "fixed",
+          value: resolvedAmount,
           isDeduction,
           isTaxable,
         },
@@ -740,6 +732,10 @@ function ManageSalaryComponentsCard({
       toast.error("Label is required");
       return;
     }
+    if (valueType === "percentage" && (percentageOfValue <= 0 || percentageRate <= 0)) {
+      toast.error("Enter both the amount and percentage value");
+      return;
+    }
 
     if (!isDeduction && (kind === "allowance" || kind === "commission")) {
       setPendingTaxDecision(true);
@@ -753,60 +749,6 @@ function ManageSalaryComponentsCard({
     ...((components ?? []) as Array<NonNullable<typeof components>[number]>),
   ];
 
-  const openManualAssignDialog = async () => {
-    try {
-      const response = await fetch(getApiUrl("/api/inventory/items"), {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Could not load inventory items");
-      const data = (await response.json()) as Array<{
-        id: number;
-        name: string;
-        availableStock: number;
-        category: string;
-      }>;
-      setInventoryItems(data.filter((item) => item.availableStock > 0));
-      setManualAssignItemId("");
-      setManualAssignEmployeeId(employeeId > 0 ? String(employeeId) : "");
-      setManualAssignQuantity("1");
-      setManualAssignNotes("");
-      setManualAssignOpen(true);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not load inventory");
-    }
-  };
-
-  const submitManualAssignment = async () => {
-    if (!manualAssignItemId || !manualAssignEmployeeId) {
-      toast.error("Select both employee and inventory item");
-      return;
-    }
-    try {
-      setSubmittingManualAssign(true);
-      const response = await fetch(getApiUrl("/api/inventory/assignments"), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employeeId: Number(manualAssignEmployeeId),
-          itemId: Number(manualAssignItemId),
-          quantity: Math.max(1, Number(manualAssignQuantity || 1)),
-          notes: manualAssignNotes.trim() || undefined,
-        }),
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.message || "Could not assign inventory");
-      }
-      toast.success("Inventory assigned");
-      setManualAssignOpen(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not assign inventory");
-    } finally {
-      setSubmittingManualAssign(false);
-    }
-  };
-
   return (
     <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -816,64 +758,98 @@ function ManageSalaryComponentsCard({
             Default salary components are listed below. You can still add extra earnings or deductions here.
           </p>
         </div>
-        <Button type="button" variant="outline" onClick={openManualAssignDialog}>
-          Assign inventory manually
-        </Button>
       </div>
 
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 lg:grid-cols-12">
-        <Input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Label"
-          className="lg:col-span-4"
-        />
-        <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
-          <SelectTrigger className="lg:col-span-2">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="allowance">Allowance</SelectItem>
-            <SelectItem value="commission">Bonus / Commission</SelectItem>
-            <SelectItem value="deduction">Deduction</SelectItem>
-            <SelectItem value="provident_fund">Provident Fund</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={valueType}
-          onValueChange={(v) => setValueType(v as typeof valueType)}
-        >
-          <SelectTrigger className="lg:col-span-2">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fixed">Fixed (PKR)</SelectItem>
-            <SelectItem value="percentage">Percentage</SelectItem>
-          </SelectContent>
-        </Select>
-        {valueType === "percentage" && (
-          <Select
-            value={percentageBase}
-            onValueChange={(v) => setPercentageBase(v as typeof percentageBase)}
-          >
-            <SelectTrigger className="lg:col-span-2">
+        <div className="space-y-1.5 lg:col-span-4">
+          <Label className="text-xs">Label</Label>
+          <Input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Label"
+          />
+        </div>
+        <div className="space-y-1.5 lg:col-span-2">
+          <Label className="text-xs">Type</Label>
+          <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
+            <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="basic_salary">Of basic salary</SelectItem>
-              <SelectItem value="gross_salary">Of total salary</SelectItem>
+              <SelectItem value="allowance">Allowance</SelectItem>
+              <SelectItem value="commission">Bonus / Commission</SelectItem>
+              <SelectItem value="deduction">Deduction</SelectItem>
+              <SelectItem value="provident_fund">Provident Fund</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-1.5 lg:col-span-2">
+          <Label className="text-xs">Mode</Label>
+          <Select
+            value={valueType}
+            onValueChange={(v) => {
+              const next = v as typeof valueType;
+              setValueType(next);
+              if (next === "fixed") {
+                setPercentageOfValue(0);
+                setPercentageRate(0);
+              } else {
+                setValue(0);
+              }
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fixed">Fixed (PKR)</SelectItem>
+              <SelectItem value="percentage">Percentage</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {valueType === "percentage" ? (
+          <>
+            <div className="space-y-1.5 lg:col-span-2">
+              <Label className="text-xs">% Of Value</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={percentageOfValue}
+                onChange={(e) => setPercentageOfValue(Number(e.target.value))}
+                placeholder="% of value"
+              />
+            </div>
+            <div className="space-y-1.5 lg:col-span-2">
+              <Label className="text-xs">Percentage %</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={percentageRate}
+                onChange={(e) => setPercentageRate(Number(e.target.value))}
+                placeholder="Percentage %"
+              />
+            </div>
+          </>
+        ) : (
+          <div className="space-y-1.5 lg:col-span-2">
+            <Label className="text-xs">Value</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={value}
+              onChange={(e) => setValue(Number(e.target.value))}
+            />
+          </div>
         )}
-        <Input
-          type="number"
-          min={0}
-          step="0.01"
-          value={value}
-          onChange={(e) => setValue(Number(e.target.value))}
-          className="lg:col-span-2"
-        />
+        {valueType === "percentage" && (
+          <div className="lg:col-span-12 text-xs text-muted-foreground">
+            This will add {formatCurrency(resolvedAmount)} to salary.
+          </div>
+        )}
         <div className="lg:col-span-12">
           <Button type="submit" disabled={create.isPending}>
             {create.isPending ? "Adding..." : "Add component"}
@@ -905,11 +881,7 @@ function ManageSalaryComponentsCard({
                   {humanizeSalaryKind(component.kind)} · {component.valueType} ·{" "}
                   {component.isDeduction ? "deduction" : "earning"}
                   {component.valueType === "percentage"
-                    ? ` · ${
-                        component.percentageBase === "gross_salary"
-                          ? "of total salary"
-                          : "of basic salary"
-                      }`
+                    ? " · percentage amount"
                     : ""}
                   {!component.isDeduction && component.isTaxable === false
                     ? " · non-taxable"
@@ -987,76 +959,6 @@ function ManageSalaryComponentsCard({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={manualAssignOpen} onOpenChange={setManualAssignOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign inventory manually</DialogTitle>
-            <DialogDescription>
-              Use this for direct allocation during onboarding or whenever you want to issue an item without an employee request.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Employee</Label>
-              <Select
-                value={manualAssignEmployeeId}
-                onValueChange={setManualAssignEmployeeId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(employees ?? []).map((employee) => (
-                    <SelectItem key={employee.id} value={String(employee.id)}>
-                      {employee.name} · {employee.employeeCode ?? "No code"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Inventory item</Label>
-              <Select value={manualAssignItemId} onValueChange={setManualAssignItemId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select item" />
-                </SelectTrigger>
-                <SelectContent>
-                  {inventoryItems.map((item) => (
-                    <SelectItem key={item.id} value={String(item.id)}>
-                      {item.name} · {item.category} · {item.availableStock} available
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Quantity</Label>
-              <Input
-                type="number"
-                min={1}
-                value={manualAssignQuantity}
-                onChange={(e) => setManualAssignQuantity(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Notes</Label>
-              <Textarea
-                value={manualAssignNotes}
-                onChange={(e) => setManualAssignNotes(e.target.value)}
-                placeholder="Optional issue note"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setManualAssignOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={submitManualAssignment} disabled={submittingManualAssign}>
-              {submittingManualAssign ? "Assigning..." : "Assign item"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

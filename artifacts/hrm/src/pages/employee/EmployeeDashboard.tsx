@@ -23,6 +23,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
+import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,22 @@ export function EmployeeDashboard() {
               : 0),
         )
       : activeRecord?.workedMinutes ?? 0;
+  const liveStatus = (() => {
+    if (!activeRecord?.status) return null;
+    if (activeRecord.checkOutTime) return activeRecord.status;
+    if (!activeRecord.checkInTime) return activeRecord.status;
+
+    const [year, month, day] = activeRecord.date.split("-").map(Number);
+    const [h, m] = employee.officeStartTime.split(":").map(Number);
+    const officeStartUtc =
+      Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1, h ?? 0, m ?? 0) -
+      5 * 60 * 60 * 1000;
+    const graceCutoffUtc = officeStartUtc + employee.gracePeriodMinutes * 60 * 1000;
+    const checkedInLate =
+      new Date(activeRecord.checkInTime).getTime() > graceCutoffUtc;
+
+    return checkedInLate ? "late" : activeRecord.status;
+  })();
 
   const onCheckIn = () =>
     checkIn.mutate(undefined, {
@@ -149,13 +166,18 @@ export function EmployeeDashboard() {
                     ? "You're checked in"
                     : "Ready to start your day?"}
               </h2>
-              {todayAttendance.record?.status && (
-                <StatusBadge status={todayAttendance.record.status} className="bg-white/15 ring-white/20 text-white" />
+              {liveStatus && (
+                <StatusBadge status={liveStatus} className="bg-white/15 ring-white/20 text-white" />
               )}
             </div>
             <p className="mt-1 text-sm opacity-90">
               Office hours {formatHMRange12(employee.officeStartTime, employee.officeEndTime)}, with a {employee.gracePeriodMinutes}-min grace.
             </p>
+            <AttendanceRuleHint
+              officeStartTime={employee.officeStartTime}
+              gracePeriodMinutes={employee.gracePeriodMinutes}
+              className="mt-2 text-white/85"
+            />
             {todayAttendance.record && (
               <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
                 <div>

@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/PageHeader";
+import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
@@ -183,6 +184,7 @@ export function AdminAttendancePage() {
         title="Today's Attendance"
         description={data ? formatDateLong(data.date) : "Loading..."}
       />
+      <AttendanceRuleHint />
 
       {/* Date navigator */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">

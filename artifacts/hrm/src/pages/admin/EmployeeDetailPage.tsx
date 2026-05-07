@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
+import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { DateField } from "@/components/DateField";
@@ -216,7 +217,7 @@ export function EmployeeDetailPage() {
           <ProvidentFundTab id={id} employee={employee} />
         </TabsContent>
         <TabsContent value="attendance" className="mt-5">
-          <AttendanceTab id={id} />
+          <AttendanceTab id={id} employee={employee} />
         </TabsContent>
         <TabsContent value="payslips" className="mt-5">
           <PayslipsTab id={id} />
@@ -1841,7 +1842,16 @@ function SalaryComponentsCard({ id }: { id: number }) {
   );
 }
 
-function AttendanceTab({ id }: { id: number }) {
+function AttendanceTab({
+  id,
+  employee,
+}: {
+  id: number;
+  employee: {
+    officeStartTime?: string | null;
+    gracePeriodMinutes?: number | null;
+  };
+}) {
   const now = new Date();
   const [month, setMonth] = useState<string>(
     `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
@@ -1915,6 +1925,10 @@ function AttendanceTab({ id }: { id: number }) {
           className="w-44"
         />
       </div>
+      <AttendanceRuleHint
+        officeStartTime={employee.officeStartTime}
+        gracePeriodMinutes={employee.gracePeriodMinutes}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

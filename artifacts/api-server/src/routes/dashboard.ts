@@ -11,7 +11,10 @@ import {
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { parseDate, ymd } from "../lib/dates";
-import { resolveAttendanceShiftDate } from "../lib/attendance";
+import {
+  normalizeAttendanceStatus,
+  resolveAttendanceShiftDate,
+} from "../lib/attendance";
 
 const router: IRouter = Router();
 
@@ -36,12 +39,15 @@ router.get(
     for (const e of allEmps) {
       const r = attMap.get(e.id);
       if (!r) absent += 1;
-      else if (r.status === "present") present += 1;
-      else if (r.status === "late") late += 1;
-      else if (r.status === "on_leave") onLeave += 1;
-      else if (r.status === "half_day") halfDay += 1;
-      else if (r.status === "remote_work") remoteWork += 1;
-      else absent += 1;
+      else {
+        const normalized = normalizeAttendanceStatus(r, e);
+        if (normalized.status === "present") present += 1;
+        else if (normalized.status === "late") late += 1;
+        else if (normalized.status === "on_leave") onLeave += 1;
+        else if (normalized.status === "half_day") halfDay += 1;
+        else if (normalized.status === "remote_work") remoteWork += 1;
+        else absent += 1;
+      }
     }
 
     const pendingLeaves = await db
@@ -218,6 +224,9 @@ router.get(
               activePauseMinutes,
           )
         : todayRec?.workedMinutes ?? null;
+    const normalizedTodayRec = todayRec
+      ? normalizeAttendanceStatus({ ...todayRec, workedMinutes: liveWorkedMinutes }, e)
+      : null;
     const todayAttendance = {
       hasCheckedIn: !!todayRec?.checkInTime,
       hasCheckedOut: !!todayRec?.checkOutTime,
@@ -238,8 +247,8 @@ router.get(
             pausedAt: todayRec.pausedAt ? todayRec.pausedAt.toISOString() : null,
             pausedMinutes: todayRec.pausedMinutes ?? 0,
             isPaused: !!todayRec.pausedAt && !todayRec.checkOutTime,
-            status: todayRec.status,
-            isLate: todayRec.isLate,
+            status: normalizedTodayRec?.status ?? todayRec.status,
+            isLate: normalizedTodayRec?.isLate ?? todayRec.isLate,
             notes: todayRec.notes,
           }
         : null,
@@ -267,11 +276,12 @@ router.get(
       mHalf = 0,
       mRemote = 0;
     for (const r of monthRows) {
-      if (r.status === "present") mPresent += 1;
-      else if (r.status === "late") mLate += 1;
-      else if (r.status === "on_leave") mLeave += 1;
-      else if (r.status === "half_day") mHalf += 1;
-      else if (r.status === "remote_work") mRemote += 1;
+      const normalized = normalizeAttendanceStatus(r, e);
+      if (normalized.status === "present") mPresent += 1;
+      else if (normalized.status === "late") mLate += 1;
+      else if (normalized.status === "on_leave") mLeave += 1;
+      else if (normalized.status === "half_day") mHalf += 1;
+      else if (normalized.status === "remote_work") mRemote += 1;
       else mAbsent += 1;
     }
 

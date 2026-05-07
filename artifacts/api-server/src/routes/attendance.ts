@@ -10,6 +10,7 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { ymd } from "../lib/dates";
 import {
+  normalizeAttendanceStatus,
   officeMinutes,
   officeStartForShiftDate,
   resolveAttendanceShiftDate,
@@ -22,7 +23,12 @@ const router: IRouter = Router();
 function serializeRecord(
   r: typeof attendanceTable.$inferSelect,
   employeeName: string,
+  employee?: Pick<
+    typeof employeesTable.$inferSelect,
+    "officeStartTime" | "officeEndTime" | "gracePeriodMinutes"
+  >,
 ) {
+  const normalized = employee ? normalizeAttendanceStatus(r, employee) : null;
   return {
     id: r.id,
     employeeId: r.employeeId,
@@ -34,8 +40,8 @@ function serializeRecord(
     pausedAt: r.pausedAt ? r.pausedAt.toISOString() : null,
     pausedMinutes: r.pausedMinutes ?? 0,
     isPaused: Boolean(r.pausedAt && !r.checkOutTime),
-    status: r.status,
-    isLate: r.isLate,
+    status: normalized?.status ?? r.status,
+    isLate: normalized?.isLate ?? r.isLate,
     excused: r.excused,
     notes: r.notes,
   };
@@ -164,7 +170,7 @@ router.post(
         : [];
       record = insertedRows[0]!;
     }
-    res.json(serializeRecord(record, emp.name));
+    res.json(serializeRecord(record, emp.name, emp));
   },
 );
 
@@ -218,31 +224,17 @@ router.post(
     // - under 25% of the shift => absent
     // - under 50% of the shift => half-day
     const fullDayMinutes = officeMinutes(emp);
-    let nextStatus = rec.status;
-    let nextIsLate = rec.isLate;
-    if (
-      rec.status !== "remote_work" &&
-      rec.status !== "on_leave" &&
-      fullDayMinutes > 0 &&
-      worked < fullDayMinutes / 4
-    ) {
-      nextStatus = "absent";
-    } else if (
-      rec.status !== "remote_work" &&
-      rec.status !== "on_leave" &&
-      fullDayMinutes > 0 &&
-      worked < fullDayMinutes / 2
-    ) {
-      nextStatus = "half_day";
-    } else if (
-      rec.status === "late" &&
-      fullDayMinutes > 0 &&
-      worked >= fullDayMinutes
-    ) {
-      // Late check-in but full hours worked → count as Present
-      nextStatus = "present";
-      nextIsLate = false;
-    }
+    const normalized = normalizeAttendanceStatus(
+      {
+        date: rec.date,
+        status: rec.status,
+        isLate: rec.isLate,
+        checkInTime: rec.checkInTime,
+        checkOutTime: now,
+        workedMinutes: worked,
+      },
+      emp,
+    );
 
     await db
       .update(attendanceTable)
@@ -250,8 +242,8 @@ router.post(
         checkOutTime: now,
         workedMinutes: worked,
         pausedAt: null,
-        status: nextStatus,
-        isLate: nextIsLate,
+        status: normalized.status as typeof attendanceTable.$inferInsert.status,
+        isLate: normalized.isLate,
       })
       .where(eq(attendanceTable.id, rec.id));
     const updatedRows = await db
@@ -259,7 +251,7 @@ router.post(
       .from(attendanceTable)
       .where(eq(attendanceTable.id, rec.id))
       .limit(1);
-    res.json(serializeRecord(updatedRows[0]!, emp.name));
+    res.json(serializeRecord(updatedRows[0]!, emp.name, emp));
   },
 );
 
@@ -308,7 +300,7 @@ router.get(
       hasCheckedIn: !!r.checkInTime,
       hasCheckedOut: !!r.checkOutTime,
       isPaused: !!r.pausedAt && !r.checkOutTime,
-      record: serializeRecord(r, emp.name),
+      record: serializeRecord(r, emp.name, emp),
     });
   },
 );
@@ -479,7 +471,7 @@ router.get("/attendance/me", requireAuth(["employee"]), async (req, res): Promis
       ),
     )
     .orderBy(attendanceTable.date);
-  res.json(rows.map((r) => serializeRecord(r, emp.name)));
+  res.json(rows.map((r) => serializeRecord(r, emp.name, emp)));
 });
 
 router.get(
@@ -509,7 +501,7 @@ router.get(
         ),
       )
       .orderBy(attendanceTable.date);
-    res.json(rows.map((r) => serializeRecord(r, emp.name)));
+    res.json(rows.map((r) => serializeRecord(r, emp.name, emp)));
   },
 );
 
@@ -554,13 +546,14 @@ router.get(
     for (const emp of allEmps) {
       const r = recMap.get(emp.id);
       if (r) {
-        if (r.status === "present") present += 1;
-        else if (r.status === "late") late += 1;
-        else if (r.status === "on_leave") onLeave += 1;
-        else if (r.status === "half_day") halfDay += 1;
-        else if (r.status === "remote_work") remoteWork += 1;
+        const normalized = normalizeAttendanceStatus(r, emp);
+        if (normalized.status === "present") present += 1;
+        else if (normalized.status === "late") late += 1;
+        else if (normalized.status === "on_leave") onLeave += 1;
+        else if (normalized.status === "half_day") halfDay += 1;
+        else if (normalized.status === "remote_work") remoteWork += 1;
         else absent += 1;
-        out.push(serializeRecord(r, emp.name));
+        out.push(serializeRecord(r, emp.name, emp));
       } else if (isFuture) {
         // Don't fabricate "absent" rows for future dates.
         out.push({
@@ -711,7 +704,7 @@ router.get(
       const r = recMap.get(dateStr);
       let status: string;
       if (r) {
-        status = r.status;
+        status = normalizeAttendanceStatus(r, emp).status;
       } else if (leaveDates.has(dateStr)) {
         status = "on_leave";
       } else if (dow === 0 || dow === 6) {
@@ -726,7 +719,7 @@ router.get(
       days.push({
         date: dateStr,
         status,
-        record: r ? serializeRecord(r, emp.name) : null,
+        record: r ? serializeRecord(r, emp.name, emp) : null,
       });
     }
 
@@ -775,9 +768,12 @@ router.get(
       );
     const lates = rows
       .filter((r) => !isPayrollOffDay(r.date, settings, holidaySet))
-      .filter((r) => r.isLate || r.status === "late")
+      .filter((r) => {
+        const normalized = normalizeAttendanceStatus(r, emp);
+        return normalized.isLate || normalized.status === "late";
+      })
       .sort((a, b) => (a.date < b.date ? -1 : 1))
-      .map((r) => serializeRecord(r, emp.name));
+      .map((r) => serializeRecord(r, emp.name, emp));
     res.json(lates);
   },
 );
@@ -916,7 +912,7 @@ router.post(
       record = insertedRows[0]!;
     }
 
-    res.json(serializeRecord(record, emp.name));
+    res.json(serializeRecord(record, emp.name, emp));
   },
 );
 
