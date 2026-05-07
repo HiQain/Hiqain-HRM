@@ -21,6 +21,7 @@ import {
   isPayrollOffDay,
   toHolidaySet,
 } from "../lib/payroll";
+import { resolveCompensationForDate } from "../lib/salary";
 import { getSettings } from "./settings";
 
 const router: IRouter = Router();
@@ -63,7 +64,7 @@ function buildPayslipBreakdown(
   components: Array<typeof salaryComponentsTable.$inferSelect>,
 ) {
   const basicSalary = Number(payslip.basicSalary);
-  const defaultAllowances = Number(employee.allowances);
+  const defaultAllowances = Number(payslip.allowances);
   const grossSalaryBase = basicSalary + defaultAllowances;
   const homeRent = roundAmount(defaultAllowances / 2);
   const utilityBills = roundAmount(defaultAllowances - homeRent);
@@ -303,11 +304,23 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
       ),
     );
   let eventBonus = 0;
-  let incrementAdjust = 0;
   for (const e of events) {
-    if (e.type === "bonus") eventBonus += Number(e.amount);
-    else if (e.type === "increment") incrementAdjust += Number(e.amount);
+    if (e.type === "bonus" || e.type === "commission") {
+      eventBonus += Number(e.amount);
+    }
   }
+
+  const allIncrementEvents = await db
+    .select()
+    .from(salaryEventsTable)
+    .where(and(eq(salaryEventsTable.employeeId, employeeId), eq(salaryEventsTable.type, "increment")));
+
+  const effectiveCompensation = resolveCompensationForDate(
+    emp,
+    allIncrementEvents,
+    end,
+    settings,
+  );
 
   // Salary components: replace defaults if any are configured
   const components = await db
@@ -326,14 +339,14 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
   const baseDesignation =
     designationFixed > 0
       ? designationFixed
-      : Number(emp.basicSalary) + incrementAdjust;
+      : effectiveCompensation.basicSalary;
 
-  const grossSalaryBase = baseDesignation + Number(emp.allowances);
+  const grossSalaryBase = baseDesignation + effectiveCompensation.allowances;
   const evalComponent = (c: (typeof components)[number]) =>
     resolveComponentValue(c, baseDesignation, grossSalaryBase);
 
   const basicSalary = baseDesignation;
-  let allowances = Number(emp.allowances);
+  let allowances = effectiveCompensation.allowances;
   let componentBonus = 0;
   let taxableComponentBonus = 0;
   let nonTaxableExtraAmount = 0;
@@ -381,7 +394,7 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
 
   const recurringGrossCompensation = basicSalary + allowances;
   const recurringTaxableCompensation =
-    basicSalary + Number(emp.allowances) + taxableRecurringAllowanceAdditions;
+    basicSalary + effectiveCompensation.allowances + taxableRecurringAllowanceAdditions;
   const perDay = recurringGrossCompensation / PAYROLL_MONTHLY_DIVISOR;
   const absenceDeduction = perDay * absentDays;
 

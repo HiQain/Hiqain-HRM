@@ -11,6 +11,7 @@ import {
   getGetEmployeeQueryKey,
   getGetEmployeePayslipsQueryKey,
   getGetSettingsQueryKey,
+  getListEmployeesQueryKey,
   type GeneralRequest,
   type GeneralRequestType,
 } from "@workspace/api-client-react";
@@ -107,11 +108,20 @@ export function AdminRequestsPage() {
     },
   });
 
-  const invalidate = () => {
+  const invalidate = (request?: GeneralRequest) => {
     qc.invalidateQueries({
       queryKey: getListGeneralRequestsQueryKey().slice(0, 1),
     });
     qc.invalidateQueries({ queryKey: getGetAdminDashboardQueryKey() });
+    qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
+    if (request?.employeeId) {
+      qc.invalidateQueries({
+        queryKey: getGetEmployeeQueryKey(request.employeeId),
+      });
+      qc.invalidateQueries({
+        queryKey: getGetEmployeePayslipsQueryKey(request.employeeId),
+      });
+    }
   };
 
   const onApprove = (r: GeneralRequest) => {
@@ -128,7 +138,7 @@ export function AdminRequestsPage() {
       {
         onSuccess: () => {
           toast.success("Request approved");
-          invalidate();
+          invalidate(r);
         },
         onError: (err) =>
           toast.error(err instanceof Error ? err.message : "Could not approve"),
@@ -142,7 +152,7 @@ export function AdminRequestsPage() {
       {
         onSuccess: () => {
           toast.success("Request rejected");
-          invalidate();
+          invalidate(r);
         },
         onError: (err) =>
           toast.error(err instanceof Error ? err.message : "Could not reject"),
@@ -299,7 +309,7 @@ export function AdminRequestsPage() {
         defaultMonths={settings?.loanDefaultMonths ?? 6}
         onClose={() => setLoanDialog(null)}
         onApproved={() => {
-          invalidate();
+          invalidate(loanDialog ?? undefined);
           setLoanDialog(null);
         }}
       />
@@ -311,7 +321,7 @@ export function AdminRequestsPage() {
         requests={(data ?? []).filter((item) => item.employeeId === pfDialog?.employeeId)}
         onClose={() => setPfDialog(null)}
         onApproved={() => {
-          invalidate();
+          invalidate(pfDialog ?? undefined);
           setPfDialog(null);
         }}
       />

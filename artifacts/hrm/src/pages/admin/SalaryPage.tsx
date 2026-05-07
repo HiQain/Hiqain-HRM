@@ -68,6 +68,7 @@ import { formatCurrency, formatDate, formatMonth } from "@/lib/utils";
 import {
   computeSalaryStructurePreview,
   getDefaultAllowanceBreakdown,
+  resolveHistoricalCompensation,
   isManualTaxComponent,
 } from "@/lib/salary";
 
@@ -139,20 +140,6 @@ export function AdminSalaryPage() {
   const visibleComponents = (components ?? []).filter(
     (component) => !isManualTaxComponent(component),
   );
-  const defaultAllowanceRows = getDefaultAllowanceBreakdown(emp?.allowances ?? 0);
-  const earnings = [
-    ...defaultAllowanceRows,
-    ...visibleComponents.filter((c) => !c.isDeduction),
-  ];
-  const deductions = visibleComponents.filter((c) => c.isDeduction);
-
-  const activeLoans = (loans ?? []).filter((l) => l.status === "active");
-  const closedLoans = (loans ?? []).filter((l) => l.status !== "active");
-
-  const monthPayslip = (payslips ?? []).find(
-    (p) => p.month === month && p.year === year,
-  );
-
   const filteredLateRecords = useMemo(() => {
     const weeklyOffDays = settings?.weeklyOffDays ?? [0, 6];
     const holidaySet = new Set(
@@ -168,14 +155,46 @@ export function AdminSalaryPage() {
   const excusedLates = filteredLateRecords.filter((r) => r.excused).length;
   const countedLates = totalLates - excusedLates;
   const defaultAllowances = emp?.allowances ?? 0;
-  const totalSalary = (emp?.basicSalary ?? 0) + defaultAllowances;
+  const effectiveCompensation = resolveHistoricalCompensation({
+    currentBasicSalary: emp?.basicSalary ?? 0,
+    currentAllowances: defaultAllowances,
+    incrementEvents: (emp?.salaryEvents ?? []).filter((event) => event.type === "increment"),
+    month,
+    year,
+    basicSalaryPercent: settings?.basicSalaryPercent ?? 50,
+    allowancePercent: settings?.allowancePercent ?? 50,
+  });
+  const defaultAllowanceRows = getDefaultAllowanceBreakdown(
+    effectiveCompensation.defaultAllowances,
+  );
+  const earnings = [
+    ...defaultAllowanceRows,
+    ...visibleComponents.filter((c) => !c.isDeduction),
+  ];
+  const deductions = visibleComponents.filter((c) => c.isDeduction);
+
+  const activeLoans = (loans ?? []).filter((l) => l.status === "active");
+  const closedLoans = (loans ?? []).filter((l) => l.status !== "active");
+
+  const monthPayslip = (payslips ?? []).find(
+    (p) => p.month === month && p.year === year,
+  );
+  const isPastPeriod =
+    year < now.getFullYear() ||
+    (year === now.getFullYear() && month < now.getMonth() + 1);
+  const displayedBasicSalary =
+    monthPayslip?.basicSalary ?? effectiveCompensation.basicSalary;
+  const displayedDefaultAllowances =
+    monthPayslip?.allowances ?? effectiveCompensation.defaultAllowances;
+  const totalSalary = displayedBasicSalary + displayedDefaultAllowances;
   const salaryPreview = computeSalaryStructurePreview({
-    basicSalary: emp?.basicSalary ?? 0,
-    defaultAllowances,
+    basicSalary: displayedBasicSalary,
+    defaultAllowances: displayedDefaultAllowances,
     components: visibleComponents,
     providentFundPercent: emp?.providentFundPercent,
     month,
     year,
+    useDesignationFixedOverride: !isPastPeriod,
   });
   const generatedPayrollTax =
     monthPayslip?.salaryBreakdown?.deductions?.find((line) => line.label === "Payroll Tax")
@@ -301,12 +320,12 @@ export function AdminSalaryPage() {
               <StatCard
                 icon={<Wallet className="h-4 w-4" />}
                 label="Basic salary"
-                value={formatCurrency(emp.basicSalary)}
+                value={formatCurrency(displayedBasicSalary)}
               />
               <StatCard
                 icon={<Coins className="h-4 w-4" />}
                 label="Default allowances"
-                value={formatCurrency(emp.allowances ?? 0)}
+                value={formatCurrency(displayedDefaultAllowances)}
               />
               <StatCard
                 icon={<Receipt className="h-4 w-4" />}
@@ -433,7 +452,7 @@ export function AdminSalaryPage() {
                   <MoneySummaryCard
                     label="PF deduction"
                     value={formatCurrency(
-                      ((emp.providentFundPercent ?? 0) / 100) * emp.basicSalary,
+                      ((emp.providentFundPercent ?? 0) / 100) * displayedBasicSalary,
                     )}
                     tone="down"
                   />

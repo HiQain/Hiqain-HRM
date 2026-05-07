@@ -107,6 +107,7 @@ import {
   buildScheduledHoursTargets,
   normalizeAttendanceWorkedMinutes,
 } from "@/lib/attendanceHours";
+import { inferPercentageBaseAmount } from "@/lib/salary";
 import { buildProvidentFundSummary } from "@/lib/providentFund";
 
 const PRIMARY_PAYROLL_BANK = "Bank Al Habib";
@@ -1236,6 +1237,7 @@ function SalaryTab({
   const qc = useQueryClient();
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "admin";
+  const canDeleteEvents = me?.role === "admin" || me?.role === "hr";
   const create = useCreateSalaryEvent();
   const update = useUpdateSalaryEvent();
   const del = useDeleteSalaryEvent();
@@ -1245,6 +1247,7 @@ function SalaryTab({
   const [mode, setMode] = useState<Mode>("fixed");
   const [amount, setAmount] = useState<number>(10000);
   const [percent, setPercent] = useState<number>(10);
+  const [percentBaseAmount, setPercentBaseAmount] = useState<number>(50000);
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState<string>("");
   const [editing, setEditing] = useState<null | {
@@ -1253,6 +1256,7 @@ function SalaryTab({
     mode: Mode;
     amount: number;
     percent: number;
+    percentBaseAmount: number;
     date: string;
     reason: string;
   }>(null);
@@ -1265,6 +1269,7 @@ function SalaryTab({
       ? {
           type,
           amountMode: "percentage" as const,
+          amount: percentBaseAmount,
           percentValue: percent,
           date: date as unknown as string,
           reason: reason || undefined,
@@ -1284,6 +1289,7 @@ function SalaryTab({
           qc.invalidateQueries({ queryKey: getGetEmployeeQueryKey(id) });
           qc.invalidateQueries({ queryKey: getGetEmployeeJourneyQueryKey(id) });
           setReason("");
+          setPercentBaseAmount(50000);
         },
         onError: () => toast.error("Could not record event"),
       },
@@ -1298,6 +1304,7 @@ function SalaryTab({
       ? {
           type: editing.type,
           amountMode: "percentage" as const,
+          amount: editing.percentBaseAmount,
           percentValue: editing.percent,
           date: editing.date as unknown as string,
           reason: editing.reason || null,
@@ -1384,19 +1391,35 @@ function SalaryTab({
           </div>
         )}
         {supportsPercentage(type) && mode === "percentage" ? (
-          <div className="relative">
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              value={percent}
-              onChange={(e) => setPercent(Number(e.target.value))}
-              placeholder="Percentage of basic salary"
-              className="pr-8"
-            />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-              %
-            </span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">% of amount</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={percentBaseAmount}
+                onChange={(e) => setPercentBaseAmount(Number(e.target.value))}
+                placeholder="50000"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">% value</Label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={percent}
+                  onChange={(e) => setPercent(Number(e.target.value))}
+                  placeholder="20"
+                  className="pr-8"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  %
+                </span>
+              </div>
+            </div>
           </div>
         ) : (
           <Input
@@ -1451,7 +1474,7 @@ function SalaryTab({
                     {e.amountMode === "percentage" &&
                       e.percentValue != null && (
                         <p className="text-[11px] text-muted-foreground">
-                          {e.percentValue}% of basic
+                          {e.percentValue}% of {formatCurrency(inferPercentageBaseAmount(e.amount, e.percentValue))}
                         </p>
                       )}
                   </div>
@@ -1470,6 +1493,10 @@ function SalaryTab({
                             : "fixed",
                         amount: e.amount,
                         percent: e.percentValue ?? 10,
+                        percentBaseAmount: inferPercentageBaseAmount(
+                          e.amount,
+                          e.percentValue,
+                        ),
                         date: e.date,
                         reason: e.reason ?? "",
                       })
@@ -1477,7 +1504,7 @@ function SalaryTab({
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  {isAdmin && (
+                  {canDeleteEvents && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -1570,21 +1597,39 @@ function SalaryTab({
             </div>
           )}
           {supportsPercentage(editing.type) && editing.mode === "percentage" ? (
-            <div className="relative">
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={editing.percent}
-                onChange={(e) =>
-                  setEditing({ ...editing, percent: Number(e.target.value) })
-                }
-                placeholder="Percentage of basic salary"
-                className="pr-8"
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                %
-              </span>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">% of amount</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={editing.percentBaseAmount}
+                  onChange={(e) =>
+                    setEditing({ ...editing, percentBaseAmount: Number(e.target.value) })
+                  }
+                  placeholder="50000"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">% value</Label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editing.percent}
+                    onChange={(e) =>
+                      setEditing({ ...editing, percent: Number(e.target.value) })
+                    }
+                    placeholder="20"
+                    className="pr-8"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    %
+                  </span>
+                </div>
+              </div>
             </div>
           ) : (
             <Input

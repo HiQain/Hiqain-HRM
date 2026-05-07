@@ -15,6 +15,11 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 import { getUser, hashPassword, requireAuth } from "../lib/auth";
 import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
+import {
+  applyPermanentIncrementToCompensation,
+  inferPercentageBaseAmount,
+  splitCompensationBySettings,
+} from "../lib/salary";
 import { getSettings } from "./settings";
 
 const router: IRouter = Router();
@@ -892,34 +897,31 @@ router.post(
   async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     const parsed = CreateSalaryEventBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ message: "Invalid payload" });
-      return;
-    }
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid payload" });
+    return;
+  }
+    const settings = await getSettings();
     // Resolve amount based on amountMode (fixed | percentage)
     const mode = parsed.data.amountMode ?? "fixed";
     let resolvedAmount: number;
     let percentValue: number | null = null;
     if (mode === "percentage") {
       const pct = parsed.data.percentValue;
+      const baseAmount = parsed.data.amount;
       if (pct === undefined || pct === null) {
         res
           .status(400)
           .json({ message: "percentValue is required when amountMode is 'percentage'" });
         return;
       }
-      const empRows = await db
-        .select()
-        .from(employeesTable)
-        .where(eq(employeesTable.id, id))
-        .limit(1);
-      const emp = empRows[0];
-      if (!emp) {
-        res.status(404).json({ message: "Employee not found" });
+      if (baseAmount === undefined || baseAmount === null) {
+        res
+          .status(400)
+          .json({ message: "amount is required when amountMode is 'percentage'" });
         return;
       }
-      const basic = Number(emp.basicSalary);
-      resolvedAmount = Math.round(((basic * pct) / 100) * 100) / 100;
+      resolvedAmount = Math.round(((baseAmount * pct) / 100) * 100) / 100;
       percentValue = pct;
     } else {
       if (parsed.data.amount === undefined || parsed.data.amount === null) {
@@ -968,10 +970,17 @@ router.post(
         .limit(1);
       const emp = empRows[0];
       if (emp) {
-        const newSalary = Number(emp.basicSalary) + resolvedAmount;
+        const nextCompensation = applyPermanentIncrementToCompensation(
+          emp,
+          resolvedAmount,
+          settings,
+        );
         await db
           .update(employeesTable)
-          .set({ basicSalary: String(newSalary) })
+          .set({
+            basicSalary: String(nextCompensation.basicSalary),
+            allowances: String(nextCompensation.allowances),
+          })
           .where(eq(employeesTable.id, id));
       }
     }
@@ -1000,6 +1009,7 @@ router.patch(
       res.status(400).json({ message: "Invalid payload" });
       return;
     }
+    const settings = await getSettings();
 
     const existingRows = await db
       .select()
@@ -1012,17 +1022,39 @@ router.patch(
       return;
     }
 
-    const updates: Partial<typeof salaryEventsTable.$inferInsert> = {};
-    if (parsed.data.type !== undefined) updates.type = parsed.data.type;
-    if (parsed.data.amount !== undefined)
-      updates.amount = String(parsed.data.amount);
-    if (parsed.data.amountMode !== undefined && parsed.data.amountMode !== null)
-      updates.amountMode = parsed.data.amountMode;
-    if (parsed.data.percentValue !== undefined)
-      updates.percentValue =
-        parsed.data.percentValue !== null
-          ? String(parsed.data.percentValue)
+    const nextType = parsed.data.type ?? existing.type;
+    const nextMode = parsed.data.amountMode ?? existing.amountMode ?? "fixed";
+    let nextPercentValue =
+      parsed.data.percentValue !== undefined
+        ? parsed.data.percentValue
+        : existing.percentValue !== null
+          ? Number(existing.percentValue)
           : null;
+    let nextAmount: number;
+
+    if (nextMode === "percentage") {
+      if (nextPercentValue == null) {
+        res.status(400).json({ message: "percentValue is required when amountMode is 'percentage'" });
+        return;
+      }
+      const baseAmount =
+        parsed.data.amount !== undefined
+          ? parsed.data.amount
+          : inferPercentageBaseAmount(Number(existing.amount), Number(existing.percentValue));
+      nextAmount = Math.round(((baseAmount * nextPercentValue) / 100) * 100) / 100;
+    } else {
+      nextAmount =
+        parsed.data.amount !== undefined ? parsed.data.amount : Number(existing.amount);
+      nextPercentValue =
+        parsed.data.percentValue !== undefined ? parsed.data.percentValue : null;
+    }
+
+    const updates: Partial<typeof salaryEventsTable.$inferInsert> = {
+      amount: String(nextAmount),
+      amountMode: nextMode,
+      percentValue: nextPercentValue != null ? String(nextPercentValue) : null,
+    };
+    if (parsed.data.type !== undefined) updates.type = parsed.data.type;
     if (parsed.data.date !== undefined)
       updates.date = parsed.data.date as unknown as string;
     if (parsed.data.reason !== undefined)
@@ -1035,12 +1067,7 @@ router.patch(
 
     // Reverse-and-reapply increment effect on the employee's basicSalary if needed
     const wasIncrement = existing.type === "increment";
-    const newType = parsed.data.type ?? existing.type;
-    const newAmount =
-      parsed.data.amount !== undefined
-        ? Number(parsed.data.amount)
-        : Number(existing.amount);
-    const isIncrement = newType === "increment";
+    const isIncrement = nextType === "increment";
     if (wasIncrement || isIncrement) {
       const empRows = await db
         .select()
@@ -1049,12 +1076,20 @@ router.patch(
         .limit(1);
       const emp = empRows[0];
       if (emp) {
-        let salary = Number(emp.basicSalary);
-        if (wasIncrement) salary -= Number(existing.amount);
-        if (isIncrement) salary += newAmount;
+        const currentTotal = Number(emp.basicSalary) + Number(emp.allowances);
+        let nextTotal = currentTotal;
+        if (wasIncrement) nextTotal -= Number(existing.amount);
+        if (isIncrement) nextTotal += nextAmount;
+        const nextCompensation = splitCompensationBySettings(
+          Math.max(0, nextTotal),
+          settings,
+        );
         await db
           .update(employeesTable)
-          .set({ basicSalary: String(salary) })
+          .set({
+            basicSalary: String(nextCompensation.basicSalary),
+            allowances: String(nextCompensation.allowances),
+          })
           .where(eq(employeesTable.id, id));
       }
     }
@@ -1080,9 +1115,43 @@ router.patch(
 
 router.delete(
   "/employees/:id/salary-events/:eventId",
-  requireAuth(["admin"]),
+  requireAuth(["admin", "hr"]),
   async (req, res) => {
+    const id = Number(req.params.id);
     const eventId = Number(req.params.eventId);
+    const settings = await getSettings();
+    const existingRows = await db
+      .select()
+      .from(salaryEventsTable)
+      .where(eq(salaryEventsTable.id, eventId))
+      .limit(1);
+    const existing = existingRows[0];
+    if (!existing) {
+      res.status(404).json({ message: "Salary event not found" });
+      return;
+    }
+    if (existing.type === "increment") {
+      const empRows = await db
+        .select()
+        .from(employeesTable)
+        .where(eq(employeesTable.id, id))
+        .limit(1);
+      const emp = empRows[0];
+      if (emp) {
+        const currentTotal = Number(emp.basicSalary) + Number(emp.allowances) - Number(existing.amount);
+        const nextCompensation = splitCompensationBySettings(
+          Math.max(0, currentTotal),
+          settings,
+        );
+        await db
+          .update(employeesTable)
+          .set({
+            basicSalary: String(nextCompensation.basicSalary),
+            allowances: String(nextCompensation.allowances),
+          })
+          .where(eq(employeesTable.id, id));
+      }
+    }
     await db
       .delete(salaryEventsTable)
       .where(eq(salaryEventsTable.id, eventId));

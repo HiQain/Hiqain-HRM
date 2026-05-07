@@ -12,6 +12,7 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
+import { applyPermanentIncrementToCompensation } from "../lib/salary";
 import { getSettings } from "./settings";
 import { computeLoanEligibility } from "./loans";
 
@@ -720,6 +721,27 @@ router.post(
         date: row.date,
         reason: row.reason,
       });
+      const settings = await getSettings();
+      const empRows = await db
+        .select()
+        .from(employeesTable)
+        .where(eq(employeesTable.id, row.employeeId))
+        .limit(1);
+      const emp = empRows[0];
+      if (emp) {
+        const nextCompensation = applyPermanentIncrementToCompensation(
+          emp,
+          Number(row.amount ?? 0),
+          settings,
+        );
+        await db
+          .update(employeesTable)
+          .set({
+            basicSalary: String(nextCompensation.basicSalary),
+            allowances: String(nextCompensation.allowances),
+          })
+          .where(eq(employeesTable.id, row.employeeId));
+      }
     }
     // For 'late' and 'resignation' / 'other' we just record the acknowledgement.
 

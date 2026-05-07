@@ -85,6 +85,57 @@ function roundCurrency(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+export function splitCompensationByPercentages(
+  totalSalary: number,
+  basicSalaryPercent = 50,
+  allowancePercent = 50,
+) {
+  const total = Math.max(0, totalSalary);
+  const ratioSum = Math.max(1, basicSalaryPercent + allowancePercent);
+  const basicSalary = roundCurrency(total * (basicSalaryPercent / ratioSum));
+  const defaultAllowances = roundCurrency(total - basicSalary);
+  return { basicSalary, defaultAllowances };
+}
+
+export function resolveHistoricalCompensation({
+  currentBasicSalary,
+  currentAllowances,
+  incrementEvents,
+  month,
+  year,
+  basicSalaryPercent = 50,
+  allowancePercent = 50,
+}: {
+  currentBasicSalary: number;
+  currentAllowances: number;
+  incrementEvents: Array<{ amount: number; date: string; type?: string }>;
+  month: number;
+  year: number;
+  basicSalaryPercent?: number;
+  allowancePercent?: number;
+}) {
+  const currentTotal = currentBasicSalary + currentAllowances;
+  const effectiveDate = `${year}-${String(month).padStart(2, "0")}-${String(
+    new Date(year, month, 0).getDate(),
+  ).padStart(2, "0")}`;
+  const futureIncrementTotal = incrementEvents
+    .filter((event) => (event.type ?? "increment") === "increment" && event.date > effectiveDate)
+    .reduce((sum, event) => sum + Number(event.amount), 0);
+  return splitCompensationByPercentages(
+    currentTotal - futureIncrementTotal,
+    basicSalaryPercent,
+    allowancePercent,
+  );
+}
+
+export function inferPercentageBaseAmount(
+  resolvedAmount: number,
+  percentValue?: number | null,
+) {
+  if (!percentValue || percentValue <= 0) return resolvedAmount;
+  return roundCurrency((resolvedAmount * 100) / percentValue);
+}
+
 export function getDefaultAllowanceBreakdown(defaultAllowances: number) {
   const total = Math.max(0, defaultAllowances);
   const homeRent = roundCurrency(total / 2);
@@ -119,6 +170,7 @@ export function computeSalaryStructurePreview({
   providentFundPercent,
   month,
   year,
+  useDesignationFixedOverride = true,
 }: {
   basicSalary: number;
   defaultAllowances: number;
@@ -126,6 +178,7 @@ export function computeSalaryStructurePreview({
   providentFundPercent: number | null | undefined;
   month: number;
   year: number;
+  useDesignationFixedOverride?: boolean;
 }) {
   const designationFixed = components
     .filter(
@@ -136,7 +189,10 @@ export function computeSalaryStructurePreview({
     )
     .reduce((sum, component) => sum + component.value, 0);
 
-  const resolvedBasicSalary = designationFixed > 0 ? designationFixed : basicSalary;
+  const resolvedBasicSalary =
+    useDesignationFixedOverride && designationFixed > 0
+      ? designationFixed
+      : basicSalary;
   const grossSalaryBase = resolvedBasicSalary + defaultAllowances;
   let componentAllowances = 0;
   let nonTaxableAllowances = 0;

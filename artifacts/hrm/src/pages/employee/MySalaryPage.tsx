@@ -97,6 +97,7 @@ export function MySalaryPage() {
   const latestPayrollTax =
     latestPayslip?.salaryBreakdown?.deductions?.find((line) => line.label === "Payroll Tax")
       ?.amount ?? null;
+  const currentProjectedTax = salaryPreview.tax;
   const latestLatePenalty =
     latestPayslip && latestPayslip.totalWorkingDays > 0
       ? ((latestPayslip.basicSalary / latestPayslip.totalWorkingDays) *
@@ -154,7 +155,7 @@ export function MySalaryPage() {
         <StatCard
           icon={<Landmark className="h-4 w-4" />}
           label="Tax"
-          value={formatCurrency(latestPayrollTax ?? salaryPreview.tax)}
+          value={formatCurrency(currentProjectedTax)}
         />
       </div>
 
@@ -193,7 +194,7 @@ export function MySalaryPage() {
             />
             <PayrollPreviewCard
               label="Payroll tax"
-              value={formatCurrency(latestPayrollTax ?? salaryPreview.tax)}
+              value={formatCurrency(currentProjectedTax)}
               tone="down"
             />
             <PayrollPreviewCard
