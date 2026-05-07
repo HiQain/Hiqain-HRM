@@ -206,6 +206,9 @@ function ListView({
   employeeId: number | null;
   month: string;
 }) {
+  const qc = useQueryClient();
+  const override = useOverrideAttendance();
+  const [editingRowKey, setEditingRowKey] = useState<string | null>(null);
   const params = { month };
   const calendarParams = { employeeId: employeeId ?? 0, month };
   const { data, isLoading } = useGetEmployeeAttendance(employeeId ?? 0, params, {
@@ -256,6 +259,42 @@ function ListView({
     return s;
   }, [rows]);
 
+  const handleStatusChange = (
+    rowKey: string,
+    date: string,
+    newStatus: AttendanceOverrideRequestStatus,
+  ) => {
+    if (!employeeId) return;
+    setEditingRowKey(rowKey);
+    override.mutate(
+      {
+        data: {
+          employeeId,
+          date,
+          status: newStatus,
+        },
+      },
+      {
+        onSuccess: async () => {
+          toast.success("Attendance updated");
+          await Promise.all([
+            qc.invalidateQueries({
+              queryKey: getGetEmployeeAttendanceQueryKey(employeeId, params),
+            }),
+            qc.invalidateQueries({
+              queryKey: getGetAttendanceCalendarQueryKey(calendarParams),
+            }),
+          ]);
+          setEditingRowKey(null);
+        },
+        onError: () => {
+          toast.error("Could not update attendance");
+          setEditingRowKey(null);
+        },
+      },
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -281,6 +320,7 @@ function ListView({
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Change status</TableHead>
               <TableHead>Check-in</TableHead>
               <TableHead>Check-out</TableHead>
               <TableHead className="text-right">Worked</TableHead>
@@ -289,19 +329,19 @@ function ListView({
           <TableBody>
             {!employeeId ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   Select an employee to view attendance.
                 </TableCell>
               </TableRow>
             ) : isLoading || calendarLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   No records for this month.
                 </TableCell>
               </TableRow>
@@ -311,6 +351,30 @@ function ListView({
                   <TableCell>{formatDate(r.date)}</TableCell>
                   <TableCell>
                     <StatusBadge status={r.status} />
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={r.status}
+                      onValueChange={(value) =>
+                        handleStatusChange(
+                          `${r.date}-${r.id}`,
+                          r.date,
+                          value as AttendanceOverrideRequestStatus,
+                        )
+                      }
+                      disabled={editingRowKey === `${r.date}-${r.id}` && override.isPending}
+                    >
+                      <SelectTrigger className="h-8 w-[160px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell>{formatTime(r.checkInTime)}</TableCell>
                   <TableCell>{formatTime(r.checkOutTime)}</TableCell>
