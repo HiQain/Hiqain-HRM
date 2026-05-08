@@ -87,6 +87,7 @@ export function AdminSettingsPage() {
     query: { queryKey: getGetSettingsQueryKey() },
   });
   const update = useUpdateSettings();
+  const holidayUpdate = useUpdateSettings();
 
   const [form, setForm] = useState({
     companyName: "",
@@ -221,6 +222,25 @@ export function AdminSettingsPage() {
   const resetHolidayDraft = () =>
     setHolidayDraft({ date: "", name: "", country: "other", editingKey: null });
 
+  const persistHolidays = (
+    nextHolidays: Array<{ date: string; name: string; country: Country }>,
+    successMessage: string,
+  ) => {
+    holidayUpdate.mutate(
+      { data: { publicHolidays: nextHolidays } },
+      {
+        onSuccess: () => {
+          toast.success(successMessage);
+          qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+        },
+        onError: () => {
+          toast.error("Could not save holiday changes");
+          qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+        },
+      },
+    );
+  };
+
   const saveHolidayDraft = () => {
     const date = holidayDraft.date.trim();
     const name = holidayDraft.name.trim();
@@ -235,17 +255,23 @@ export function AdminSettingsPage() {
       country: holidayDraft.country,
     };
 
+    let nextHolidays: Array<{ date: string; name: string; country: Country }> = [];
     setForm((current) => {
       const remaining = current.publicHolidays.filter(
         (holiday) =>
           `${holiday.date}-${holiday.name}-${holiday.country}` !==
           holidayDraft.editingKey,
       );
+      nextHolidays = sortHolidays([...remaining, nextHoliday]);
       return {
         ...current,
-        publicHolidays: sortHolidays([...remaining, nextHoliday]),
+        publicHolidays: nextHolidays,
       };
     });
+    persistHolidays(
+      nextHolidays,
+      holidayDraft.editingKey ? "Holiday updated" : "Holiday added",
+    );
     resetHolidayDraft();
   };
 
@@ -259,20 +285,25 @@ export function AdminSettingsPage() {
   };
 
   const removeHoliday = (holiday: { date: string; name: string; country: Country }) => {
-    setForm((current) => ({
-      ...current,
-      publicHolidays: current.publicHolidays.filter(
+    let nextHolidays: Array<{ date: string; name: string; country: Country }> = [];
+    setForm((current) => {
+      nextHolidays = current.publicHolidays.filter(
         (item) =>
           `${item.date}-${item.name}-${item.country}` !==
           `${holiday.date}-${holiday.name}-${holiday.country}`,
-      ),
-    }));
+      );
+      return {
+        ...current,
+        publicHolidays: nextHolidays,
+      };
+    });
     if (
       holidayDraft.editingKey ===
       `${holiday.date}-${holiday.name}-${holiday.country}`
     ) {
       resetHolidayDraft();
     }
+    persistHolidays(nextHolidays, "Holiday removed");
   };
 
   const onSubmit = (e: FormEvent) => {
@@ -776,7 +807,11 @@ export function AdminSettingsPage() {
                     <SelectItem value="us">US</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button type="button" onClick={saveHolidayDraft}>
+                <Button
+                  type="button"
+                  onClick={saveHolidayDraft}
+                  disabled={holidayUpdate.isPending}
+                >
                   {holidayDraft.editingKey ? (
                     <>
                       <Pencil className="mr-2 h-4 w-4" />
@@ -790,7 +825,12 @@ export function AdminSettingsPage() {
                   )}
                 </Button>
                 {holidayDraft.editingKey && (
-                  <Button type="button" variant="ghost" onClick={resetHolidayDraft}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={resetHolidayDraft}
+                    disabled={holidayUpdate.isPending}
+                  >
                     Cancel
                   </Button>
                 )}
@@ -833,7 +873,7 @@ export function AdminSettingsPage() {
         </Section>
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={update.isPending}>
+          <Button type="submit" disabled={update.isPending || holidayUpdate.isPending}>
             {update.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
