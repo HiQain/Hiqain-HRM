@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type GetMonthlyAdminViewQueryResult,
   getGetMonthlyAdminViewQueryKey,
@@ -44,6 +44,14 @@ const SALARY_WIDTHS = {
 function currentMonthValue() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function currentDateValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function toMonthYear(value: string) {
@@ -102,13 +110,39 @@ function stickyCell(left: number, z = 20) {
 export function AdminMonthlyViewPage() {
   const [tab, setTab] = useState<"attendance" | "salary">("attendance");
   const [monthValue, setMonthValue] = useState(currentMonthValue);
+  const [attendanceScrollDate, setAttendanceScrollDate] = useState<string | null>(null);
+  const attendanceScrollRef = useRef<HTMLDivElement | null>(null);
   const { month, year } = useMemo(() => toMonthYear(monthValue), [monthValue]);
   const params = useMemo(() => ({ month, year }), [month, year]);
   const { data, isLoading } = useGetMonthlyAdminView(params, {
     query: { queryKey: getGetMonthlyAdminViewQueryKey(params) },
   });
 
-  const onToday = () => setMonthValue(currentMonthValue());
+  useEffect(() => {
+    if (tab !== "attendance" || !attendanceScrollDate) return;
+    if (!(data?.days ?? []).some((day) => day.date === attendanceScrollDate)) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const container = attendanceScrollRef.current;
+      const target = container?.querySelector<HTMLElement>(
+        `[data-day-date="${attendanceScrollDate}"]`,
+      );
+      target?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+      setAttendanceScrollDate(null);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [attendanceScrollDate, data?.days, tab]);
+
+  const onToday = () => {
+    setMonthValue(currentMonthValue());
+    setTab("attendance");
+    setAttendanceScrollDate(currentDateValue());
+  };
 
   return (
     <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
@@ -167,7 +201,11 @@ export function AdminMonthlyViewPage() {
             </Button>
           </div>
 
-          <AttendanceSheet data={data} isLoading={isLoading} />
+          <AttendanceSheet
+            data={data}
+            isLoading={isLoading}
+            scrollContainerRef={attendanceScrollRef}
+          />
         </TabsContent>
 
         <TabsContent value="salary" className="mt-5">
@@ -181,13 +219,18 @@ export function AdminMonthlyViewPage() {
 function AttendanceSheet({
   data,
   isLoading,
+  scrollContainerRef,
 }: {
   data: GetMonthlyAdminViewQueryResult | undefined;
   isLoading: boolean;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
 }) {
   return (
     <div className="max-w-full overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-      <div className="max-w-full overflow-x-auto overflow-y-hidden">
+      <div
+        ref={scrollContainerRef}
+        className="max-w-full overflow-x-auto overflow-y-hidden"
+      >
         <div className="inline-block min-w-full align-top">
           <table className="w-max min-w-full border-collapse text-sm">
             <thead>
@@ -248,6 +291,7 @@ function AttendanceSheet({
                   return (
                     <th
                       key={day.date}
+                      data-day-date={day.date}
                       className={cn(
                         "min-w-[110px] border border-slate-200 px-2 py-2.5 text-center align-top",
                         day.isOffDay ? "bg-amber-50/50" : "bg-slate-50",

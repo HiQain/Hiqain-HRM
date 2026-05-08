@@ -10,8 +10,11 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { ymd } from "../lib/dates";
 import {
+  clearManualAttendanceOverride,
+  markManualAttendanceOverride,
   normalizeAttendanceStatus,
   officeMinutes,
+  officeEndForShiftDate,
   officeStartForShiftDate,
   resolveAttendanceShiftDate,
 } from "../lib/attendance";
@@ -19,6 +22,61 @@ import { isPayrollOffDay, toHolidaySet } from "../lib/payroll";
 import { getSettings } from "./settings";
 
 const router: IRouter = Router();
+
+function resolveOverrideAttendanceFields(
+  employee: Pick<
+    typeof employeesTable.$inferSelect,
+    "officeStartTime" | "officeEndTime" | "gracePeriodMinutes"
+  >,
+  date: string,
+  status: string,
+  existing?: typeof attendanceTable.$inferSelect,
+) {
+  const shiftStart = officeStartForShiftDate(employee, date);
+  const shiftEnd = officeEndForShiftDate(employee, date);
+  const fullShiftMinutes = officeMinutes(employee);
+  const lateStart = new Date(
+    shiftStart.getTime() + (employee.gracePeriodMinutes + 1) * 60_000,
+  );
+
+  if (status === "absent") {
+    return {
+      checkInTime: null,
+      checkOutTime: null,
+      workedMinutes: 0,
+    };
+  }
+
+  if (status === "half_day") {
+    return {
+      checkInTime: existing?.checkInTime ?? shiftStart,
+      checkOutTime: existing?.checkOutTime ?? shiftEnd,
+      workedMinutes: Math.max(1, Math.round(fullShiftMinutes / 2)),
+    };
+  }
+
+  if (status === "late") {
+    return {
+      checkInTime: existing?.checkInTime ?? lateStart,
+      checkOutTime: existing?.checkOutTime ?? shiftEnd,
+      workedMinutes: fullShiftMinutes,
+    };
+  }
+
+  if (status === "present" || status === "remote_work" || status === "on_leave") {
+    return {
+      checkInTime: existing?.checkInTime ?? shiftStart,
+      checkOutTime: existing?.checkOutTime ?? shiftEnd,
+      workedMinutes: fullShiftMinutes,
+    };
+  }
+
+  return {
+    checkInTime: existing?.checkInTime ?? null,
+    checkOutTime: existing?.checkOutTime ?? null,
+    workedMinutes: existing?.workedMinutes ?? 0,
+  };
+}
 
 function serializeRecord(
   r: typeof attendanceTable.$inferSelect,
@@ -137,6 +195,7 @@ router.post(
           checkInTime: now,
           isLate,
           status,
+          notes: clearManualAttendanceOverride(existing[0]!.notes),
           pausedAt: null,
           pausedMinutes: 0,
         })
@@ -156,6 +215,7 @@ router.post(
           checkInTime: now,
           isLate,
           status,
+          notes: null,
           pausedAt: null,
           pausedMinutes: 0,
         })
@@ -244,6 +304,7 @@ router.post(
         pausedAt: null,
         status: normalized.status as typeof attendanceTable.$inferInsert.status,
         isLate: normalized.isLate,
+        notes: clearManualAttendanceOverride(rec.notes),
       })
       .where(eq(attendanceTable.id, rec.id));
     const updatedRows = await db
@@ -514,6 +575,11 @@ router.get(
     const targetDate = isValidDate ? dateParam : ymd(new Date());
     const today = ymd(new Date());
     const allEmps = await db.select().from(employeesTable);
+    const settings = await getSettings();
+    const holidaySet = toHolidaySet(settings);
+    const targetDow = new Date(`${targetDate}T00:00:00Z`).getUTCDay();
+    const isWeeklyOff = (settings.weeklyOffDays ?? [0, 6]).includes(targetDow);
+    const isHoliday = holidaySet.has(targetDate);
 
     const records = await db
       .select()
@@ -545,7 +611,58 @@ router.get(
     let remoteWork = 0;
     for (const emp of allEmps) {
       const r = recMap.get(emp.id);
-      if (r) {
+      if (targetDate < emp.joiningDate) {
+        out.push({
+          id: -emp.id,
+          employeeId: emp.id,
+          employeeName: emp.name,
+          date: targetDate,
+          checkInTime: null,
+          checkOutTime: null,
+          workedMinutes: null,
+          pausedAt: null,
+          pausedMinutes: 0,
+          isPaused: false,
+          status: "none",
+          isLate: false,
+          excused: false,
+          notes: null,
+        });
+      } else if (isHoliday) {
+        out.push({
+          id: -(emp.id * 10),
+          employeeId: emp.id,
+          employeeName: emp.name,
+          date: targetDate,
+          checkInTime: null,
+          checkOutTime: null,
+          workedMinutes: null,
+          pausedAt: null,
+          pausedMinutes: 0,
+          isPaused: false,
+          status: "holiday",
+          isLate: false,
+          excused: false,
+          notes: null,
+        });
+      } else if (isWeeklyOff) {
+        out.push({
+          id: -(emp.id * 100),
+          employeeId: emp.id,
+          employeeName: emp.name,
+          date: targetDate,
+          checkInTime: null,
+          checkOutTime: null,
+          workedMinutes: null,
+          pausedAt: null,
+          pausedMinutes: 0,
+          isPaused: false,
+          status: "weekend",
+          isLate: false,
+          excused: false,
+          notes: null,
+        });
+      } else if (r) {
         const normalized = normalizeAttendanceStatus(r, emp);
         if (normalized.status === "present") present += 1;
         else if (normalized.status === "late") late += 1;
@@ -567,7 +684,7 @@ router.get(
           pausedAt: null,
           pausedMinutes: 0,
           isPaused: false,
-          status: "absent",
+          status: "future",
           isLate: false,
           excused: false,
           notes: null,
@@ -652,6 +769,9 @@ router.get(
       res.status(404).json({ message: "Employee not found" });
       return;
     }
+    const settings = await getSettings();
+    const holidaySet = toHolidaySet(settings);
+    const weeklyOffDays = new Set(settings.weeklyOffDays ?? [0, 6]);
 
     const { start, end, year, month } = monthRange(
       req.query.month as string | undefined,
@@ -703,16 +823,18 @@ router.get(
       const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
       const r = recMap.get(dateStr);
       let status: string;
-      if (r) {
-        status = normalizeAttendanceStatus(r, emp).status;
+      if (dateStr < emp.joiningDate) {
+        status = "none";
+      } else if (holidaySet.has(dateStr)) {
+        status = "holiday";
+      } else if (weeklyOffDays.has(dow)) {
+        status = "weekend";
       } else if (leaveDates.has(dateStr)) {
         status = "on_leave";
-      } else if (dow === 0 || dow === 6) {
-        status = "weekend";
+      } else if (r) {
+        status = normalizeAttendanceStatus(r, emp).status;
       } else if (dateStr > todayStr) {
         status = "future";
-      } else if (dateStr < emp.joiningDate) {
-        status = "none";
       } else {
         status = "absent";
       }
@@ -876,12 +998,21 @@ router.post(
 
     let record;
     if (existing.length) {
+      const overrideFields = resolveOverrideAttendanceFields(
+        emp,
+        date,
+        status,
+        existing[0]!,
+      );
       await db
         .update(attendanceTable)
         .set({
           status,
           isLate: status === "late",
-          notes: notes ?? existing[0]!.notes,
+          checkInTime: overrideFields.checkInTime,
+          checkOutTime: overrideFields.checkOutTime,
+          workedMinutes: overrideFields.workedMinutes,
+          notes: markManualAttendanceOverride(notes ?? existing[0]!.notes),
         })
         .where(eq(attendanceTable.id, existing[0]!.id));
       const updatedRows = await db
@@ -891,6 +1022,7 @@ router.post(
         .limit(1);
       record = updatedRows[0]!;
     } else {
+      const overrideFields = resolveOverrideAttendanceFields(emp, date, status);
       const inserted = await db
         .insert(attendanceTable)
         .values({
@@ -898,7 +1030,10 @@ router.post(
           date,
           status,
           isLate: status === "late",
-          notes: notes ?? null,
+          checkInTime: overrideFields.checkInTime,
+          checkOutTime: overrideFields.checkOutTime,
+          workedMinutes: overrideFields.workedMinutes,
+          notes: markManualAttendanceOverride(notes ?? null),
         })
         .$returningId();
       const recordId = inserted[0]?.id;

@@ -12,6 +12,10 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
+import {
+  getProvidentFundPolicyStartDate,
+  isProvidentFundPolicyActiveForPeriod,
+} from "../lib/provident-fund-policy";
 import { applyPermanentIncrementToCompensation } from "../lib/salary";
 import { getSettings } from "./settings";
 import { computeLoanEligibility } from "./loans";
@@ -137,7 +141,15 @@ async function computeProvidentFundBalance(
   const probationEndDate = subtractDay(
     addMonths(joiningDate, employee.probationMonths),
   );
-  const withdrawalEligibleFrom = addMonths(joiningDate, 12);
+  const oneYearAfterJoining = addMonths(joiningDate, 12);
+  const policyStartDate = getProvidentFundPolicyStartDate();
+  const withdrawalEligibleFrom = new Date(
+    Math.max(
+      oneYearAfterJoining.getTime(),
+      probationEndDate.getTime() + 86400000,
+      policyStartDate.getTime(),
+    ),
+  );
   const now = new Date();
 
   const payslips = await db
@@ -154,6 +166,9 @@ async function computeProvidentFundBalance(
     payslips.reduce((sum, payslip) => {
       const periodEnd = new Date(Date.UTC(payslip.year, payslip.month, 0));
       if (periodEnd.getTime() <= probationEndDate.getTime()) return sum;
+      if (!isProvidentFundPolicyActiveForPeriod(payslip.month, payslip.year)) {
+        return sum;
+      }
 
       const basicSalary = Number(payslip.basicSalary);
       const pfFromComponent = components
@@ -210,6 +225,7 @@ async function computeProvidentFundBalance(
     withdrawalEligibleFrom: ymd(withdrawalEligibleFrom),
     oneYearCompleted: diffMonths(joiningDate, now) >= 12,
     probationCompleted: now.getTime() > probationEndDate.getTime(),
+    policyStarted: now.getTime() >= policyStartDate.getTime(),
     currentBalance,
     availableBalance,
   };
@@ -231,6 +247,12 @@ async function validateProvidentFundWithdrawal(
     return {
       ok: false as const,
       message: `PF starts after probation. Probation completes on ${summary.probationEndDate}.`,
+    };
+  }
+  if (!summary.policyStarted) {
+    return {
+      ok: false as const,
+      message: `PF policy starts on ${ymd(getProvidentFundPolicyStartDate())}.`,
     };
   }
   if (amount <= 0) {

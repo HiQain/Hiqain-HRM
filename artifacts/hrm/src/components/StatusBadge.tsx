@@ -8,6 +8,7 @@ type Status =
   | "half_day"
   | "remote_work"
   | "weekend"
+  | "holiday"
   | "future"
   | "none"
   | "pending"
@@ -22,6 +23,7 @@ const LABELS: Record<Status, string> = {
   half_day: "Half Day",
   remote_work: "Remote Work",
   weekend: "Weekend",
+  holiday: "Holiday",
   future: "—",
   none: "—",
   pending: "Pending",
@@ -37,6 +39,7 @@ const STYLES: Record<Status, string> = {
   half_day: "bg-purple-50 text-purple-700 ring-purple-200",
   remote_work: "bg-teal-50 text-teal-700 ring-teal-200",
   weekend: "bg-slate-50 text-slate-500 ring-slate-200",
+  holiday: "bg-indigo-50 text-indigo-700 ring-indigo-200",
   future: "bg-slate-50 text-slate-400 ring-slate-200",
   none: "bg-slate-50 text-slate-400 ring-slate-200",
   pending: "bg-amber-50 text-amber-700 ring-amber-200",
@@ -52,6 +55,7 @@ const DOTS: Record<Status, string> = {
   half_day: "bg-purple-500",
   remote_work: "bg-teal-500",
   weekend: "bg-slate-400",
+  holiday: "bg-indigo-500",
   future: "bg-slate-300",
   none: "bg-slate-300",
   pending: "bg-amber-500",

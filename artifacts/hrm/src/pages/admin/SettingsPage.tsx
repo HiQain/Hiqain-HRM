@@ -8,19 +8,37 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
+  Plus,
   Upload,
   FileText,
   X,
   Type,
   Paperclip,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { getApiUrl } from "@/lib/api";
 import {
@@ -80,6 +98,7 @@ export function AdminSettingsPage() {
     defaultOfficeStartTime: "09:00",
     defaultOfficeEndTime: "18:00",
     weeklyOffDays: [0, 6] as number[],
+    publicHolidays: [] as Array<{ date: string; name: string; country: Country }>,
     proRatedQuotas: true,
     attendancePolicy: "",
     attendancePolicyFileUrl: "",
@@ -102,6 +121,17 @@ export function AdminSettingsPage() {
   const [uploadingAttendance, setUploadingAttendance] = useState(false);
   const [uploadingCompany, setUploadingCompany] = useState(false);
   const [holidayFilter, setHolidayFilter] = useState<HolidayFilter>("all");
+  const [holidayDraft, setHolidayDraft] = useState<{
+    date: string;
+    name: string;
+    country: Country;
+    editingKey: string | null;
+  }>({
+    date: "",
+    name: "",
+    country: "other",
+    editingKey: null,
+  });
   const currentHolidayYear = getCurrentHolidayYear();
 
   useEffect(() => {
@@ -116,6 +146,14 @@ export function AdminSettingsPage() {
         defaultOfficeStartTime: data.defaultOfficeStartTime,
         defaultOfficeEndTime: data.defaultOfficeEndTime,
         weeklyOffDays: data.weeklyOffDays,
+        publicHolidays: data.publicHolidays.map((h) => ({
+          date: h.date as unknown as string,
+          name: h.name,
+          country: normalizeHolidayCountry(
+            h.country as Country | undefined,
+            h.name,
+          ),
+        })),
         proRatedQuotas: data.proRatedQuotas,
         attendancePolicy: data.attendancePolicy,
         attendancePolicyFileUrl: data.attendancePolicyFileUrl,
@@ -139,20 +177,8 @@ export function AdminSettingsPage() {
   }, [data]);
 
   const holidays = useMemo(
-    () =>
-      data
-        ? sortHolidays(
-          data.publicHolidays.map((h) => ({
-            date: h.date as unknown as string,
-            name: h.name,
-            country: normalizeHolidayCountry(
-              h.country as Country | undefined,
-              h.name,
-            ),
-          })),
-        )
-        : [],
-    [data],
+    () => sortHolidays(form.publicHolidays),
+    [form.publicHolidays],
   );
 
   const dailyHours = data?.dailyHours ?? 0;
@@ -192,6 +218,63 @@ export function AdminSettingsPage() {
     [filteredHolidays],
   );
 
+  const resetHolidayDraft = () =>
+    setHolidayDraft({ date: "", name: "", country: "other", editingKey: null });
+
+  const saveHolidayDraft = () => {
+    const date = holidayDraft.date.trim();
+    const name = holidayDraft.name.trim();
+    if (!date || !name) {
+      toast.error("Holiday date and name are required");
+      return;
+    }
+
+    const nextHoliday = {
+      date,
+      name,
+      country: holidayDraft.country,
+    };
+
+    setForm((current) => {
+      const remaining = current.publicHolidays.filter(
+        (holiday) =>
+          `${holiday.date}-${holiday.name}-${holiday.country}` !==
+          holidayDraft.editingKey,
+      );
+      return {
+        ...current,
+        publicHolidays: sortHolidays([...remaining, nextHoliday]),
+      };
+    });
+    resetHolidayDraft();
+  };
+
+  const editHoliday = (holiday: { date: string; name: string; country: Country }) => {
+    setHolidayDraft({
+      date: holiday.date,
+      name: holiday.name,
+      country: holiday.country,
+      editingKey: `${holiday.date}-${holiday.name}-${holiday.country}`,
+    });
+  };
+
+  const removeHoliday = (holiday: { date: string; name: string; country: Country }) => {
+    setForm((current) => ({
+      ...current,
+      publicHolidays: current.publicHolidays.filter(
+        (item) =>
+          `${item.date}-${item.name}-${item.country}` !==
+          `${holiday.date}-${holiday.name}-${holiday.country}`,
+      ),
+    }));
+    if (
+      holidayDraft.editingKey ===
+      `${holiday.date}-${holiday.name}-${holiday.country}`
+    ) {
+      resetHolidayDraft();
+    }
+  };
+
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     const payload = {
@@ -202,6 +285,7 @@ export function AdminSettingsPage() {
         attendanceMode === "file" ? form.attendancePolicyFileUrl : "",
       attendancePolicyFileName:
         attendanceMode === "file" ? form.attendancePolicyFileName : "",
+      publicHolidays: form.publicHolidays,
       companyPolicy: companyMode === "text" ? form.companyPolicy : "",
       companyPolicyFileUrl:
         companyMode === "file" ? form.companyPolicyFileUrl : "",
@@ -652,6 +736,66 @@ export function AdminSettingsPage() {
         {/* Public holidays */}
         <Section title={`Public holidays (${currentHolidayYear})`}>
           <div className="space-y-3">
+            <div className="rounded-xl border border-border bg-muted/20 p-4">
+              <div className="grid gap-3 md:grid-cols-[170px_minmax(0,1fr)_130px_auto_auto]">
+                <Input
+                  type="date"
+                  value={holidayDraft.date}
+                  onChange={(e) =>
+                    setHolidayDraft((current) => ({
+                      ...current,
+                      date: e.target.value,
+                    }))
+                  }
+                />
+                <Input
+                  placeholder="Holiday name"
+                  value={holidayDraft.name}
+                  onChange={(e) =>
+                    setHolidayDraft((current) => ({
+                      ...current,
+                      name: e.target.value,
+                    }))
+                  }
+                />
+                <Select
+                  value={holidayDraft.country}
+                  onValueChange={(value) =>
+                    setHolidayDraft((current) => ({
+                      ...current,
+                      country: value as Country,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value="pk">Pakistan</SelectItem>
+                    <SelectItem value="us">US</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button type="button" onClick={saveHolidayDraft}>
+                  {holidayDraft.editingKey ? (
+                    <>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Update
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add
+                    </>
+                  )}
+                </Button>
+                {holidayDraft.editingKey && (
+                  <Button type="button" variant="ghost" onClick={resetHolidayDraft}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </div>
             <div className="inline-flex rounded-md border border-border bg-muted p-0.5 text-xs">
               <FilterTab
                 active={holidayFilter === "all"}
@@ -670,7 +814,7 @@ export function AdminSettingsPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Holidays are generated automatically year-wise from the built-in holiday rules. They are shown here for reference and are not stored in the database.
+              These holidays are used across attendance, salary, working-hours, and payroll calculations throughout the app.
             </p>
 
             {filteredHolidays.length === 0 ? (
@@ -678,9 +822,11 @@ export function AdminSettingsPage() {
                 No holidays in this view.
               </div>
             ) : (
-              <HolidayBoard
+              <HolidayTable
                 items={filteredHolidays}
                 highlighted={highlightedHoliday}
+                onEdit={editHoliday}
+                onDelete={removeHoliday}
               />
             )}
           </div>
@@ -744,19 +890,17 @@ function CountryBadge({ country }: { country: Country }) {
   );
 }
 
-function HolidayBoard({
+function HolidayTable({
   items,
   highlighted,
+  onEdit,
+  onDelete,
 }: {
   items: { date: string; name: string; country: Country }[];
   highlighted?: { date: string; name: string; country: Country };
+  onEdit: (holiday: { date: string; name: string; country: Country }) => void;
+  onDelete: (holiday: { date: string; name: string; country: Country }) => void;
 }) {
-  const grouped = items.reduce<Record<string, typeof items>>((acc, item) => {
-    const key = getMonthLabel(item.date);
-    acc[key] = acc[key] ? [...acc[key]!, item] : [item];
-    return acc;
-  }, {});
-
   return (
     <div className="space-y-4">
       {highlighted && (
@@ -777,28 +921,41 @@ function HolidayBoard({
         </div>
       )}
 
-      {Object.entries(grouped).map(([month, monthItems]) => (
-        <div key={month} className="rounded-xl border border-border bg-card">
-          <div className="border-b border-border bg-muted/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {month}
-          </div>
-          <ul className="divide-y divide-border">
-            {monthItems.map((h) => (
-              <li
-                key={`${h.date}-${h.name}`}
-                className="flex items-start gap-3 px-4 py-3 text-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <CountryBadge country={h.country} />
-                  <p className="font-medium">
-                    {formatDateCalendar(h.date)} - {h.name}
-                  </p>
-                </div>
-              </li>
+      <div className="rounded-xl border border-border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Month</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Country</TableHead>
+              <TableHead className="w-[120px] text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((holiday) => (
+              <TableRow key={`${holiday.date}-${holiday.name}-${holiday.country}`}>
+                <TableCell>{formatDateCalendar(holiday.date)}</TableCell>
+                <TableCell>{getMonthLabel(holiday.date)}</TableCell>
+                <TableCell className="font-medium">{holiday.name}</TableCell>
+                <TableCell>
+                  <CountryBadge country={holiday.country} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="ghost" size="icon" onClick={() => onEdit(holiday)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => onDelete(holiday)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
             ))}
-          </ul>
-        </div>
-      ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

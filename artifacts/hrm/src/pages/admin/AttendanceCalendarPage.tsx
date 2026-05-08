@@ -41,7 +41,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatDate, formatDateLong, formatDuration, formatTime } from "@/lib/utils";
+import {
+  cn,
+  formatDate,
+  formatDateLong,
+  formatDuration,
+  formatHM12,
+  formatTime,
+} from "@/lib/utils";
 
 const STATUS_OPTIONS = [
   { value: "present", label: "Present" },
@@ -61,9 +68,14 @@ const DAY_BG: Record<string, string> = {
     "border-purple-200 hover:border-purple-300 bg-[linear-gradient(135deg,#faf5ff_0%,#faf5ff_50%,#e9d5ff_50%,#e9d5ff_100%)] hover:bg-[linear-gradient(135deg,#f5edff_0%,#f5edff_50%,#ddc7ff_50%,#ddc7ff_100%)]",
   remote_work: "bg-teal-50 hover:bg-teal-100 border-teal-200",
   weekend: "bg-slate-50 border-slate-200 text-slate-400",
+  holiday: "bg-indigo-50 border-indigo-200 text-indigo-500",
   future: "bg-white border-dashed border-slate-200 text-slate-300",
   none: "bg-white border-dashed border-slate-200 text-slate-300",
 };
+
+function isLockedAttendanceStatus(status: string) {
+  return ["weekend", "holiday", "future", "none"].includes(status);
+}
 
 function thisMonth(): string {
   const now = new Date();
@@ -84,6 +96,54 @@ function monthLabel(month: string): string {
     year: "numeric",
     timeZone: "UTC",
   });
+}
+
+function officeMinutes(
+  officeStartTime?: string | null,
+  officeEndTime?: string | null,
+) {
+  if (!officeStartTime || !officeEndTime) return 0;
+  const [startHour, startMinute] = officeStartTime.split(":").map(Number);
+  const [endHour, endMinute] = officeEndTime.split(":").map(Number);
+  const start = (startHour ?? 0) * 60 + (startMinute ?? 0);
+  const end = (endHour ?? 0) * 60 + (endMinute ?? 0);
+  return end <= start ? 24 * 60 - start + end : end - start;
+}
+
+function resolveAttendanceDisplay(
+  row: {
+    status: string;
+    checkInTime?: string | null;
+    checkOutTime?: string | null;
+    workedMinutes?: number | null;
+  },
+  officeStartTime?: string | null,
+  officeEndTime?: string | null,
+) {
+  const fullShiftMinutes = officeMinutes(officeStartTime, officeEndTime);
+  const shouldBackfill =
+    ["present", "on_leave", "remote_work"].includes(row.status) &&
+    !row.checkInTime &&
+    !row.checkOutTime;
+
+  return {
+    checkIn: row.checkInTime
+      ? formatTime(row.checkInTime)
+      : shouldBackfill
+        ? formatHM12(officeStartTime)
+        : "—",
+    checkOut: row.checkOutTime
+      ? formatTime(row.checkOutTime)
+      : shouldBackfill
+        ? formatHM12(officeEndTime)
+        : "—",
+    worked:
+      row.workedMinutes && row.workedMinutes > 0
+        ? formatDuration(row.workedMinutes)
+        : shouldBackfill && fullShiftMinutes > 0
+          ? formatDuration(fullShiftMinutes)
+          : "—",
+  };
 }
 
 export function AdminAttendanceCalendarPage() {
@@ -193,7 +253,12 @@ export function AdminAttendanceCalendarPage() {
       {view === "calendar" ? (
         <CalendarView employeeId={effectiveEmployeeId} month={month} />
       ) : (
-        <ListView employeeId={effectiveEmployeeId} month={month} />
+        <ListView
+          employeeId={effectiveEmployeeId}
+          month={month}
+          officeStartTime={selectedEmployee?.officeStartTime}
+          officeEndTime={selectedEmployee?.officeEndTime}
+        />
       )}
     </div>
   );
@@ -202,9 +267,13 @@ export function AdminAttendanceCalendarPage() {
 function ListView({
   employeeId,
   month,
+  officeStartTime,
+  officeEndTime,
 }: {
   employeeId: number | null;
   month: string;
+  officeStartTime?: string | null;
+  officeEndTime?: string | null;
 }) {
   const qc = useQueryClient();
   const override = useOverrideAttendance();
@@ -347,41 +416,53 @@ function ListView({
               </TableRow>
             ) : (
               rows.map((r) => (
-                <TableRow key={`${r.date}-${r.id}`}>
-                  <TableCell>{formatDate(r.date)}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={r.status} />
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={r.status}
-                      onValueChange={(value) =>
-                        handleStatusChange(
-                          `${r.date}-${r.id}`,
-                          r.date,
-                          value as AttendanceOverrideRequestStatus,
-                        )
-                      }
-                      disabled={editingRowKey === `${r.date}-${r.id}` && override.isPending}
-                    >
-                      <SelectTrigger className="h-8 w-[160px] text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STATUS_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>{formatTime(r.checkInTime)}</TableCell>
-                  <TableCell>{formatTime(r.checkOutTime)}</TableCell>
-                  <TableCell className="text-right">
-                    {formatDuration(r.workedMinutes)}
-                  </TableCell>
-                </TableRow>
+                (() => {
+                  const display = resolveAttendanceDisplay(
+                    r,
+                    officeStartTime,
+                    officeEndTime,
+                  );
+                  const isLockedStatus = isLockedAttendanceStatus(r.status);
+                  return (
+                    <TableRow key={`${r.date}-${r.id}`}>
+                      <TableCell>{formatDate(r.date)}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={r.status} />
+                      </TableCell>
+                      <TableCell>
+                        {isLockedStatus ? (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        ) : (
+                          <Select
+                            value={r.status}
+                            onValueChange={(value) =>
+                              handleStatusChange(
+                                `${r.date}-${r.id}`,
+                                r.date,
+                                value as AttendanceOverrideRequestStatus,
+                              )
+                            }
+                            disabled={editingRowKey === `${r.date}-${r.id}` && override.isPending}
+                          >
+                            <SelectTrigger className="h-8 w-[160px] text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUS_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </TableCell>
+                      <TableCell>{display.checkIn}</TableCell>
+                      <TableCell>{display.checkOut}</TableCell>
+                      <TableCell className="text-right">{display.worked}</TableCell>
+                    </TableRow>
+                  );
+                })()
               ))
             )}
           </TableBody>
@@ -479,8 +560,8 @@ function CalendarView({
               if (!cell)
                 return <div key={`empty-${i}`} className="h-24 rounded-md" />;
               const day = Number(cell.date.slice(-2));
-              const editable =
-                cell.status !== "future" && cell.status !== "none";
+              const cellStatus = String(cell.status);
+              const editable = !isLockedAttendanceStatus(cellStatus);
               return (
                 <button
                   key={cell.date}
@@ -490,33 +571,37 @@ function CalendarView({
                     if (!editable) return;
                     setEditing({ date: cell.date, status: cell.status });
                     setEditStatus(
-                      cell.status === "weekend" ||
-                        cell.status === "future" ||
-                        cell.status === "none"
+                      isLockedAttendanceStatus(cellStatus)
                         ? "present"
                         : cell.status,
                     );
                   }}
                   className={cn(
                     "flex h-24 flex-col items-start justify-between rounded-md border p-2 text-left transition",
-                    DAY_BG[cell.status] ?? "bg-white border-slate-200",
+                    DAY_BG[cellStatus] ?? "bg-white border-slate-200",
                     editable
                       ? "cursor-pointer"
                       : "cursor-default opacity-60",
                   )}
                 >
                   <span className="text-sm font-semibold">{day}</span>
-                  {cell.status !== "weekend" &&
-                    cell.status !== "future" &&
-                    cell.status !== "none" && (
+                  {cellStatus !== "weekend" &&
+                    cellStatus !== "holiday" &&
+                    cellStatus !== "future" &&
+                    cellStatus !== "none" && (
                       <StatusBadge
                         status={cell.status}
                         className="self-stretch justify-center !text-[10px] !px-1.5 !py-0"
                       />
                     )}
-                  {cell.status === "weekend" && (
+                  {cellStatus === "weekend" && (
                     <span className="text-[10px] uppercase text-slate-400">
                       Weekend
+                    </span>
+                  )}
+                  {cellStatus === "holiday" && (
+                    <span className="text-[10px] uppercase text-indigo-500">
+                      Holiday
                     </span>
                   )}
                 </button>
@@ -530,6 +615,7 @@ function CalendarView({
             <StatusBadge key={s.value} status={s.value} />
           ))}
           <StatusBadge status="weekend" />
+          <StatusBadge status="holiday" />
         </div>
       </div>
 

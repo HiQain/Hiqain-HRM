@@ -25,6 +25,8 @@ export type ProvidentFundSummary = {
   ledger: ProvidentFundLedgerEntry[];
 };
 
+const PF_POLICY_START_DATE = "2026-02-01";
+
 function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
@@ -37,6 +39,10 @@ function addYears(dateStr: string, years: number) {
   const date = new Date(`${dateStr}T00:00:00Z`);
   date.setUTCFullYear(date.getUTCFullYear() + years);
   return date;
+}
+
+function getPolicyStartDate() {
+  return new Date(`${PF_POLICY_START_DATE}T00:00:00Z`);
 }
 
 function getPfAmountFromPayslip(payslip: Payslip) {
@@ -61,7 +67,10 @@ function isContributionEligibleForBalance(
 ) {
   const periodEnd = new Date(Date.UTC(payslip.year, payslip.month, 0));
   const probationEnd = new Date(`${probationEndDate}T00:00:00Z`);
-  return periodEnd.getTime() > probationEnd.getTime();
+  return (
+    periodEnd.getTime() > probationEnd.getTime() &&
+    periodEnd.getTime() >= getPolicyStartDate().getTime()
+  );
 }
 
 function sortEntries(entries: ProvidentFundLedgerEntry[]) {
@@ -80,8 +89,13 @@ export function buildProvidentFundSummary(
 ): ProvidentFundSummary {
   const oneYearAfterJoining = addYears(employee.joiningDate, 1);
   const probationEnd = new Date(`${employee.probationEndDate}T00:00:00Z`);
+  const policyStartDate = getPolicyStartDate();
   const eligibleAfterDate = new Date(
-    Math.max(oneYearAfterJoining.getTime(), probationEnd.getTime() + 86400000),
+    Math.max(
+      oneYearAfterJoining.getTime(),
+      probationEnd.getTime() + 86400000,
+      policyStartDate.getTime(),
+    ),
   );
   const today = new Date();
 

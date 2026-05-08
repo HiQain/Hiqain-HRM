@@ -9,8 +9,10 @@ type AttendanceLike = {
   checkInTime: Date | null;
   checkOutTime: Date | null;
   workedMinutes: number | null;
+  notes?: string | null;
 };
 const ATTENDANCE_TIMEZONE_OFFSET_MINUTES = 5 * 60;
+const MANUAL_OVERRIDE_NOTE_PREFIX = "[manual_attendance_override]";
 
 function minutesFromHHMM(value: string): number {
   const { h, m } = parseHHMM(value);
@@ -112,6 +114,26 @@ export function officeEndForShiftDate(
   return end;
 }
 
+export function hasManualAttendanceOverride(notes?: string | null) {
+  return typeof notes === "string" && notes.startsWith(MANUAL_OVERRIDE_NOTE_PREFIX);
+}
+
+export function markManualAttendanceOverride(notes?: string | null) {
+  const cleanNotes = clearManualAttendanceOverride(notes);
+  return cleanNotes
+    ? `${MANUAL_OVERRIDE_NOTE_PREFIX} ${cleanNotes}`
+    : MANUAL_OVERRIDE_NOTE_PREFIX;
+}
+
+export function clearManualAttendanceOverride(notes?: string | null) {
+  if (typeof notes !== "string" || notes.length === 0) return null;
+  if (!notes.startsWith(MANUAL_OVERRIDE_NOTE_PREFIX)) return notes;
+  const trimmed = notes
+    .slice(MANUAL_OVERRIDE_NOTE_PREFIX.length)
+    .trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function normalizeAttendanceStatus(
   record: AttendanceLike,
   emp: Pick<
@@ -123,6 +145,13 @@ export function normalizeAttendanceStatus(
     return {
       status: record.status,
       isLate: record.isLate,
+    };
+  }
+
+  if (hasManualAttendanceOverride(record.notes)) {
+    return {
+      status: record.status,
+      isLate: record.status === "late",
     };
   }
 

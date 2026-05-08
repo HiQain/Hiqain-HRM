@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
+import { addMonths, parseDate } from "../lib/dates";
 import { normalizeAttendanceStatus } from "../lib/attendance";
 import { ymd } from "../lib/dates";
 import {
@@ -21,6 +22,7 @@ import {
   isPayrollOffDay,
   toHolidaySet,
 } from "../lib/payroll";
+import { isProvidentFundPolicyActiveForPeriod } from "../lib/provident-fund-policy";
 import { resolveCompensationForDate } from "../lib/salary";
 import { getSettings } from "./settings";
 
@@ -58,6 +60,24 @@ function isManualTaxComponent(label: string) {
   return /\btax\b/i.test(label);
 }
 
+function getProbationEndDate(
+  employee: Pick<typeof employeesTable.$inferSelect, "joiningDate" | "probationMonths">,
+) {
+  const probationBoundary = addMonths(parseDate(employee.joiningDate), employee.probationMonths);
+  probationBoundary.setUTCDate(probationBoundary.getUTCDate() - 1);
+  return probationBoundary;
+}
+
+function isProvidentFundActiveForEmployeePeriod(
+  employee: Pick<typeof employeesTable.$inferSelect, "joiningDate" | "probationMonths">,
+  month: number,
+  year: number,
+) {
+  if (!isProvidentFundPolicyActiveForPeriod(month, year)) return false;
+  const periodEnd = new Date(Date.UTC(year, month, 0));
+  return periodEnd.getTime() > getProbationEndDate(employee).getTime();
+}
+
 function buildPayslipBreakdown(
   payslip: typeof payslipsTable.$inferSelect,
   employee: typeof employeesTable.$inferSelect,
@@ -86,6 +106,11 @@ function buildPayslipBreakdown(
   let providentFundFromComponent = 0;
   let taxableRecurringComponentTotal = 0;
   let nonTaxableRecurringComponentTotal = 0;
+  const shouldApplyProvidentFund = isProvidentFundActiveForEmployeePeriod(
+    employee,
+    payslip.month,
+    payslip.year,
+  );
 
   for (const component of components) {
     const amount = roundAmount(
@@ -94,8 +119,10 @@ function buildPayslipBreakdown(
     if (amount <= 0) continue;
 
     if (component.isDeduction === 1 && component.kind === "provident_fund") {
-      providentFundFromComponent += amount;
-      deductions.push({ label: component.label, amount });
+      if (shouldApplyProvidentFund) {
+        providentFundFromComponent += amount;
+        deductions.push({ label: component.label, amount });
+      }
       continue;
     }
 
@@ -128,7 +155,9 @@ function buildPayslipBreakdown(
   }
 
   const providentFundFromProfile =
-    providentFundFromComponent <= 0 && employee.providentFundPercent != null
+    shouldApplyProvidentFund &&
+    providentFundFromComponent <= 0 &&
+    employee.providentFundPercent != null
       ? roundAmount((Number(employee.providentFundPercent) / 100) * basicSalary)
       : 0;
   if (providentFundFromProfile > 0) {
@@ -354,11 +383,18 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
   let providentFundFromComponent = 0;
   let taxableRecurringAllowanceAdditions = 0;
   const isTaxComponent = (label: string) => /\btax\b/i.test(label);
+  const shouldApplyProvidentFund = isProvidentFundActiveForEmployeePeriod(
+    emp,
+    month,
+    year,
+  );
 
   for (const c of components) {
     const v = evalComponent(c);
     if (c.isDeduction === 1 && c.kind === "provident_fund") {
-      providentFundFromComponent += v;
+      if (shouldApplyProvidentFund) {
+        providentFundFromComponent += v;
+      }
       continue;
     }
     if (c.isDeduction === 1) {
@@ -386,7 +422,9 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
 
   // PF from employee.providentFundPercent (if no PF component already set)
   const pfFromProfile =
-    providentFundFromComponent <= 0 && emp.providentFundPercent != null
+    shouldApplyProvidentFund &&
+    providentFundFromComponent <= 0 &&
+    emp.providentFundPercent != null
       ? (Number(emp.providentFundPercent) / 100) * baseDesignation
       : 0;
   const bonus =

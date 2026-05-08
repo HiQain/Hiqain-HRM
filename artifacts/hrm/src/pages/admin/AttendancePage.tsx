@@ -42,7 +42,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatDateLong, formatTime, ymdLocal } from "@/lib/utils";
+import {
+  cn,
+  formatDateLong,
+  formatDuration,
+  formatHM12,
+  formatTime,
+  ymdLocal,
+} from "@/lib/utils";
 
 type StatusFilter = "all" | "absent" | "leave" | "late";
 
@@ -52,6 +59,58 @@ function shiftDate(ymd: string, days: number): string {
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   d.setDate(d.getDate() + days);
   return ymdLocal(d);
+}
+
+function officeMinutes(
+  officeStartTime?: string | null,
+  officeEndTime?: string | null,
+) {
+  if (!officeStartTime || !officeEndTime) return 0;
+  const [startHour, startMinute] = officeStartTime.split(":").map(Number);
+  const [endHour, endMinute] = officeEndTime.split(":").map(Number);
+  const start = (startHour ?? 0) * 60 + (startMinute ?? 0);
+  const end = (endHour ?? 0) * 60 + (endMinute ?? 0);
+  return end <= start ? 24 * 60 - start + end : end - start;
+}
+
+function resolveAttendanceDisplay(
+  row: {
+    status: string;
+    checkInTime?: string | null;
+    checkOutTime?: string | null;
+    workedMinutes?: number | null;
+  },
+  officeStartTime?: string | null,
+  officeEndTime?: string | null,
+) {
+  const fullShiftMinutes = officeMinutes(officeStartTime, officeEndTime);
+  const shouldBackfill =
+    ["present", "on_leave", "remote_work"].includes(row.status) &&
+    !row.checkInTime &&
+    !row.checkOutTime;
+
+  return {
+    checkIn: row.checkInTime
+      ? formatTime(row.checkInTime)
+      : shouldBackfill
+        ? formatHM12(officeStartTime)
+        : "—",
+    checkOut: row.checkOutTime
+      ? formatTime(row.checkOutTime)
+      : shouldBackfill
+        ? formatHM12(officeEndTime)
+        : "—",
+    worked:
+      row.workedMinutes && row.workedMinutes > 0
+        ? formatDuration(row.workedMinutes)
+        : shouldBackfill && fullShiftMinutes > 0
+          ? formatDuration(fullShiftMinutes)
+          : "—",
+  };
+}
+
+function isLockedAttendanceStatus(status: string) {
+  return ["weekend", "holiday", "future", "none"].includes(status);
 }
 
 export function AdminAttendancePage() {
@@ -106,6 +165,8 @@ export function AdminAttendancePage() {
             department: employee.department ?? "",
             joiningDate: employee.joiningDate ?? "",
             employeeCode: employee.employeeCode ?? "",
+            officeStartTime: employee.officeStartTime ?? null,
+            officeEndTime: employee.officeEndTime ?? null,
           },
         ]),
       ),
@@ -324,18 +385,19 @@ export function AdminAttendancePage() {
               <TableHead className="w-[180px]">Change status</TableHead>
               <TableHead>Check-in</TableHead>
               <TableHead>Check-out</TableHead>
+              <TableHead className="text-right">Worked</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   Loading attendance...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   No matching employees.
                 </TableCell>
               </TableRow>
@@ -343,6 +405,13 @@ export function AdminAttendancePage() {
               filtered.map((r) => {
                 const isSaving =
                   editingEmpId === r.employeeId && override.isPending;
+                const meta = employeeMeta.get(r.employeeId);
+                const display = resolveAttendanceDisplay(
+                  r,
+                  meta?.officeStartTime,
+                  meta?.officeEndTime,
+                );
+                const isLockedStatus = isLockedAttendanceStatus(r.status);
                 return (
                   <TableRow key={`${r.employeeId}-${r.date}`}>
                     <TableCell>
@@ -360,31 +429,36 @@ export function AdminAttendancePage() {
                       <StatusBadge status={r.status} />
                     </TableCell>
                     <TableCell>
-                      <Select
-                        value={r.status}
-                        onValueChange={(v) =>
-                          handleStatusChange(
-                            r.employeeId,
-                            v as AttendanceOverrideRequestStatus,
-                          )
-                        }
-                        disabled={isSaving}
-                      >
-                        <SelectTrigger className="h-8 w-[160px] text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="present">Present</SelectItem>
-                          <SelectItem value="late">Late</SelectItem>
-                          <SelectItem value="absent">Absent</SelectItem>
-                          <SelectItem value="on_leave">On leave</SelectItem>
-                          <SelectItem value="half_day">Half day</SelectItem>
-                          <SelectItem value="remote_work">Remote work</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      {isLockedStatus ? (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      ) : (
+                        <Select
+                          value={r.status}
+                          onValueChange={(v) =>
+                            handleStatusChange(
+                              r.employeeId,
+                              v as AttendanceOverrideRequestStatus,
+                            )
+                          }
+                          disabled={isSaving}
+                        >
+                          <SelectTrigger className="h-8 w-[160px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="present">Present</SelectItem>
+                            <SelectItem value="late">Late</SelectItem>
+                            <SelectItem value="absent">Absent</SelectItem>
+                            <SelectItem value="on_leave">On leave</SelectItem>
+                            <SelectItem value="half_day">Half day</SelectItem>
+                            <SelectItem value="remote_work">Remote work</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                     </TableCell>
-                    <TableCell>{formatTime(r.checkInTime)}</TableCell>
-                    <TableCell>{formatTime(r.checkOutTime)}</TableCell>
+                    <TableCell>{display.checkIn}</TableCell>
+                    <TableCell>{display.checkOut}</TableCell>
+                    <TableCell className="text-right">{display.worked}</TableCell>
                   </TableRow>
                 );
               })

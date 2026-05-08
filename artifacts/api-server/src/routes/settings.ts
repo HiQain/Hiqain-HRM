@@ -1,10 +1,5 @@
 import { Router, type IRouter } from "express";
-import {
-  db,
-  appSettingsTable,
-  employeesTable,
-  type AppSettings,
-} from "@workspace/db";
+import { db, appSettingsTable, employeesTable, type AppSettings } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { UpdateSettingsBody } from "@workspace/api-zod";
@@ -34,44 +29,6 @@ function sortHolidays<T extends { date: string; name: string }>(holidays: T[]): 
     const byDate = a.date.localeCompare(b.date);
     return byDate !== 0 ? byDate : a.name.localeCompare(b.name);
   });
-}
-
-function nthWeekdayOfMonth(
-  year: number,
-  monthIndex: number,
-  weekday: number,
-  occurrence: number,
-): string {
-  const date = new Date(Date.UTC(year, monthIndex, 1));
-  while (date.getUTCDay() !== weekday) {
-    date.setUTCDate(date.getUTCDate() + 1);
-  }
-  date.setUTCDate(date.getUTCDate() + (occurrence - 1) * 7);
-  return date.toISOString().slice(0, 10);
-}
-
-function lastWeekdayOfMonth(
-  year: number,
-  monthIndex: number,
-  weekday: number,
-): string {
-  const date = new Date(Date.UTC(year, monthIndex + 1, 0));
-  while (date.getUTCDay() !== weekday) {
-    date.setUTCDate(date.getUTCDate() - 1);
-  }
-  return date.toISOString().slice(0, 10);
-}
-
-function observedUsHoliday(
-  year: number,
-  monthIndex: number,
-  day: number,
-): string {
-  const date = new Date(Date.UTC(year, monthIndex, day));
-  const weekday = date.getUTCDay();
-  if (weekday === 6) date.setUTCDate(date.getUTCDate() - 1);
-  if (weekday === 0) date.setUTCDate(date.getUTCDate() + 1);
-  return date.toISOString().slice(0, 10);
 }
 
 function findIslamicDatesInGregorianYear(
@@ -110,60 +67,146 @@ function findIslamicDatesInGregorianYear(
 }
 
 function buildPakistanMoonSightingHolidays(year: number): GeneratedHoliday[] {
-  const mapHoliday = (
-    dates: string[],
-    name: string,
-  ): GeneratedHoliday[] =>
-    dates.map((date) => ({
-      date,
-      name: `${name} (subject to moon sighting)`,
-      country: "pk",
-    }));
-
   return [
-    ...mapHoliday(
-      findIslamicDatesInGregorianYear(year, 10, [1, 2, 3]),
-      "Eid-ul-Fitr",
-    ),
-    ...mapHoliday(
-      findIslamicDatesInGregorianYear(year, 12, [10, 11, 12]),
-      "Eid-ul-Adha",
-    ),
-    ...mapHoliday(
-      findIslamicDatesInGregorianYear(year, 1, [9, 10]),
-      "Muharram",
-    ),
+    ...findIslamicDatesInGregorianYear(year, 10, [1, 2, 3]).map((date, index) => ({
+      date,
+      name: `Eid-ul-Fitr - Day ${index + 1} (subject to moon sighting)`,
+      country: "pk" as const,
+    })),
+    ...findIslamicDatesInGregorianYear(year, 12, [10, 11, 12]).map((date, index) => ({
+      date,
+      name: `Eid-ul-Adha - Day ${index + 1} (subject to moon sighting)`,
+      country: "pk" as const,
+    })),
+    ...findIslamicDatesInGregorianYear(year, 1, [9, 10]).map((date, index) => ({
+      date,
+      name: `Muharram - ${index === 0 ? "9th" : "10th"} Muharram (subject to moon sighting)`,
+      country: "pk" as const,
+    })),
   ];
 }
 
 function buildDefaultPublicHolidays(year: number): GeneratedHoliday[] {
-  const usFixedHolidays: GeneratedHoliday[] = [
+  return sortHolidays([
     { date: `${year}-01-01`, name: "New Year's Day", country: "us" },
-    { date: lastWeekdayOfMonth(year, 4, 1), name: "Memorial Day", country: "us" },
-    {
-      date: observedUsHoliday(year, 6, 4),
-      name: "Independence Day",
-      country: "us",
-    },
-    { date: nthWeekdayOfMonth(year, 8, 1, 1), name: "Labor Day", country: "us" },
-    {
-      date: nthWeekdayOfMonth(year, 10, 4, 4),
-      name: "Thanksgiving Day",
-      country: "us",
-    },
+    { date: `${year}-05-25`, name: "Memorial Day", country: "us" },
+    ...buildPakistanMoonSightingHolidays(year),
+    { date: `${year}-07-03`, name: "Independence Day", country: "us" },
+    { date: `${year}-09-07`, name: "Labor Day", country: "us" },
+    { date: `${year}-11-26`, name: "Thanksgiving Day", country: "us" },
     { date: `${year}-12-24`, name: "Christmas Day", country: "us" },
     { date: `${year}-12-25`, name: "Christmas Day", country: "us" },
     { date: `${year}-12-31`, name: "New Year's Eve", country: "us" },
-  ];
-
-  return sortHolidays([
-    ...usFixedHolidays,
-    ...buildPakistanMoonSightingHolidays(year),
   ]);
 }
 
-function getGeneratedPublicHolidays(_settings: AppSettings): GeneratedHoliday[] {
-  return buildDefaultPublicHolidays(new Date().getFullYear());
+function buildLegacyUsAndMoonDefaults(year: number): GeneratedHoliday[] {
+  return sortHolidays([
+    { date: `${year}-01-01`, name: "New Year's Day", country: "us" },
+    { date: `${year}-05-25`, name: "Memorial Day", country: "us" },
+    ...buildPakistanMoonSightingHolidays(year),
+    { date: `${year}-07-03`, name: "Independence Day", country: "us" },
+    { date: `${year}-09-07`, name: "Labor Day", country: "us" },
+    { date: `${year}-11-26`, name: "Thanksgiving Day", country: "us" },
+    { date: `${year}-12-24`, name: "Christmas Day", country: "us" },
+    { date: `${year}-12-25`, name: "Christmas Day", country: "us" },
+    { date: `${year}-12-31`, name: "New Year's Eve", country: "us" },
+  ]);
+}
+
+function buildLegacyFixedPakistanDefaults(year: number): GeneratedHoliday[] {
+  return sortHolidays([
+    { date: `${year}-02-05`, name: "Kashmir Day", country: "pk" },
+    { date: `${year}-03-23`, name: "Pakistan Day", country: "pk" },
+    { date: `${year}-05-01`, name: "Labour Day", country: "pk" },
+    { date: `${year}-08-14`, name: "Independence Day", country: "pk" },
+    { date: `${year}-11-09`, name: "Iqbal Day", country: "pk" },
+    { date: `${year}-12-25`, name: "Quaid-e-Azam Day", country: "pk" },
+  ]);
+}
+
+function buildLegacyCombinedDefaults(year: number): GeneratedHoliday[] {
+  return sortHolidays([
+    ...buildLegacyUsAndMoonDefaults(year).filter((holiday) => holiday.country === "us"),
+    ...buildLegacyFixedPakistanDefaults(year),
+  ]);
+}
+
+function buildLegacyCurrentLiveDefaults(year: number): GeneratedHoliday[] {
+  return sortHolidays([
+    { date: `${year}-01-01`, name: "New Year's Day", country: "us" },
+    { date: `${year}-02-05`, name: "Kashmir Day", country: "pk" },
+    { date: `${year}-03-23`, name: "Pakistan Day", country: "pk" },
+    { date: `${year}-05-01`, name: "Labour Day", country: "pk" },
+    { date: `${year}-05-25`, name: "Memorial Day", country: "us" },
+    { date: `${year}-07-04`, name: "Independence Day", country: "us" },
+    { date: `${year}-08-14`, name: "Independence Day", country: "pk" },
+    { date: `${year}-09-07`, name: "Labor Day", country: "us" },
+    { date: `${year}-11-09`, name: "Iqbal Day", country: "pk" },
+    { date: `${year}-11-26`, name: "Thanksgiving Day", country: "us" },
+    { date: `${year}-12-25`, name: "Christmas Day", country: "us" },
+    { date: `${year}-12-25`, name: "Quaid-e-Azam Day", country: "pk" },
+  ]);
+}
+
+function buildNormalizationCandidates(year: number) {
+  const years = [year - 1, year, year + 1];
+  return years.flatMap((candidateYear) => [
+    buildPakistanMoonSightingHolidays(candidateYear),
+    buildLegacyUsAndMoonDefaults(candidateYear),
+    buildLegacyFixedPakistanDefaults(candidateYear),
+    buildLegacyCombinedDefaults(candidateYear),
+    buildLegacyCurrentLiveDefaults(candidateYear),
+    buildDefaultPublicHolidays(candidateYear),
+  ]);
+}
+
+function areSameHolidayLists(
+  left: Array<{ date: string; name: string; country: "us" | "pk" | "other" }>,
+  right: Array<{ date: string; name: string; country: "us" | "pk" | "other" }>,
+): boolean {
+  if (left.length !== right.length) return false;
+  const leftKeys = sortHolidays(left).map(
+    (holiday) => `${holiday.date}|${holiday.name}|${holiday.country}`,
+  );
+  const rightKeys = sortHolidays(right).map(
+    (holiday) => `${holiday.date}|${holiday.name}|${holiday.country}`,
+  );
+  return leftKeys.every((key, index) => key === rightKeys[index]);
+}
+
+function normalizeStoredPublicHolidays(
+  holidays: AppSettings["publicHolidays"] | null | undefined,
+  year: number,
+) {
+  const normalized = sortHolidays(
+    (holidays ?? [])
+      .filter((holiday) => typeof holiday?.date === "string" && typeof holiday?.name === "string")
+      .map((holiday) => ({
+        date: toHolidayDate(holiday.date),
+        name: holiday.name.trim(),
+        country: toHolidayCountry(holiday.country) ?? "other",
+      })),
+  );
+
+  if (normalized.length === 0) {
+    return buildDefaultPublicHolidays(year);
+  }
+
+  const legacyCandidates = buildNormalizationCandidates(year);
+
+  if (legacyCandidates.some((candidate) => areSameHolidayLists(normalized, candidate))) {
+    return buildDefaultPublicHolidays(year);
+  }
+
+  return normalized;
+}
+
+function getEffectivePublicHolidays(settings: AppSettings) {
+  return normalizeStoredPublicHolidays(
+    settings.publicHolidays,
+    new Date().getFullYear(),
+  );
 }
 
 function parseTime(t: string): number {
@@ -210,7 +253,7 @@ function serialize(s: AppSettings) {
   const workingDaysPerWeek = 7 - (s.weeklyOffDays?.length ?? 0);
   const weeklyHours = Math.round(dailyHours * workingDaysPerWeek);
   const today = new Date();
-  const effectivePublicHolidays = getGeneratedPublicHolidays(s);
+  const effectivePublicHolidays = getEffectivePublicHolidays(s);
   const holidaySet = new Set(effectivePublicHolidays.map((h) => h.date));
   const monthlyWorkingDays = computeWorkingDaysInMonth(
     today.getFullYear(),
@@ -260,8 +303,38 @@ function serialize(s: AppSettings) {
 
 export async function getSettings(): Promise<AppSettings> {
   const rows = await db.select().from(appSettingsTable).limit(1);
-  if (rows.length) return rows[0]!;
-  await db.insert(appSettingsTable).values({});
+  const year = new Date().getFullYear();
+  if (rows.length) {
+    const current = rows[0]!;
+    const normalizedPublicHolidays = normalizeStoredPublicHolidays(
+      current.publicHolidays,
+      year,
+    );
+    const currentPublicHolidays = sortHolidays(
+      (current.publicHolidays ?? [])
+        .filter((holiday) => typeof holiday?.date === "string" && typeof holiday?.name === "string")
+        .map((holiday) => ({
+          date: toHolidayDate(holiday.date),
+          name: holiday.name.trim(),
+          country: toHolidayCountry(holiday.country) ?? "other",
+        })),
+    );
+    if (areSameHolidayLists(currentPublicHolidays, normalizedPublicHolidays)) {
+      return current;
+    }
+    await db
+      .update(appSettingsTable)
+      .set({
+        publicHolidays: normalizedPublicHolidays,
+        updatedAt: new Date(),
+      })
+      .where(eq(appSettingsTable.id, current.id));
+    const seededRows = await db.select().from(appSettingsTable).limit(1);
+    return seededRows[0]!;
+  }
+  await db.insert(appSettingsTable).values({
+    publicHolidays: buildDefaultPublicHolidays(year),
+  });
   const nextRows = await db.select().from(appSettingsTable).limit(1);
   return nextRows[0]!;
 }
@@ -297,6 +370,17 @@ router.patch("/settings", requireAuth(["admin", "hr"]), async (req, res): Promis
     updates.defaultOfficeEndTime = data.defaultOfficeEndTime;
   if (data.weeklyOffDays !== undefined)
     updates.weeklyOffDays = data.weeklyOffDays;
+  if (data.publicHolidays !== undefined) {
+    updates.publicHolidays = sortHolidays(
+      data.publicHolidays
+        .filter((holiday) => holiday.date && holiday.name.trim())
+        .map((holiday) => ({
+          date: toHolidayDate(holiday.date),
+          name: holiday.name.trim(),
+          country: toHolidayCountry(holiday.country) ?? "other",
+        })),
+    );
+  }
   if (data.proRatedQuotas !== undefined)
     updates.proRatedQuotas = data.proRatedQuotas;
   if (data.attendancePolicy !== undefined)
