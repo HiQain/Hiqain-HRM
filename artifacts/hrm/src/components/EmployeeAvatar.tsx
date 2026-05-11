@@ -1,6 +1,7 @@
+import { memo } from "react";
 import { avatarColor, cn, initialsFrom } from "@/lib/utils";
 
-export function EmployeeAvatar({
+export const EmployeeAvatar = memo(function EmployeeAvatar({
   name,
   url,
   size = "md",
@@ -42,4 +43,4 @@ export function EmployeeAvatar({
       {initialsFrom(name)}
     </div>
   );
-}
+});

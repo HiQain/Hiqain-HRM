@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 
 type Status =
@@ -63,7 +64,7 @@ const DOTS: Record<Status, string> = {
   rejected: "bg-rose-500",
 };
 
-export function StatusBadge({
+export const StatusBadge = memo(function StatusBadge({
   status,
   className,
 }: {
@@ -88,4 +89,4 @@ export function StatusBadge({
       {LABELS[s] ?? status}
     </span>
   );
-}
+});

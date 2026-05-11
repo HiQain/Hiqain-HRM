@@ -1059,7 +1059,10 @@ function PayrollSnapshotCard({ id }: { id: number }) {
     () => (payslips ?? []).find((p) => p.month === month && p.year === year),
     [payslips, month, year],
   );
-  const activeLoans = (loans ?? []).filter((l) => l.status === "active");
+  const activeLoans = useMemo(
+    () => (loans ?? []).filter((l) => l.status === "active"),
+    [loans],
+  );
 
   const onGenerate = () => {
     generate.mutate(

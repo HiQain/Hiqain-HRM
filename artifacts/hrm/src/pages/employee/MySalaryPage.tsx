@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   useGetMe,
   useGetEmployee,
@@ -74,15 +75,19 @@ export function MySalaryPage() {
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
-  const visibleComponents = (components ?? []).filter(
-    (component) => !isManualTaxComponent(component),
+  const visibleComponents = useMemo(
+    () => (components ?? []).filter((component) => !isManualTaxComponent(component)),
+    [components],
   );
   const defaultAllowanceRows = getDefaultAllowanceBreakdown(emp.allowances ?? 0);
-  const earnings = [
-    ...defaultAllowanceRows,
-    ...visibleComponents.filter((c) => !c.isDeduction),
-  ];
-  const deductions = visibleComponents.filter((c) => c.isDeduction);
+  const earnings = useMemo(
+    () => [...defaultAllowanceRows, ...visibleComponents.filter((c) => !c.isDeduction)],
+    [defaultAllowanceRows, visibleComponents],
+  );
+  const deductions = useMemo(
+    () => visibleComponents.filter((c) => c.isDeduction),
+    [visibleComponents],
+  );
   const latestPayslip = payslips?.[0];
   const defaultAllowances = emp.allowances ?? 0;
   const totalSalary = emp.basicSalary + defaultAllowances;
@@ -114,11 +119,17 @@ export function MySalaryPage() {
     return { fixed, percent };
   };
 
-  const earnSum = sumComponents(earnings);
-  const dedSum = sumComponents(deductions);
+  const earnSum = useMemo(() => sumComponents(earnings), [earnings]);
+  const dedSum = useMemo(() => sumComponents(deductions), [deductions]);
 
-  const activeLoans = (loans ?? []).filter((l) => l.status === "active");
-  const closedLoans = (loans ?? []).filter((l) => l.status !== "active");
+  const activeLoans = useMemo(
+    () => (loans ?? []).filter((l) => l.status === "active"),
+    [loans],
+  );
+  const closedLoans = useMemo(
+    () => (loans ?? []).filter((l) => l.status !== "active"),
+    [loans],
+  );
 
   return (
     <div className="space-y-6">

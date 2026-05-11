@@ -1,4 +1,4 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getListInventoryItemsQueryKey,
@@ -59,14 +59,18 @@ export function MyInventoryPage() {
     [assignments, availableItems.length, requests],
   );
 
-  const resetDialog = () => {
+  const resetDialog = useCallback(() => {
     setRequestedItemName("");
     setQuantity("1");
     setReason("");
     setDialogOpen(false);
-  };
+  }, []);
 
-  const submitRequest = (event: FormEvent) => {
+  const openDialog = useCallback(() => {
+    setDialogOpen(true);
+  }, []);
+
+  const submitRequest = useCallback((event: FormEvent) => {
     event.preventDefault();
     const normalizedName = requestedItemName.trim();
     if (!normalizedName) {
@@ -101,19 +105,24 @@ export function MyInventoryPage() {
         },
       },
     );
-  };
+  }, [availableItems, createRequest, qc, quantity, reason, requestedItemName, resetDialog]);
+
+  const pageActions = useMemo(
+    () => (
+      <Button onClick={openDialog} className="gap-2">
+        <Plus className="h-4 w-4" />
+        New inventory request
+      </Button>
+    ),
+    [openDialog],
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Inventory"
         description="Request extra hardware, track approval status, and see the equipment currently assigned to you."
-        actions={
-          <Button onClick={() => setDialogOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            New inventory request
-          </Button>
-        }
+        actions={pageActions}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

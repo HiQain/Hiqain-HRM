@@ -42,6 +42,18 @@ function FullScreenLoader() {
   );
 }
 
+function RedirectToAdmin() {
+  return <Redirect to="/admin" />;
+}
+
+function RedirectToEmployee() {
+  return <Redirect to="/employee" />;
+}
+
+function ChangePasswordRoute() {
+  return <ChangePasswordPage mustChange={false} />;
+}
+
 function AuthGate() {
   const { data: user, isLoading, isError } = useGetMe({
     query: {
@@ -74,7 +86,7 @@ function AuthGate() {
       <CelebrationPopup />
       {user.role !== "employee" ? (
         <Switch>
-          <Route path="/" component={() => <Redirect to="/admin" />} />
+          <Route path="/" component={RedirectToAdmin} />
           <Route path="/admin" component={AdminDashboard} />
           <Route path="/admin/employees" component={EmployeesPage} />
           <Route path="/admin/employees/:id" component={EmployeeDetailPage} />
@@ -91,15 +103,12 @@ function AuthGate() {
           <Route path="/admin/inventory" component={AdminInventoryPage} />
           <Route path="/admin/feed" component={FeedPage} />
           <Route path="/admin/settings" component={AdminSettingsPage} />
-          <Route
-            path="/change-password"
-            component={() => <ChangePasswordPage mustChange={false} />}
-          />
-          <Route component={() => <Redirect to="/admin" />} />
+          <Route path="/change-password" component={ChangePasswordRoute} />
+          <Route component={RedirectToAdmin} />
         </Switch>
       ) : (
         <Switch>
-          <Route path="/" component={() => <Redirect to="/employee" />} />
+          <Route path="/" component={RedirectToEmployee} />
           <Route path="/employee" component={EmployeeDashboard} />
           <Route path="/employee/profile" component={EmployeeProfilePage} />
           <Route path="/employee/attendance" component={MyAttendancePage} />
@@ -111,11 +120,8 @@ function AuthGate() {
           <Route path="/employee/provident-fund" component={MyProvidentFundPage} />
           <Route path="/employee/settings" component={MySettingsPage} />
           <Route path="/employee/feed" component={FeedPage} />
-          <Route
-            path="/change-password"
-            component={() => <ChangePasswordPage mustChange={false} />}
-          />
-          <Route component={() => <Redirect to="/employee" />} />
+          <Route path="/change-password" component={ChangePasswordRoute} />
+          <Route component={RedirectToEmployee} />
         </Switch>
       )}
     </AppShell>

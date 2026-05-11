@@ -137,8 +137,9 @@ export function AdminSalaryPage() {
     );
   };
 
-  const visibleComponents = (components ?? []).filter(
-    (component) => !isManualTaxComponent(component),
+  const visibleComponents = useMemo(
+    () => (components ?? []).filter((component) => !isManualTaxComponent(component)),
+    [components],
   );
   const filteredLateRecords = useMemo(() => {
     const weeklyOffDays = settings?.weeklyOffDays ?? [0, 6];
@@ -152,7 +153,10 @@ export function AdminSalaryPage() {
   }, [lateRecords, settings?.publicHolidays, settings?.weeklyOffDays]);
 
   const totalLates = filteredLateRecords.length;
-  const excusedLates = filteredLateRecords.filter((r) => r.excused).length;
+  const excusedLates = useMemo(
+    () => filteredLateRecords.filter((r) => r.excused).length,
+    [filteredLateRecords],
+  );
   const countedLates = totalLates - excusedLates;
   const defaultAllowances = emp?.allowances ?? 0;
   const effectiveCompensation = resolveHistoricalCompensation({
@@ -167,17 +171,27 @@ export function AdminSalaryPage() {
   const defaultAllowanceRows = getDefaultAllowanceBreakdown(
     effectiveCompensation.defaultAllowances,
   );
-  const earnings = [
-    ...defaultAllowanceRows,
-    ...visibleComponents.filter((c) => !c.isDeduction),
-  ];
-  const deductions = visibleComponents.filter((c) => c.isDeduction);
+  const earnings = useMemo(
+    () => [...defaultAllowanceRows, ...visibleComponents.filter((c) => !c.isDeduction)],
+    [defaultAllowanceRows, visibleComponents],
+  );
+  const deductions = useMemo(
+    () => visibleComponents.filter((c) => c.isDeduction),
+    [visibleComponents],
+  );
 
-  const activeLoans = (loans ?? []).filter((l) => l.status === "active");
-  const closedLoans = (loans ?? []).filter((l) => l.status !== "active");
+  const activeLoans = useMemo(
+    () => (loans ?? []).filter((l) => l.status === "active"),
+    [loans],
+  );
+  const closedLoans = useMemo(
+    () => (loans ?? []).filter((l) => l.status !== "active"),
+    [loans],
+  );
 
-  const monthPayslip = (payslips ?? []).find(
-    (p) => p.month === month && p.year === year,
+  const monthPayslip = useMemo(
+    () => (payslips ?? []).find((p) => p.month === month && p.year === year),
+    [month, payslips, year],
   );
   const isPastPeriod =
     year < now.getFullYear() ||

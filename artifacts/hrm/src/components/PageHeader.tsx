@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 
-export function PageHeader({
+export const PageHeader = memo(function PageHeader({
   title,
   description,
   actions,
@@ -22,4 +22,4 @@ export function PageHeader({
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );
-}
+});

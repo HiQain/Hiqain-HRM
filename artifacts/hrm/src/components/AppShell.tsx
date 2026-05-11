@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { memo, type ReactNode, useCallback, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -82,7 +82,7 @@ export function AppShell({
     const saved = window.localStorage.getItem("hrm-sidebar-open");
     return saved === null ? true : saved === "1";
   });
-  const toggleDesktop = () => {
+  const toggleDesktop = useCallback(() => {
     setDesktopOpen((v) => {
       const next = !v;
       try {
@@ -92,13 +92,13 @@ export function AppShell({
       }
       return next;
     });
-  };
+  }, []);
   const [location, setLocation] = useLocation();
   const qc = useQueryClient();
   const logout = useLogout();
   const { theme, toggle } = useTheme();
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout.mutate(undefined, {
       onSuccess: async () => {
         await qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
@@ -108,11 +108,20 @@ export function AppShell({
       },
       onError: () => toast.error("Could not sign out"),
     });
-  };
+  }, [logout, qc, setLocation]);
 
-  const isActive = (href: string) =>
-    location === href ||
-    (href !== "/admin" && href !== "/employee" && location.startsWith(href + "/"));
+  const isActive = useCallback(
+    (href: string) =>
+      location === href ||
+      (href !== "/admin" && href !== "/employee" && location.startsWith(href + "/")),
+    [location],
+  );
+  const toggleMobileMenu = useCallback(() => {
+    setOpen((v) => !v);
+  }, []);
+  const closeMobileMenu = useCallback(() => {
+    setOpen(false);
+  }, []);
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -129,7 +138,7 @@ export function AppShell({
           </button>
           <button
             className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border"
-            onClick={() => setOpen((v) => !v)}
+            onClick={toggleMobileMenu}
             aria-label={open ? "Close menu" : "Open menu"}
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -173,7 +182,7 @@ export function AppShell({
         {open && (
           <div
             className="fixed inset-0 z-40 lg:hidden"
-            onClick={() => setOpen(false)}
+            onClick={closeMobileMenu}
           >
             <div className="absolute inset-0 bg-black/40" />
             <aside
@@ -184,7 +193,7 @@ export function AppShell({
                 <BrandMark />
                 <button
                   className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted"
-                  onClick={() => setOpen(false)}
+                  onClick={closeMobileMenu}
                   aria-label="Close menu"
                 >
                   <X className="h-5 w-5" />
@@ -194,7 +203,7 @@ export function AppShell({
                 user={user}
                 nav={nav}
                 isActive={isActive}
-                onNavigate={() => setOpen(false)}
+                onNavigate={closeMobileMenu}
                 onLogout={handleLogout}
                 hideHeader
                 theme={theme}
@@ -215,7 +224,7 @@ export function AppShell({
   );
 }
 
-function SidebarRail({
+const SidebarRail = memo(function SidebarRail({
   user,
   nav,
   isActive,
@@ -316,9 +325,9 @@ function SidebarRail({
       </div>
     </div>
   );
-}
+});
 
-function BrandMark() {
+const BrandMark = memo(function BrandMark() {
   return (
     <div className="flex items-center gap-2.5">
       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-border overflow-hidden">
@@ -336,9 +345,9 @@ function BrandMark() {
       </div>
     </div>
   );
-}
+});
 
-function SidebarInner({
+const SidebarInner = memo(function SidebarInner({
   user,
   nav,
   isActive,
@@ -446,4 +455,4 @@ function SidebarInner({
       </div>
     </div>
   );
-}
+});
