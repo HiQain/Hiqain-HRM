@@ -26,13 +26,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -46,7 +39,7 @@ import { formatDate } from "@/lib/utils";
 export function MyInventoryPage() {
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedItemId, setSelectedItemId] = useState<string>("");
+  const [requestedItemName, setRequestedItemName] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [reason, setReason] = useState("");
 
@@ -67,7 +60,7 @@ export function MyInventoryPage() {
   );
 
   const resetDialog = () => {
-    setSelectedItemId("");
+    setRequestedItemName("");
     setQuantity("1");
     setReason("");
     setDialogOpen(false);
@@ -75,16 +68,20 @@ export function MyInventoryPage() {
 
   const submitRequest = (event: FormEvent) => {
     event.preventDefault();
-    const itemId = Number(selectedItemId);
-    if (!itemId) {
-      toast.error("Select an inventory item first");
+    const normalizedName = requestedItemName.trim();
+    if (!normalizedName) {
+      toast.error("Enter the item you need first");
       return;
     }
+    const matchedItem = availableItems.find(
+      (item) => item.name.trim().toLowerCase() === normalizedName.toLowerCase(),
+    );
 
     createRequest.mutate(
       {
         data: {
-          itemId,
+          itemId: matchedItem?.id,
+          requestedItemName: normalizedName,
           quantity: Math.max(1, Number(quantity || 1)),
           reason: reason.trim() || undefined,
         },
@@ -128,56 +125,6 @@ export function MyInventoryPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
-          <section className="rounded-xl border border-border bg-card shadow-sm">
-            <div className="border-b border-border px-5 py-4">
-              <h2 className="text-lg font-semibold">Available stock</h2>
-              <p className="text-sm text-muted-foreground">
-                Request any item you need for work. Approved requests are assigned automatically.
-              </p>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Available</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {itemsLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
-                      Loading available stock...
-                    </TableCell>
-                  </TableRow>
-                ) : !availableItems.length ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
-                      No stock is currently available.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  availableItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <div className="font-medium">{item.name}</div>
-                        {item.notes && (
-                          <div className="max-w-xs truncate text-xs text-muted-foreground">
-                            {item.notes}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{item.category}</TableCell>
-                      <TableCell>{item.sku || "—"}</TableCell>
-                      <TableCell>{item.availableStock}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </section>
-
           <section className="rounded-xl border border-border bg-card shadow-sm">
             <div className="border-b border-border px-5 py-4">
               <h2 className="text-lg font-semibold">My request history</h2>
@@ -228,9 +175,6 @@ export function MyInventoryPage() {
         <section className="rounded-xl border border-border bg-card shadow-sm">
           <div className="border-b border-border px-5 py-4">
             <h2 className="text-lg font-semibold">Assigned to me</h2>
-            <p className="text-sm text-muted-foreground">
-              These items have already been approved and issued against your employee profile.
-            </p>
           </div>
           <Table>
             <TableHeader>
@@ -283,24 +227,21 @@ export function MyInventoryPage() {
           <DialogHeader>
             <DialogTitle>New inventory request</DialogTitle>
             <DialogDescription>
-              Request hardware or accessories such as a monitor, RAM, SSD, keyboard, or any other approved stock item.
+              Request any hardware or accessory you need, even if it is not currently listed in stock.
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitRequest}>
             <div className="space-y-1.5">
               <Label>Item</Label>
-              <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an available item" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableItems.map((item) => (
-                    <SelectItem key={item.id} value={String(item.id)}>
-                      {item.name} · {item.category} · {item.availableStock} available
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                value={requestedItemName}
+                onChange={(event) => setRequestedItemName(event.target.value)}
+                placeholder="Enter the item you need"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                You can enter a new item name even if it is not currently available in inventory.
+              </p>
             </div>
 
             <div className="space-y-1.5">

@@ -193,9 +193,11 @@ export const CreateEmployeeBody = zod.object({
   "education": zod.string().nullish(),
   "address": zod.string().nullish(),
   "employeeCode": zod.string().nullish(),
+  "maritalStatus": zod.string().nullish(),
   "leftDate": zod.coerce.date().nullish(),
   "emergencyContactName": zod.string().nullish(),
   "emergencyContactNumber": zod.string().nullish(),
+  "emergencyContactRelation": zod.string().nullish(),
   "emergencyContact": zod.string().nullish(),
   "cnic": zod.string().nullish(),
   "lastQualification": zod.string().nullish(),
@@ -280,9 +282,11 @@ export const BulkCreateEmployeesBody = zod.object({
   "education": zod.string().nullish(),
   "address": zod.string().nullish(),
   "employeeCode": zod.string().nullish(),
+  "maritalStatus": zod.string().nullish(),
   "leftDate": zod.coerce.date().nullish(),
   "emergencyContactName": zod.string().nullish(),
   "emergencyContactNumber": zod.string().nullish(),
+  "emergencyContactRelation": zod.string().nullish(),
   "emergencyContact": zod.string().nullish(),
   "cnic": zod.string().nullish(),
   "lastQualification": zod.string().nullish(),
@@ -380,9 +384,11 @@ export const GetEmployeeResponse = zod.object({
   "address": zod.string().nullish(),
   "avatarUrl": zod.string().nullish(),
   "employeeCode": zod.string().nullish(),
+  "maritalStatus": zod.string().nullish(),
   "leftDate": zod.coerce.date().nullish(),
   "emergencyContactName": zod.string().nullish(),
   "emergencyContactNumber": zod.string().nullish(),
+  "emergencyContactRelation": zod.string().nullish(),
   "emergencyContact": zod.string().nullish(),
   "cnic": zod.string().nullish(),
   "lastQualification": zod.string().nullish(),
@@ -481,9 +487,11 @@ export const UpdateEmployeeBody = zod.object({
   "education": zod.string().nullish(),
   "address": zod.string().nullish(),
   "employeeCode": zod.string().nullish(),
+  "maritalStatus": zod.string().nullish(),
   "leftDate": zod.coerce.date().nullish(),
   "emergencyContactName": zod.string().nullish(),
   "emergencyContactNumber": zod.string().nullish(),
+  "emergencyContactRelation": zod.string().nullish(),
   "emergencyContact": zod.string().nullish(),
   "cnic": zod.string().nullish(),
   "lastQualification": zod.string().nullish(),
@@ -1295,8 +1303,9 @@ export const ListInventoryRequestsResponseItem = zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
   "employeeName": zod.string(),
-  "itemId": zod.number(),
+  "itemId": zod.number().nullish(),
   "itemName": zod.string(),
+  "requestedItemName": zod.string().nullish(),
   "quantity": zod.number(),
   "reason": zod.string().nullish(),
   "status": zod.enum(['pending', 'approved', 'rejected']),
@@ -1315,8 +1324,9 @@ export const ListMyInventoryRequestsResponseItem = zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
   "employeeName": zod.string(),
-  "itemId": zod.number(),
+  "itemId": zod.number().nullish(),
   "itemName": zod.string(),
+  "requestedItemName": zod.string().nullish(),
   "quantity": zod.number(),
   "reason": zod.string().nullish(),
   "status": zod.enum(['pending', 'approved', 'rejected']),
@@ -1335,7 +1345,8 @@ export const ListMyInventoryRequestsResponse = zod.array(ListMyInventoryRequests
 
 
 export const CreateMyInventoryRequestBody = zod.object({
-  "itemId": zod.number(),
+  "itemId": zod.number().nullish(),
+  "requestedItemName": zod.string().nullish(),
   "quantity": zod.number().min(1),
   "reason": zod.string().nullish()
 })
@@ -1357,8 +1368,9 @@ export const ApproveInventoryRequestResponse = zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
   "employeeName": zod.string(),
-  "itemId": zod.number(),
+  "itemId": zod.number().nullish(),
   "itemName": zod.string(),
+  "requestedItemName": zod.string().nullish(),
   "quantity": zod.number(),
   "reason": zod.string().nullish(),
   "status": zod.enum(['pending', 'approved', 'rejected']),
@@ -1385,8 +1397,9 @@ export const RejectInventoryRequestResponse = zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
   "employeeName": zod.string(),
-  "itemId": zod.number(),
+  "itemId": zod.number().nullish(),
   "itemName": zod.string(),
+  "requestedItemName": zod.string().nullish(),
   "quantity": zod.number(),
   "reason": zod.string().nullish(),
   "status": zod.enum(['pending', 'approved', 'rejected']),
@@ -1427,7 +1440,8 @@ export const CreateInventoryAssignmentBody = zod.object({
   "employeeId": zod.number(),
   "itemId": zod.number(),
   "quantity": zod.number().min(1),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "assignedAt": zod.coerce.date().nullish()
 })
 
 
@@ -2736,5 +2750,3 @@ export const UploadAttachmentResponse = zod.object({
   "url": zod.string(),
   "name": zod.string()
 })
-
-

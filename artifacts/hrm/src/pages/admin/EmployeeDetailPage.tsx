@@ -284,10 +284,12 @@ function ProfileTab({ employee }: { employee: any }) {
     dateOfBirth: employee.dateOfBirth ?? "",
     address: employee.address ?? "",
     employeeCode: employee.employeeCode ?? "",
+    maritalStatus: employee.maritalStatus ?? "",
     leftDate: employee.leftDate ?? "",
     emergencyContactName: employee.emergencyContactName ?? "",
     emergencyContactNumber:
       employee.emergencyContactNumber ?? employee.emergencyContact ?? "",
+    emergencyContactRelation: employee.emergencyContactRelation ?? "",
     emergencyContact: employee.emergencyContact ?? "",
     cnic: employee.cnic ?? "",
     lastQualification: employee.lastQualification ?? "",
@@ -355,9 +357,12 @@ function ProfileTab({ employee }: { employee: any }) {
             : undefined,
           address: form.address || undefined,
           employeeCode: form.employeeCode || undefined,
+          maritalStatus: form.maritalStatus || undefined,
           leftDate: form.leftDate ? (form.leftDate as unknown as string) : undefined,
           emergencyContactName: form.emergencyContactName || undefined,
           emergencyContactNumber: form.emergencyContactNumber || undefined,
+          emergencyContactRelation:
+            form.emergencyContactRelation || undefined,
           emergencyContact:
             form.emergencyContactNumber || form.emergencyContact || undefined,
           cnic: form.cnic || undefined,
@@ -499,6 +504,28 @@ function ProfileTab({ employee }: { employee: any }) {
                 value={form.department}
                 onChange={(e) => setForm({ ...form, department: e.target.value })}
               />
+            </FormField>
+            <FormField label="Marital status">
+              <Select
+                value={form.maritalStatus || "unset"}
+                onValueChange={(v) =>
+                  setForm({
+                    ...form,
+                    maritalStatus: v === "unset" ? "" : v,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select marital status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">Select marital status</SelectItem>
+                  <SelectItem value="Single">Single</SelectItem>
+                  <SelectItem value="Married">Married</SelectItem>
+                  <SelectItem value="Divorced">Divorced</SelectItem>
+                  <SelectItem value="Widowed">Widowed</SelectItem>
+                </SelectContent>
+              </Select>
             </FormField>
           </div>
         </SectionBlock>
@@ -853,6 +880,18 @@ function ProfileTab({ employee }: { employee: any }) {
                   })
                 }
                 placeholder="+923XXXXXXXXX"
+              />
+            </FormField>
+            <FormField label="Relation">
+              <Input
+                value={form.emergencyContactRelation}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    emergencyContactRelation: e.target.value,
+                  })
+                }
+                placeholder="e.g. Father"
               />
             </FormField>
             <FormField label="Last qualification">

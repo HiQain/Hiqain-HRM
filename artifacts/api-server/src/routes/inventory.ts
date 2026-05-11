@@ -39,6 +39,7 @@ function serializeRequest(
     employeeName,
     itemId: row.itemId,
     itemName,
+    requestedItemName: row.requestedItemName ?? itemName,
     quantity: row.quantity,
     reason: row.reason,
     status: row.status,
@@ -87,14 +88,14 @@ router.get("/inventory/items", requireAuth(), async (req, res): Promise<void> =>
 router.post("/inventory/items", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const body = req.body ?? {};
   const name = String(body.name ?? "").trim();
-  const category = String(body.category ?? "").trim();
+  const category = body.category != null ? String(body.category).trim() : "General";
   const sku = body.sku ? String(body.sku).trim() : null;
   const totalStock = Math.max(0, Number(body.totalStock ?? 0));
   const reorderLevel = Math.max(0, Number(body.reorderLevel ?? 0));
   const notes = body.notes ? String(body.notes).trim() : null;
 
-  if (!name || !category) {
-    res.status(400).json({ message: "Name and category are required" });
+  if (!name) {
+    res.status(400).json({ message: "Name is required" });
     return;
   }
 
@@ -150,7 +151,7 @@ router.patch("/inventory/items/:id", requireAuth(["admin", "hr"]), async (req, r
     .set({
       name: body.name != null ? String(body.name).trim() : current.name,
       category:
-        body.category != null ? String(body.category).trim() : current.category,
+        body.category != null ? String(body.category).trim() || "General" : current.category,
       sku: body.sku != null ? String(body.sku).trim() : current.sku,
       totalStock: nextTotalStock,
       availableStock: nextTotalStock - assignedStock,
@@ -170,6 +171,23 @@ router.patch("/inventory/items/:id", requireAuth(["admin", "hr"]), async (req, r
   res.json(serializeItem(rows[0]!));
 });
 
+router.delete("/inventory/items/:id", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const itemRows = await db
+    .select()
+    .from(inventoryItemsTable)
+    .where(eq(inventoryItemsTable.id, id))
+    .limit(1);
+  const item = itemRows[0];
+  if (!item) {
+    res.status(404).json({ message: "Inventory item not found" });
+    return;
+  }
+
+  await db.delete(inventoryItemsTable).where(eq(inventoryItemsTable.id, id));
+  res.json({ success: true });
+});
+
 router.get("/inventory/requests", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const status = req.query.status ? String(req.query.status) : null;
   const rows = await db
@@ -180,10 +198,18 @@ router.get("/inventory/requests", requireAuth(["admin", "hr"]), async (req, res)
     })
     .from(inventoryRequestsTable)
     .innerJoin(employeesTable, eq(employeesTable.id, inventoryRequestsTable.employeeId))
-    .innerJoin(inventoryItemsTable, eq(inventoryItemsTable.id, inventoryRequestsTable.itemId))
+    .leftJoin(inventoryItemsTable, eq(inventoryItemsTable.id, inventoryRequestsTable.itemId))
     .where(status ? eq(inventoryRequestsTable.status, status as any) : undefined)
     .orderBy(desc(inventoryRequestsTable.requestedAt));
-  res.json(rows.map((row) => serializeRequest(row.request, row.employeeName, row.itemName)));
+  res.json(
+    rows.map((row) =>
+      serializeRequest(
+        row.request,
+        row.employeeName,
+        row.request.requestedItemName ?? row.itemName ?? "Custom item request",
+      ),
+    ),
+  );
 });
 
 router.get("/inventory/requests/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
@@ -200,10 +226,18 @@ router.get("/inventory/requests/me", requireAuth(["employee"]), async (req, res)
     })
     .from(inventoryRequestsTable)
     .innerJoin(employeesTable, eq(employeesTable.id, inventoryRequestsTable.employeeId))
-    .innerJoin(inventoryItemsTable, eq(inventoryItemsTable.id, inventoryRequestsTable.itemId))
+    .leftJoin(inventoryItemsTable, eq(inventoryItemsTable.id, inventoryRequestsTable.itemId))
     .where(eq(inventoryRequestsTable.employeeId, user.employeeId))
     .orderBy(desc(inventoryRequestsTable.requestedAt));
-  res.json(rows.map((row) => serializeRequest(row.request, row.employeeName, row.itemName)));
+  res.json(
+    rows.map((row) =>
+      serializeRequest(
+        row.request,
+        row.employeeName,
+        row.request.requestedItemName ?? row.itemName ?? "Custom item request",
+      ),
+    ),
+  );
 });
 
 async function createInventoryRequestHandler(req: any, res: any): Promise<void> {
@@ -212,22 +246,28 @@ async function createInventoryRequestHandler(req: any, res: any): Promise<void> 
     res.status(400).json({ message: "No employee profile" });
     return;
   }
-  const itemId = Number(req.body?.itemId);
+  const requestedItemName = req.body?.requestedItemName
+    ? String(req.body.requestedItemName).trim()
+    : "";
+  const itemId = req.body?.itemId ? Number(req.body?.itemId) : null;
   const quantity = Math.max(1, Number(req.body?.quantity ?? 1));
   const reason = req.body?.reason ? String(req.body.reason).trim() : null;
-  if (!itemId || !Number.isFinite(itemId)) {
-    res.status(400).json({ message: "Valid item is required" });
+  if ((!itemId || !Number.isFinite(itemId)) && !requestedItemName) {
+    res.status(400).json({ message: "Item name is required" });
     return;
   }
-  const itemRows = await db
-    .select()
-    .from(inventoryItemsTable)
-    .where(eq(inventoryItemsTable.id, itemId))
-    .limit(1);
-  const item = itemRows[0];
-  if (!item) {
-    res.status(404).json({ message: "Inventory item not found" });
-    return;
+  let item: typeof inventoryItemsTable.$inferSelect | undefined;
+  if (itemId && Number.isFinite(itemId)) {
+    const itemRows = await db
+      .select()
+      .from(inventoryItemsTable)
+      .where(eq(inventoryItemsTable.id, itemId))
+      .limit(1);
+    item = itemRows[0];
+    if (!item) {
+      res.status(404).json({ message: "Inventory item not found" });
+      return;
+    }
   }
   const empRows = await db
     .select()
@@ -240,7 +280,8 @@ async function createInventoryRequestHandler(req: any, res: any): Promise<void> 
     .insert(inventoryRequestsTable)
     .values({
       employeeId: user.employeeId,
-      itemId,
+      itemId: item?.id ?? null,
+      requestedItemName: requestedItemName || item?.name || null,
       quantity,
       reason,
     })
@@ -253,7 +294,13 @@ async function createInventoryRequestHandler(req: any, res: any): Promise<void> 
         .where(eq(inventoryRequestsTable.id, requestId))
         .limit(1)
     : [];
-  res.status(201).json(serializeRequest(rows[0]!, employee.name, item.name));
+  res.status(201).json(
+    serializeRequest(
+      rows[0]!,
+      employee.name,
+      rows[0]?.requestedItemName ?? item?.name ?? "Custom item request",
+    ),
+  );
 }
 
 router.post("/inventory/requests", requireAuth(["employee"]), createInventoryRequestHandler);
@@ -270,7 +317,7 @@ router.post("/inventory/requests/:id/approve", requireAuth(["admin", "hr"]), asy
     })
     .from(inventoryRequestsTable)
     .innerJoin(employeesTable, eq(employeesTable.id, inventoryRequestsTable.employeeId))
-    .innerJoin(inventoryItemsTable, eq(inventoryItemsTable.id, inventoryRequestsTable.itemId))
+    .leftJoin(inventoryItemsTable, eq(inventoryItemsTable.id, inventoryRequestsTable.itemId))
     .where(eq(inventoryRequestsTable.id, id))
     .limit(1);
   const row = rows[0];
@@ -280,6 +327,12 @@ router.post("/inventory/requests/:id/approve", requireAuth(["admin", "hr"]), asy
   }
   if (row.request.status !== "pending") {
     res.status(400).json({ message: "Request has already been reviewed" });
+    return;
+  }
+  if (!row.item || !row.request.itemId) {
+    res.status(400).json({
+      message: "This request cannot be approved until a matching inventory item is available in stock.",
+    });
     return;
   }
   if (row.item.availableStock < row.request.quantity) {
@@ -321,7 +374,13 @@ router.post("/inventory/requests/:id/approve", requireAuth(["admin", "hr"]), asy
     .from(inventoryRequestsTable)
     .where(eq(inventoryRequestsTable.id, id))
     .limit(1);
-  res.json(serializeRequest(updatedRows[0]!, row.employeeName, row.item.name));
+  res.json(
+    serializeRequest(
+      updatedRows[0]!,
+      row.employeeName,
+      updatedRows[0]?.requestedItemName ?? row.item.name,
+    ),
+  );
 });
 
 router.post("/inventory/requests/:id/reject", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
@@ -335,7 +394,7 @@ router.post("/inventory/requests/:id/reject", requireAuth(["admin", "hr"]), asyn
     })
     .from(inventoryRequestsTable)
     .innerJoin(employeesTable, eq(employeesTable.id, inventoryRequestsTable.employeeId))
-    .innerJoin(inventoryItemsTable, eq(inventoryItemsTable.id, inventoryRequestsTable.itemId))
+    .leftJoin(inventoryItemsTable, eq(inventoryItemsTable.id, inventoryRequestsTable.itemId))
     .where(eq(inventoryRequestsTable.id, id))
     .limit(1);
   const row = rows[0];
@@ -361,7 +420,13 @@ router.post("/inventory/requests/:id/reject", requireAuth(["admin", "hr"]), asyn
     .from(inventoryRequestsTable)
     .where(eq(inventoryRequestsTable.id, id))
     .limit(1);
-  res.json(serializeRequest(updatedRows[0]!, row.employeeName, row.itemName));
+  res.json(
+    serializeRequest(
+      updatedRows[0]!,
+      row.employeeName,
+      updatedRows[0]?.requestedItemName ?? row.itemName ?? "Custom item request",
+    ),
+  );
 });
 
 router.get("/inventory/assignments", requireAuth(["admin", "hr"]), async (_req, res): Promise<void> => {
@@ -388,6 +453,10 @@ router.post("/inventory/assignments", requireAuth(["admin", "hr"]), async (req, 
   const itemId = Number(req.body?.itemId);
   const quantity = Math.max(1, Number(req.body?.quantity ?? 1));
   const notes = req.body?.notes ? String(req.body.notes).trim() : null;
+  const assignedAt =
+    req.body?.assignedAt && String(req.body.assignedAt).trim()
+      ? new Date(`${String(req.body.assignedAt).trim()}T00:00:00`)
+      : new Date();
 
   if (!employeeId || !itemId) {
     res.status(400).json({ message: "employeeId and itemId are required" });
@@ -435,6 +504,7 @@ router.post("/inventory/assignments", requireAuth(["admin", "hr"]), async (req, 
       itemId,
       quantity,
       notes,
+      assignedAt,
       assignedByUserId: user.id,
     })
     .$returningId();

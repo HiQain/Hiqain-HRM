@@ -40,20 +40,24 @@ function empCode(id: number, code?: string | null) {
 function getBreakdownRows(p: Payslip) {
   const fallbackEarnings: Array<{ label: string; amount: number }> = [
     { label: "Basic Salary", amount: p.basicSalary },
-    { label: "Allowances", amount: p.allowances },
+    { label: "Home Rent", amount: Math.round((p.allowances / 2) * 100) / 100 },
+    {
+      label: "Utility Bills",
+      amount:
+        Math.round((p.allowances - Math.round((p.allowances / 2) * 100) / 100) * 100) /
+        100,
+    },
+    { label: "Additional Bonus", amount: p.bonus },
   ];
-  if (p.bonus > 0) fallbackEarnings.push({ label: "Bonus", amount: p.bonus });
 
-  const fallbackDeductions: Array<{ label: string; amount: number }> = [];
-  if (p.otherDeductions > 0) {
-    fallbackDeductions.push({
-      label: "Other Deductions",
-      amount: p.otherDeductions,
-    });
-  }
-  if (p.loanDeduction > 0) {
-    fallbackDeductions.push({ label: "Loan Deduction", amount: p.loanDeduction });
-  }
+  const fallbackDeductions: Array<{ label: string; amount: number }> = [
+    { label: "Absence Deduction", amount: 0 },
+    { label: "Late Penalty", amount: 0 },
+    { label: "Loan Deduction", amount: p.loanDeduction },
+    { label: "Other Deductions", amount: p.otherDeductions },
+    { label: "Provident Fund", amount: 0 },
+    { label: "Payroll Tax", amount: 0 },
+  ];
 
   return {
     earnings: p.salaryBreakdown?.earnings?.length

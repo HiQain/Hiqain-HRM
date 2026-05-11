@@ -86,9 +86,11 @@ export interface Employee {
   address?: string | null;
   avatarUrl?: string | null;
   employeeCode?: string | null;
+  maritalStatus?: string | null;
   leftDate?: string | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;
+  emergencyContactRelation?: string | null;
   emergencyContact?: string | null;
   cnic?: string | null;
   lastQualification?: string | null;
@@ -225,9 +227,11 @@ export interface CreateEmployeeRequest {
   education?: string | null;
   address?: string | null;
   employeeCode?: string | null;
+  maritalStatus?: string | null;
   leftDate?: string | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;
+  emergencyContactRelation?: string | null;
   emergencyContact?: string | null;
   cnic?: string | null;
   lastQualification?: string | null;
@@ -307,9 +311,11 @@ export interface UpdateEmployeeRequest {
   education?: string | null;
   address?: string | null;
   employeeCode?: string | null;
+  maritalStatus?: string | null;
   leftDate?: string | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;
+  emergencyContactRelation?: string | null;
   emergencyContact?: string | null;
   cnic?: string | null;
   lastQualification?: string | null;
@@ -791,8 +797,9 @@ export interface InventoryRequest {
   id: number;
   employeeId: number;
   employeeName: string;
-  itemId: number;
+  itemId?: number | null;
   itemName: string;
+  requestedItemName?: string | null;
   quantity: number;
   reason?: string | null;
   status: InventoryRequestStatus;
@@ -827,6 +834,7 @@ export interface CreateInventoryAssignmentRequest {
   /** @minimum 1 */
   quantity: number;
   notes?: string | null;
+  assignedAt?: string | null;
 }
 
 export interface CreateInventoryItemRequest {
@@ -852,7 +860,8 @@ export interface UpdateInventoryItemRequest {
 }
 
 export interface CreateInventoryRequestRequest {
-  itemId: number;
+  itemId?: number | null;
+  requestedItemName?: string | null;
   /** @minimum 1 */
   quantity: number;
   reason?: string | null;
@@ -1537,4 +1546,3 @@ export const ListGeneralRequestsStatus = {
 export type UploadAttachmentBody = {
   file: Blob;
 };
-

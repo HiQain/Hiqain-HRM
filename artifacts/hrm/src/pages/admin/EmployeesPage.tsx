@@ -406,12 +406,14 @@ function NewEmployeeSheet({
       ),
       dateOfBirth: "",
       employeeCode: "",
+      maritalStatus: "",
       personalEmail: "",
       lastQualification: "",
       address: "",
       cnic: "",
       emergencyContactName: "",
       emergencyContactNumber: "",
+      emergencyContactRelation: "",
       emergencyContact: "",
       previousCompany: "",
       lastPay: "",
@@ -519,11 +521,14 @@ function NewEmployeeSheet({
             ? (form.dateOfBirth as unknown as string)
             : undefined,
           employeeCode: form.employeeCode || undefined,
+          maritalStatus: form.maritalStatus || undefined,
           lastQualification: form.lastQualification || undefined,
           address: form.address || undefined,
           cnic: form.cnic || undefined,
           emergencyContactName: form.emergencyContactName || undefined,
           emergencyContactNumber: form.emergencyContactNumber || undefined,
+          emergencyContactRelation:
+            form.emergencyContactRelation || undefined,
           emergencyContact:
             form.emergencyContactNumber || form.emergencyContact || undefined,
           previousCompany: form.previousCompany || undefined,
@@ -711,6 +716,28 @@ function NewEmployeeSheet({
                   value={form.dateOfBirth}
                   onChange={(v) => setForm({ ...form, dateOfBirth: v })}
                 />
+              </Field>
+              <Field label="Marital status">
+                <Select
+                  value={form.maritalStatus || "unset"}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      maritalStatus: v === "unset" ? "" : v,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select marital status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unset">Select marital status</SelectItem>
+                    <SelectItem value="Single">Single</SelectItem>
+                    <SelectItem value="Married">Married</SelectItem>
+                    <SelectItem value="Divorced">Divorced</SelectItem>
+                    <SelectItem value="Widowed">Widowed</SelectItem>
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
           </Section>
@@ -1112,6 +1139,18 @@ function NewEmployeeSheet({
                     })
                   }
                   placeholder="+923XXXXXXXXX"
+                />
+              </Field>
+              <Field label="Relation">
+                <Input
+                  value={form.emergencyContactRelation}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      emergencyContactRelation: e.target.value,
+                    })
+                  }
+                  placeholder="e.g. Father"
                 />
               </Field>
               <Field label="Last qualification">

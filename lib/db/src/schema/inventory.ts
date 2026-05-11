@@ -28,9 +28,10 @@ export const inventoryRequestsTable = mysqlTable("inventory_requests", {
   employeeId: int("employee_id")
     .notNull()
     .references(() => employeesTable.id, { onDelete: "cascade" }),
-  itemId: int("item_id")
-    .notNull()
-    .references(() => inventoryItemsTable.id, { onDelete: "cascade" }),
+  itemId: int("item_id").references(() => inventoryItemsTable.id, {
+    onDelete: "cascade",
+  }),
+  requestedItemName: text("requested_item_name"),
   quantity: int("quantity").notNull().default(1),
   reason: text("reason"),
   status: mysqlEnum("status", ["pending", "approved", "rejected"])

@@ -1611,9 +1611,11 @@ components:
         address: { type: string, nullable: true }
         avatarUrl: { type: string, nullable: true }
         employeeCode: { type: string, nullable: true }
+        maritalStatus: { type: string, nullable: true }
         leftDate: { type: string, format: date, nullable: true }
         emergencyContactName: { type: string, nullable: true }
         emergencyContactNumber: { type: string, nullable: true }
+        emergencyContactRelation: { type: string, nullable: true }
         emergencyContact: { type: string, nullable: true }
         cnic: { type: string, nullable: true }
         lastQualification: { type: string, nullable: true }
@@ -1704,9 +1706,11 @@ components:
         education: { type: string, nullable: true }
         address: { type: string, nullable: true }
         employeeCode: { type: string, nullable: true }
+        maritalStatus: { type: string, nullable: true }
         leftDate: { type: string, format: date, nullable: true }
         emergencyContactName: { type: string, nullable: true }
         emergencyContactNumber: { type: string, nullable: true }
+        emergencyContactRelation: { type: string, nullable: true }
         emergencyContact: { type: string, nullable: true }
         cnic: { type: string, nullable: true }
         lastQualification: { type: string, nullable: true }
@@ -1768,9 +1772,11 @@ components:
         education: { type: string, nullable: true }
         address: { type: string, nullable: true }
         employeeCode: { type: string, nullable: true }
+        maritalStatus: { type: string, nullable: true }
         leftDate: { type: string, format: date, nullable: true }
         emergencyContactName: { type: string, nullable: true }
         emergencyContactNumber: { type: string, nullable: true }
+        emergencyContactRelation: { type: string, nullable: true }
         emergencyContact: { type: string, nullable: true }
         cnic: { type: string, nullable: true }
         lastQualification: { type: string, nullable: true }

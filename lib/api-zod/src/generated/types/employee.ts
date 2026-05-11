@@ -35,9 +35,11 @@ export interface Employee {
   address?: string | null;
   avatarUrl?: string | null;
   employeeCode?: string | null;
+  maritalStatus?: string | null;
   leftDate?: Date | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;
+  emergencyContactRelation?: string | null;
   emergencyContact?: string | null;
   cnic?: string | null;
   lastQualification?: string | null;

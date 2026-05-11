@@ -73,9 +73,11 @@ function serializeEmployee(
     avatarUrl: e.avatarUrl,
     // New fields
     employeeCode: e.employeeCode,
+    maritalStatus: e.maritalStatus,
     leftDate: e.leftDate,
     emergencyContactName: e.emergencyContactName,
     emergencyContactNumber: e.emergencyContactNumber,
+    emergencyContactRelation: e.emergencyContactRelation,
     emergencyContact: e.emergencyContact,
     cnic: e.cnic,
     lastQualification: e.lastQualification,
@@ -284,8 +286,11 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
       education: data.education ?? null,
       address: data.address ?? null,
       employeeCode: (data as any).employeeCode ?? autoCode,
+      maritalStatus: (data as any).maritalStatus ?? null,
       emergencyContactName: (data as any).emergencyContactName ?? null,
       emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
+      emergencyContactRelation:
+        (data as any).emergencyContactRelation ?? null,
       emergencyContact: (data as any).emergencyContact ?? null,
       cnic: (data as any).cnic ?? null,
       lastQualification: (data as any).lastQualification ?? null,
@@ -430,8 +435,11 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
         education: data.education ?? null,
         address: data.address ?? null,
         employeeCode: autoCode,
+        maritalStatus: (data as any).maritalStatus ?? null,
         emergencyContactName: (data as any).emergencyContactName ?? null,
         emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
+        emergencyContactRelation:
+          (data as any).emergencyContactRelation ?? null,
         emergencyContact: (data as any).emergencyContact ?? null,
         cnic: (data as any).cnic ?? null,
         lastQualification: (data as any).lastQualification ?? null,
@@ -620,11 +628,15 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
     updates.personalEmail = extraText.personalEmail;
   // New fields
   if (extraText.employeeCode !== undefined) updates.employeeCode = extraText.employeeCode;
+  if (extraText.maritalStatus !== undefined)
+    updates.maritalStatus = extraText.maritalStatus;
   if (extraText.leftDate !== undefined) updates.leftDate = extraText.leftDate;
   if (extraText.emergencyContactName !== undefined)
     updates.emergencyContactName = extraText.emergencyContactName;
   if (extraText.emergencyContactNumber !== undefined)
     updates.emergencyContactNumber = extraText.emergencyContactNumber;
+  if (extraText.emergencyContactRelation !== undefined)
+    updates.emergencyContactRelation = extraText.emergencyContactRelation;
   if (extraText.emergencyContact !== undefined)
     updates.emergencyContact = extraText.emergencyContact;
   if (extraText.cnic !== undefined) updates.cnic = extraText.cnic;

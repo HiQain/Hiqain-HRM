@@ -1,4 +1,4 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getListEmployeesQueryKey,
@@ -8,6 +8,7 @@ import {
   useApproveInventoryRequest,
   useCreateInventoryAssignment,
   useCreateInventoryItem,
+  useDeleteInventoryItem,
   useListEmployees,
   useListInventoryAssignments,
   useListInventoryItems,
@@ -17,12 +18,22 @@ import {
   type InventoryItem,
   type InventoryRequest,
 } from "@workspace/api-client-react";
-import { CheckCircle2, Package, Plus, ShieldAlert, Wrench, XCircle } from "lucide-react";
+import { Check, CheckCircle2, Package, Plus, ShieldAlert, Trash2, Wrench, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +65,6 @@ import { formatDate } from "@/lib/utils";
 
 type StockFormState = {
   name: string;
-  category: string;
   sku: string;
   totalStock: string;
   reorderLevel: string;
@@ -69,12 +79,12 @@ type AssignmentFormState = {
   employeeId: string;
   itemId: string;
   quantity: string;
+  assignedAt: string;
   notes: string;
 };
 
 const EMPTY_STOCK_FORM: StockFormState = {
   name: "",
-  category: "",
   sku: "",
   totalStock: "0",
   reorderLevel: "0",
@@ -85,6 +95,7 @@ const EMPTY_ASSIGNMENT_FORM: AssignmentFormState = {
   employeeId: "",
   itemId: "",
   quantity: "1",
+  assignedAt: new Date().toISOString().slice(0, 10),
   notes: "",
 };
 
@@ -92,11 +103,17 @@ function toStockForm(item?: InventoryItem | null): StockFormState {
   if (!item) return EMPTY_STOCK_FORM;
   return {
     name: item.name,
-    category: item.category,
     sku: item.sku ?? "",
     totalStock: String(item.totalStock),
     reorderLevel: String(item.reorderLevel),
     notes: item.notes ?? "",
+  };
+}
+
+function createEmptyStockFormWithName(name = ""): StockFormState {
+  return {
+    ...EMPTY_STOCK_FORM,
+    name,
   };
 }
 
@@ -115,6 +132,9 @@ export function AdminInventoryPage() {
   const [assignmentForm, setAssignmentForm] = useState<AssignmentFormState>(
     EMPTY_ASSIGNMENT_FORM,
   );
+  const [deleteItem, setDeleteItem] = useState<InventoryItem | null>(null);
+  const [nameMenuOpen, setNameMenuOpen] = useState(false);
+  const closeNameMenuTimeoutRef = useRef<number | null>(null);
 
   const { data: employees } = useListEmployees({
     query: { queryKey: getListEmployeesQueryKey() },
@@ -127,6 +147,7 @@ export function AdminInventoryPage() {
 
   const createItem = useCreateInventoryItem();
   const updateItem = useUpdateInventoryItem();
+  const deleteInventoryItem = useDeleteInventoryItem();
   const createAssignment = useCreateInventoryAssignment();
   const approveRequest = useApproveInventoryRequest();
   const rejectRequest = useRejectInventoryRequest();
@@ -158,6 +179,7 @@ export function AdminInventoryPage() {
   const openCreateDialog = () => {
     setEditingItem(null);
     setStockForm(EMPTY_STOCK_FORM);
+    setNameMenuOpen(false);
     setItemDialogOpen(true);
   };
 
@@ -169,14 +191,30 @@ export function AdminInventoryPage() {
   const openEditDialog = (item: InventoryItem) => {
     setEditingItem(item);
     setStockForm(toStockForm(item));
+    setNameMenuOpen(false);
     setItemDialogOpen(true);
+  };
+
+  const selectSuggestedItem = (item: InventoryItem) => {
+    setEditingItem(item);
+    setStockForm(toStockForm(item));
+    setNameMenuOpen(false);
+  };
+
+  const clearSelectedItem = () => {
+    setEditingItem(null);
+    setStockForm(EMPTY_STOCK_FORM);
+    setNameMenuOpen(false);
   };
 
   const submitItem = (event: FormEvent) => {
     event.preventDefault();
+    const matchingItem = (items ?? []).find(
+      (item) => item.name.trim().toLowerCase() === stockForm.name.trim().toLowerCase(),
+    );
     const payload = {
       name: stockForm.name.trim(),
-      category: stockForm.category.trim(),
+      category: editingItem?.category ?? matchingItem?.category ?? "General",
       sku: stockForm.sku.trim() || null,
       totalStock: Math.max(0, Number(stockForm.totalStock || 0)),
       reorderLevel: Math.max(0, Number(stockForm.reorderLevel || 0)),
@@ -199,6 +237,23 @@ export function AdminInventoryPage() {
       return;
     }
     createItem.mutate({ data: payload }, { onSuccess, onError });
+  };
+
+  const submitDeleteItem = () => {
+    if (!deleteItem) return;
+    deleteInventoryItem.mutate(
+      { id: deleteItem.id },
+      {
+        onSuccess: async () => {
+          toast.success("Inventory item deleted");
+          setDeleteItem(null);
+          await invalidateInventory();
+        },
+        onError: (error: Error) => {
+          toast.error(error.message || "Could not delete inventory item");
+        },
+      },
+    );
   };
 
   const openReviewDialog = (mode: "approve" | "reject", request: InventoryRequest) => {
@@ -248,6 +303,7 @@ export function AdminInventoryPage() {
           employeeId: Number(assignmentForm.employeeId),
           itemId: Number(assignmentForm.itemId),
           quantity: Math.max(1, Number(assignmentForm.quantity || 1)),
+          assignedAt: assignmentForm.assignedAt || undefined,
           notes: assignmentForm.notes.trim() || undefined,
         },
       },
@@ -266,6 +322,14 @@ export function AdminInventoryPage() {
   };
 
   const availableItems = (items ?? []).filter((item) => item.availableStock > 0);
+  const filteredItemSuggestions = useMemo(() => {
+    const query = stockForm.name.trim().toLowerCase();
+    const inventory = items ?? [];
+    if (!query) return inventory.slice(0, 8);
+    return inventory
+      .filter((item) => item.name.toLowerCase().includes(query))
+      .slice(0, 8);
+  }, [items, stockForm.name]);
 
   return (
     <div className="space-y-6">
@@ -305,7 +369,6 @@ export function AdminInventoryPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Item</TableHead>
-                  <TableHead>Category</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Available</TableHead>
@@ -318,14 +381,14 @@ export function AdminInventoryPage() {
               <TableBody>
                 {itemsLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                      Loading inventory...
+                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      Loading inventory items...
                     </TableCell>
                   </TableRow>
                 ) : !items?.length ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                      No inventory items added yet.
+                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      No inventory items have been added yet.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -339,7 +402,6 @@ export function AdminInventoryPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell>{item.category}</TableCell>
                       <TableCell>{item.sku || "—"}</TableCell>
                       <TableCell>{item.totalStock}</TableCell>
                       <TableCell>{item.availableStock}</TableCell>
@@ -352,9 +414,20 @@ export function AdminInventoryPage() {
                         />
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
-                          Edit stock
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
+                            Edit stock
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-rose-600 hover:text-rose-700"
+                            onClick={() => setDeleteItem(item)}
+                          >
+                            Delete
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -469,7 +542,7 @@ export function AdminInventoryPage() {
                 ) : !assignments?.length ? (
                   <TableRow>
                     <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                      No inventory assignments yet.
+                      No inventory assignments have been recorded yet.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -499,31 +572,98 @@ export function AdminInventoryPage() {
           <DialogHeader>
             <DialogTitle>{editingItem ? "Edit inventory item" : "Add inventory item"}</DialogTitle>
             <DialogDescription>
-              Track stock centrally so approved employee requests can be assigned automatically.
+              Manage stock centrally so approved employee requests can be fulfilled quickly.
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitItem}>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label>Name</Label>
-                <Input
-                  value={stockForm.name}
-                  onChange={(event) =>
-                    setStockForm((current) => ({ ...current, name: event.target.value }))
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Category</Label>
-                <Input
-                  value={stockForm.category}
-                  onChange={(event) =>
-                    setStockForm((current) => ({ ...current, category: event.target.value }))
-                  }
-                  placeholder="Monitor, SSD, RAM..."
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    value={stockForm.name}
+                    onBlur={() => {
+                      closeNameMenuTimeoutRef.current = window.setTimeout(() => {
+                        setNameMenuOpen(false);
+                      }, 120);
+                    }}
+                    onChange={(event) => {
+                      const nextName = event.target.value;
+                      const normalizedNextName = nextName.trim().toLowerCase();
+                      const normalizedEditingName = editingItem?.name.trim().toLowerCase();
+                      setNameMenuOpen(normalizedNextName.length > 0);
+                      if (
+                        editingItem &&
+                        normalizedNextName !== normalizedEditingName
+                      ) {
+                        setEditingItem(null);
+                        setStockForm(createEmptyStockFormWithName(nextName));
+                        return;
+                      }
+                      setStockForm((current) => ({ ...current, name: nextName }));
+                    }}
+                    required
+                    placeholder="Search for an existing item or enter a new name"
+                    className="pr-10"
+                  />
+                  {editingItem ? (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                      onClick={clearSelectedItem}
+                      aria-label="Clear selected item"
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                  {nameMenuOpen && filteredItemSuggestions.length > 0 ? (
+                    <div className="absolute z-50 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-popover p-2 shadow-lg">
+                      <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Existing items
+                      </p>
+                      <div className="space-y-1">
+                        {filteredItemSuggestions.map((item) => {
+                          const selected = editingItem?.id === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className="flex w-full items-start justify-between rounded-lg px-3 py-2 text-left transition hover:bg-accent hover:text-accent-foreground"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                if (closeNameMenuTimeoutRef.current !== null) {
+                                  window.clearTimeout(closeNameMenuTimeoutRef.current);
+                                }
+                                selectSuggestedItem(item);
+                              }}
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium">
+                                  {item.name}
+                                </span>
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  SKU: {item.sku || "—"} · {item.availableStock} available · {item.totalStock} total
+                                </span>
+                              </span>
+                              {selected ? (
+                                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                {editingItem ? (
+                  <p className="text-xs text-emerald-600">
+                    An existing item is selected. Saving will update this record.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Select an existing item to edit it, or enter a new name to create a new record.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>SKU</Label>
@@ -587,7 +727,7 @@ export function AdminInventoryPage() {
           <DialogHeader>
             <DialogTitle>Assign inventory manually</DialogTitle>
             <DialogDescription>
-              Issue stock directly to an employee without waiting for a request.
+              Assign inventory directly to an employee without waiting for a request.
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitAssignment}>
@@ -626,7 +766,7 @@ export function AdminInventoryPage() {
                 <SelectContent>
                   {availableItems.map((item) => (
                     <SelectItem key={item.id} value={String(item.id)}>
-                      {item.name} · {item.category} · {item.availableStock} available
+                      {item.name} · {item.availableStock} available
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -643,6 +783,20 @@ export function AdminInventoryPage() {
                   setAssignmentForm((current) => ({
                     ...current,
                     quantity: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Assignment date</Label>
+              <Input
+                type="date"
+                value={assignmentForm.assignedAt}
+                onChange={(event) =>
+                  setAssignmentForm((current) => ({
+                    ...current,
+                    assignedAt: event.target.value,
                   }))
                 }
               />
@@ -696,7 +850,7 @@ export function AdminInventoryPage() {
               <Textarea
                 value={reviewNotes}
                 onChange={(event) => setReviewNotes(event.target.value)}
-                placeholder="Optional note for the employee assignment"
+                placeholder="Optional note for the assignment"
               />
             </div>
             <div className="space-y-1.5">
@@ -722,6 +876,29 @@ export function AdminInventoryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={Boolean(deleteItem)} onOpenChange={(open) => !open && setDeleteItem(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete inventory item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteItem
+                ? `This will permanently delete "${deleteItem.name}" if it does not have any assignment or request history.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-rose-600 text-white hover:bg-rose-700"
+              onClick={submitDeleteItem}
+              disabled={deleteInventoryItem.isPending}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

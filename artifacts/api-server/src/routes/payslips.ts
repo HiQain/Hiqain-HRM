@@ -93,11 +93,9 @@ function buildPayslipBreakdown(
 
   const earnings: PayslipBreakdownLine[] = [
     { label: "Basic Salary", amount: basicSalary },
+    { label: "Home Rent", amount: homeRent },
+    { label: "Utility Bills", amount: utilityBills },
   ];
-  if (homeRent > 0) earnings.push({ label: "Home Rent", amount: homeRent });
-  if (utilityBills > 0) {
-    earnings.push({ label: "Utility Bills", amount: utilityBills });
-  }
 
   const deductions: PayslipBreakdownLine[] = [];
   let commissionTotal = 0;
@@ -150,9 +148,7 @@ function buildPayslipBreakdown(
   }
 
   const additionalBonus = roundAmount(Number(payslip.bonus) - commissionTotal);
-  if (additionalBonus > 0) {
-    earnings.push({ label: "Additional Bonus", amount: additionalBonus });
-  }
+  earnings.push({ label: "Additional Bonus", amount: additionalBonus });
 
   const providentFundFromProfile =
     shouldApplyProvidentFund &&
@@ -160,9 +156,11 @@ function buildPayslipBreakdown(
     employee.providentFundPercent != null
       ? roundAmount((Number(employee.providentFundPercent) / 100) * basicSalary)
       : 0;
-  if (providentFundFromProfile > 0) {
-    deductions.push({ label: "Provident Fund", amount: providentFundFromProfile });
-  }
+  const providentFundAmount = roundAmount(
+    providentFundFromComponent > 0
+      ? providentFundFromComponent
+      : providentFundFromProfile,
+  );
 
   const recurringTaxableCompensation =
     basicSalary + defaultAllowances + taxableRecurringComponentTotal;
@@ -176,26 +174,11 @@ function buildPayslipBreakdown(
       payslip.year,
     ),
   );
-  if (payrollTax > 0) {
-    deductions.push({ label: "Payroll Tax", amount: payrollTax });
-  }
 
   const absenceDeduction = roundAmount(recurringGrossPerDay * absentDays);
-  if (absenceDeduction > 0) {
-    deductions.push({ label: "Absence Deduction", amount: absenceDeduction });
-  }
 
   const latePenaltyDeduction = roundAmount(recurringGrossPerDay * lateAbsenceDays);
-  if (latePenaltyDeduction > 0) {
-    deductions.push({ label: "Late Penalty", amount: latePenaltyDeduction });
-  }
-
-  if (Number(payslip.loanDeduction) > 0) {
-    deductions.push({
-      label: "Loan Deduction",
-      amount: roundAmount(Number(payslip.loanDeduction)),
-    });
-  }
+  const loanDeductionAmount = roundAmount(Number(payslip.loanDeduction));
 
   const manualOrResidualDeductions = roundAmount(
     Number(payslip.otherDeductions) -
@@ -206,12 +189,15 @@ function buildPayslipBreakdown(
       absenceDeduction -
       latePenaltyDeduction,
   );
-  if (manualOrResidualDeductions > 0) {
-    deductions.push({
-      label: "Other Deductions",
-      amount: manualOrResidualDeductions,
-    });
-  }
+  deductions.push({ label: "Absence Deduction", amount: absenceDeduction });
+  deductions.push({ label: "Late Penalty", amount: latePenaltyDeduction });
+  deductions.push({ label: "Loan Deduction", amount: loanDeductionAmount });
+  deductions.push({
+    label: "Other Deductions",
+    amount: manualOrResidualDeductions,
+  });
+  deductions.push({ label: "Provident Fund", amount: providentFundAmount });
+  deductions.push({ label: "Payroll Tax", amount: payrollTax });
 
   return { earnings, deductions };
 }

@@ -34,9 +34,11 @@ export interface UpdateEmployeeRequest {
   education?: string | null;
   address?: string | null;
   employeeCode?: string | null;
+  maritalStatus?: string | null;
   leftDate?: Date | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;
+  emergencyContactRelation?: string | null;
   emergencyContact?: string | null;
   cnic?: string | null;
   lastQualification?: string | null;
