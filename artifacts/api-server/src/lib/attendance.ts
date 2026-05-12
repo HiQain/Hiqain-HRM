@@ -38,6 +38,10 @@ function ymdInAttendanceTimezone(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export function attendanceTodayYmd(now: Date = new Date()): string {
+  return ymdInAttendanceTimezone(now);
+}
+
 function shiftDateFromOffset(dateStr: string, daysDelta: number): string {
   const { year, month, day } = shiftDateParts(dateStr);
   const shifted = new Date(Date.UTC(year, month - 1, day + daysDelta));

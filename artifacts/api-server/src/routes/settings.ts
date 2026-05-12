@@ -12,6 +12,17 @@ type GeneratedHoliday = {
   country: "us" | "pk" | "other";
 };
 
+function parseJsonArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function toHolidayCountry(value: unknown): "us" | "pk" | "other" | undefined {
   return value === "us" || value === "pk" || value === "other"
     ? value
@@ -180,7 +191,7 @@ function normalizeStoredPublicHolidays(
   year: number,
 ) {
   const normalized = sortHolidays(
-    (holidays ?? [])
+    parseJsonArray(holidays)
       .filter((holiday) => typeof holiday?.date === "string" && typeof holiday?.name === "string")
       .map((holiday) => ({
         date: toHolidayDate(holiday.date),
@@ -207,6 +218,21 @@ function getEffectivePublicHolidays(settings: AppSettings) {
     settings.publicHolidays,
     new Date().getFullYear(),
   );
+}
+
+function normalizeWeeklyOffDays(value: unknown): number[] {
+  return parseJsonArray(value)
+    .map((day) => Number(day))
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+}
+
+function normalizeSettingsRecord(settings: AppSettings, year: number): AppSettings {
+  const weeklyOffDays = normalizeWeeklyOffDays(settings.weeklyOffDays);
+  return {
+    ...settings,
+    weeklyOffDays: weeklyOffDays.length ? weeklyOffDays : [0, 6],
+    publicHolidays: normalizeStoredPublicHolidays(settings.publicHolidays, year),
+  };
 }
 
 function parseTime(t: string): number {
@@ -258,10 +284,14 @@ function serialize(s: AppSettings) {
   const monthlyWorkingDays = computeWorkingDaysInMonth(
     today.getFullYear(),
     today.getMonth(),
-    s.weeklyOffDays ?? [0, 6],
+    normalizeWeeklyOffDays(s.weeklyOffDays).length
+      ? normalizeWeeklyOffDays(s.weeklyOffDays)
+      : [0, 6],
     holidaySet,
   );
   const monthlyHours = Math.round(dailyHours * monthlyWorkingDays);
+
+  const weeklyOffDays = normalizeWeeklyOffDays(s.weeklyOffDays);
 
   return {
     companyName: s.companyName,
@@ -272,7 +302,7 @@ function serialize(s: AppSettings) {
     defaultProbationMonths: s.defaultProbationMonths,
     defaultOfficeStartTime: s.defaultOfficeStartTime,
     defaultOfficeEndTime: s.defaultOfficeEndTime,
-    weeklyOffDays: s.weeklyOffDays ?? [0, 6],
+    weeklyOffDays: weeklyOffDays.length ? weeklyOffDays : [0, 6],
     publicHolidays: effectivePublicHolidays.map((h) => ({
       date: h.date,
       name: h.name,
@@ -311,7 +341,7 @@ export async function getSettings(): Promise<AppSettings> {
       year,
     );
     const currentPublicHolidays = sortHolidays(
-      (current.publicHolidays ?? [])
+      parseJsonArray(current.publicHolidays)
         .filter((holiday) => typeof holiday?.date === "string" && typeof holiday?.name === "string")
         .map((holiday) => ({
           date: toHolidayDate(holiday.date),
@@ -320,7 +350,7 @@ export async function getSettings(): Promise<AppSettings> {
         })),
     );
     if (areSameHolidayLists(currentPublicHolidays, normalizedPublicHolidays)) {
-      return current;
+      return normalizeSettingsRecord(current, year);
     }
     await db
       .update(appSettingsTable)
@@ -330,13 +360,13 @@ export async function getSettings(): Promise<AppSettings> {
       })
       .where(eq(appSettingsTable.id, current.id));
     const seededRows = await db.select().from(appSettingsTable).limit(1);
-    return seededRows[0]!;
+    return normalizeSettingsRecord(seededRows[0]!, year);
   }
   await db.insert(appSettingsTable).values({
     publicHolidays: buildDefaultPublicHolidays(year),
   });
   const nextRows = await db.select().from(appSettingsTable).limit(1);
-  return nextRows[0]!;
+  return normalizeSettingsRecord(nextRows[0]!, year);
 }
 
 router.get("/settings", requireAuth(), async (_req, res) => {

@@ -279,6 +279,10 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
         data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
       basicSalary: String(data.basicSalary),
       allowances: String(data.allowances ?? 0),
+      providentFundPercent:
+        Number(settings.defaultProvidentFundPercent) > 0
+          ? String(Number(settings.defaultProvidentFundPercent))
+          : null,
       casualLeaveQuota,
       sickLeaveQuota,
       annualLeaveQuota,
@@ -422,6 +426,10 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
           data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
         basicSalary: String(data.basicSalary),
         allowances: String(data.allowances ?? 0),
+        providentFundPercent:
+          Number(settings.defaultProvidentFundPercent) > 0
+            ? String(Number(settings.defaultProvidentFundPercent))
+            : null,
         casualLeaveQuota: settings.proRatedQuotas
           ? proRatedQuota(baseCasual, joiningDateStr)
           : baseCasual,

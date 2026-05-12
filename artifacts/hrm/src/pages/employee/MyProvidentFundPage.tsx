@@ -49,11 +49,11 @@ export function MyProvidentFundPage() {
     <div className="space-y-6">
       <PageHeader
         title="Provident Fund"
-        description="View your PF contributions, withdrawals, and available balance separately from salary."
+        description="View your PF contributions, company matching, withdrawals, and available balance separately from salary."
       />
       <ProvidentFundLedgerCard
         title="Provident fund ledger"
-        description="PF starts counting after probation and withdrawal requests become available after 1 year of service."
+        description="PF starts counting after probation, and each employee contribution is matched by the company."
         summary={summary}
         emptyText="No PF contributions have been added yet."
       />

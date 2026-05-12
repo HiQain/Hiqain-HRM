@@ -18,6 +18,7 @@ export type SessionUser = {
   mustChangePassword: boolean;
   name: string;
   employeeId: number | null;
+  avatarUrl: string | null;
 };
 
 export async function hashPassword(plain: string): Promise<string> {
@@ -29,6 +30,10 @@ export async function verifyPassword(
   hash: string,
 ): Promise<boolean> {
   return bcrypt.compare(plain, hash);
+}
+
+export function toBooleanFlag(value: unknown): boolean {
+  return value === true || value === 1 || value === "1";
 }
 
 export async function getSessionUser(
@@ -45,6 +50,7 @@ export async function getSessionUser(
       mustChangePassword: usersTable.mustChangePassword,
       employeeId: employeesTable.id,
       name: employeesTable.name,
+      avatarUrl: employeesTable.avatarUrl,
     })
     .from(usersTable)
     .leftJoin(employeesTable, eq(employeesTable.userId, usersTable.id))
@@ -58,8 +64,9 @@ export async function getSessionUser(
     id: row.id,
     email: row.email,
     role: row.role,
-    mustChangePassword: row.mustChangePassword,
+    mustChangePassword: toBooleanFlag(row.mustChangePassword),
     employeeId: row.employeeId,
+    avatarUrl: row.avatarUrl ?? null,
     name:
       row.name ??
       (row.role === "admin"

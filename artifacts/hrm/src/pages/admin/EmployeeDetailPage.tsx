@@ -162,7 +162,11 @@ export function EmployeeDetailPage() {
 
       {/* Hero */}
       <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-6 shadow-sm sm:flex-row sm:items-center">
-        <EmployeeAvatar name={employee.name} size="xl" />
+        <EmployeeAvatar
+          name={employee.name}
+          url={employee.avatarUrl ?? null}
+          size="xl"
+        />
         <div className="flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">
             {employee.name}
@@ -295,6 +299,7 @@ function ProfileTab({ employee }: { employee: any }) {
     lastQualification: employee.lastQualification ?? "",
     previousCompany: employee.previousCompany ?? "",
     lastPay: employee.lastPay != null ? String(employee.lastPay) : "",
+    immediateFamily: employee.immediateFamily ?? "",
     notes: employee.notes ?? "",
     cnicDocumentUrl: employee.cnicDocumentUrl ?? "",
     cnicDocumentName: employee.cnicDocumentName ?? "",
@@ -369,6 +374,7 @@ function ProfileTab({ employee }: { employee: any }) {
           lastQualification: form.lastQualification || undefined,
           previousCompany: form.previousCompany || undefined,
           lastPay: form.lastPay ? Number(form.lastPay) : undefined,
+          immediateFamily: form.immediateFamily || undefined,
           notes: form.notes || undefined,
           cnicDocumentUrl: form.cnicDocumentUrl || undefined,
           cnicDocumentName: form.cnicDocumentName || undefined,
@@ -931,6 +937,16 @@ function ProfileTab({ employee }: { employee: any }) {
                 placeholder="e.g. 80000"
               />
             </FormField>
+            <FormField label="Family members" className="md:col-span-2">
+              <Textarea
+                value={form.immediateFamily}
+                onChange={(e) =>
+                  setForm({ ...form, immediateFamily: e.target.value })
+                }
+                rows={2}
+                placeholder="Optional family member details"
+              />
+            </FormField>
             <DocumentUploader
               label="Last 3 months payslip 1"
               uploadLabel="Uploading payslip 1..."
@@ -1254,7 +1270,7 @@ function ProvidentFundTab({
   return (
     <ProvidentFundLedgerCard
       title="Provident fund"
-      description="PF is tracked separately from salary. Contributions start after probation and withdrawal requests unlock after 1 year."
+      description="PF is tracked separately from salary. Contributions start after probation, and the company matches each employee contribution."
       summary={summary}
       emptyText="No PF contributions or withdrawals recorded for this employee yet."
     />

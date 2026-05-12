@@ -612,7 +612,7 @@ function RequestDialog({
                   <span className="font-semibold">
                     {formatCurrency(pfSummary.availableToRequest)}
                   </span>
-                  . PF starts after probation and withdrawal is allowed after 1 year of service.
+                  . PF starts after probation, company matches each employee contribution, and withdrawal is allowed after 1 year of service.
                 </>
               ) : (
                 <>

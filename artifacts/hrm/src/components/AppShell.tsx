@@ -26,7 +26,12 @@ import {
   Package,
   Settings as SettingsIcon,
 } from "lucide-react";
-import { useLogout, getGetMeQueryKey } from "@workspace/api-client-react";
+import {
+  useLogout,
+  useGetEmployee,
+  getGetEmployeeQueryKey,
+  getGetMeQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -72,7 +77,13 @@ export function AppShell({
   user,
   children,
 }: {
-  user: { name: string; email: string; role: "admin" | "hr" | "employee" };
+  user: {
+    name: string;
+    email: string;
+    role: "admin" | "hr" | "employee";
+    employeeId?: number | null;
+    avatarUrl?: string | null;
+  };
   children: ReactNode;
 }) {
   const nav = user.role !== "employee" ? ADMIN_NAV : EMP_NAV;
@@ -97,6 +108,18 @@ export function AppShell({
   const qc = useQueryClient();
   const logout = useLogout();
   const { theme, toggle } = useTheme();
+  const employeeId = user.employeeId ?? 0;
+  const { data: employee } = useGetEmployee(employeeId, {
+    query: {
+      enabled: employeeId > 0,
+      queryKey: getGetEmployeeQueryKey(employeeId),
+    },
+  });
+  const displayUser = {
+    ...user,
+    name: employee?.name ?? user.name,
+    avatarUrl: employee?.avatarUrl ?? user.avatarUrl ?? null,
+  };
 
   const handleLogout = useCallback(() => {
     logout.mutate(undefined, {
@@ -156,7 +179,7 @@ export function AppShell({
         >
           {desktopOpen ? (
             <SidebarInner
-              user={user}
+              user={displayUser}
               nav={nav}
               isActive={isActive}
               onNavigate={() => {}}
@@ -200,7 +223,7 @@ export function AppShell({
                 </button>
               </div>
               <SidebarInner
-                user={user}
+                user={displayUser}
                 nav={nav}
                 isActive={isActive}
                 onNavigate={closeMobileMenu}
@@ -233,7 +256,12 @@ const SidebarRail = memo(function SidebarRail({
   onToggleTheme,
   onExpand,
 }: {
-  user: { name: string; email: string; role: "admin" | "hr" | "employee" };
+  user: {
+    name: string;
+    email: string;
+    role: "admin" | "hr" | "employee";
+    avatarUrl?: string | null;
+  };
   nav: NavItem[];
   isActive: (href: string) => boolean;
   onLogout: () => void;
@@ -320,7 +348,7 @@ const SidebarRail = memo(function SidebarRail({
           <LogOut className="h-4 w-4" />
         </button>
         <div className="pt-1" title={`${user.name} (${user.email})`}>
-          <EmployeeAvatar name={user.name} size="sm" />
+          <EmployeeAvatar name={user.name} url={user.avatarUrl ?? null} size="sm" />
         </div>
       </div>
     </div>
@@ -358,7 +386,12 @@ const SidebarInner = memo(function SidebarInner({
   onToggleTheme,
   onCollapseDesktop,
 }: {
-  user: { name: string; email: string; role: "admin" | "hr" | "employee" };
+  user: {
+    name: string;
+    email: string;
+    role: "admin" | "hr" | "employee";
+    avatarUrl?: string | null;
+  };
   nav: NavItem[];
   isActive: (href: string) => boolean;
   onNavigate: () => void;
@@ -428,7 +461,7 @@ const SidebarInner = memo(function SidebarInner({
       </nav>
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 rounded-md p-2">
-          <EmployeeAvatar name={user.name} size="sm" />
+          <EmployeeAvatar name={user.name} url={user.avatarUrl ?? null} size="sm" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{user.name}</p>
             <p className="truncate text-xs text-muted-foreground">

@@ -2,11 +2,13 @@ import { useMemo } from "react";
 import {
   useGetMe,
   useGetEmployee,
+  useGetSettings,
   useListSalaryComponents,
   useGetMyLoans,
   useGetMyLoanEligibility,
   useGetMyPayslips,
   getGetEmployeeQueryKey,
+  getGetSettingsQueryKey,
   getListSalaryComponentsQueryKey,
   getGetMyLoansQueryKey,
   getGetMyLoanEligibilityQueryKey,
@@ -62,6 +64,9 @@ export function MySalaryPage() {
   const { data: payslips } = useGetMyPayslips({
     query: { queryKey: getGetMyPayslipsQueryKey(), enabled: employeeId > 0 },
   });
+  const { data: settings } = useGetSettings({
+    query: { queryKey: getGetSettingsQueryKey(), enabled: employeeId > 0 },
+  });
 
   if (empLoading || !emp) {
     return (
@@ -91,11 +96,13 @@ export function MySalaryPage() {
   const latestPayslip = payslips?.[0];
   const defaultAllowances = emp.allowances ?? 0;
   const totalSalary = emp.basicSalary + defaultAllowances;
+  const effectiveProvidentFundPercent =
+    emp.providentFundPercent ?? Number(settings?.defaultProvidentFundPercent ?? 0);
   const salaryPreview = computeSalaryStructurePreview({
     basicSalary: emp.basicSalary,
     defaultAllowances,
     components: visibleComponents,
-    providentFundPercent: emp.providentFundPercent,
+    providentFundPercent: effectiveProvidentFundPercent,
     month: currentMonth,
     year: currentYear,
   });
@@ -158,8 +165,8 @@ export function MySalaryPage() {
           icon={<Receipt className="h-4 w-4" />}
           label="PF deduction"
           value={
-            emp.providentFundPercent != null && emp.providentFundPercent > 0
-              ? `${emp.providentFundPercent}% of basic`
+            effectiveProvidentFundPercent > 0
+              ? `${effectiveProvidentFundPercent}% of basic`
               : "—"
           }
         />
@@ -211,7 +218,7 @@ export function MySalaryPage() {
             <PayrollPreviewCard
               label="PF deduction"
               value={formatCurrency(
-                ((emp.providentFundPercent ?? 0) / 100) * emp.basicSalary,
+                (effectiveProvidentFundPercent / 100) * emp.basicSalary,
               )}
               tone="down"
             />

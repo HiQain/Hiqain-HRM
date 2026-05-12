@@ -29,6 +29,9 @@ const SE_ICONS = {
 
 export function AdminDashboard() {
   const { data, isLoading } = useGetAdminDashboard();
+  const recentSalaryEvents = data?.recentSalaryEvents ?? [];
+  const upcomingBirthdays = data?.upcomingBirthdays ?? [];
+  const upcomingAnniversaries = data?.upcomingAnniversaries ?? [];
 
   return (
     <div className="space-y-8">
@@ -128,9 +131,9 @@ export function AdminDashboard() {
 
         <div className="lg:col-span-2">
           <SectionCard title="Recent salary events" href="/admin/employees">
-            {data && data.recentSalaryEvents.length > 0 ? (
+            {recentSalaryEvents.length > 0 ? (
               <ul className="divide-y divide-border">
-                {data.recentSalaryEvents.map((e) => {
+                {recentSalaryEvents.map((e) => {
                   const cfg = SE_ICONS[e.type as keyof typeof SE_ICONS];
                   const Icon = cfg?.icon ?? Gift;
                   return (
@@ -168,9 +171,9 @@ export function AdminDashboard() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <SectionCard title="Upcoming birthdays">
-          {data && data.upcomingBirthdays.length > 0 ? (
+          {upcomingBirthdays.length > 0 ? (
             <ul className="divide-y divide-border">
-              {data.upcomingBirthdays.map((b) => (
+              {upcomingBirthdays.map((b) => (
                 <li
                   key={b.employeeId + b.date}
                   className="flex items-center gap-3 py-3"
@@ -195,9 +198,9 @@ export function AdminDashboard() {
         </SectionCard>
 
         <SectionCard title="Upcoming work anniversaries">
-          {data && data.upcomingAnniversaries.length > 0 ? (
+          {upcomingAnniversaries.length > 0 ? (
             <ul className="divide-y divide-border">
-              {data.upcomingAnniversaries.map((b) => (
+              {upcomingAnniversaries.map((b) => (
                 <li
                   key={b.employeeId + b.date}
                   className="flex items-center gap-3 py-3"

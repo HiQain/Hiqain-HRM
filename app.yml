@@ -1,0 +1,20 @@
+apps:
+- name: site52853-bycz15.scloudsite101.com
+  log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+  cwd: /home/site52853/hrm-app/
+  script: "npm"
+  args: "run start"
+  interpreter: "/usr/bin/node"
+  env:
+    NODE_ENV: "production"
+    PORT: "3098"
+    MYSQL_HOST: "localhost"
+    MYSQL_PORT: "3306"
+    MYSQL_DATABASE: "site52853_hrm_db"
+    MYSQL_USER: "site52853_hrm_user"
+    MYSQL_PASSWORD: "VCuh90sE5yulO"
+    DATABASE_URL: "mysql://site52853_hrm_user:VCuh90sE5yulO@localhost:3306/site52853_hrm_db"
+    SESSION_SECRET: "hrm_super_secret_2026_live_key"
+    HRM_SEED_SAMPLE_DATA: "false"
+    HRM_BOOTSTRAP_ADMIN_EMAIL: "admin@hiqain.com"
+    HRM_BOOTSTRAP_ADMIN_PASSWORD: "password"

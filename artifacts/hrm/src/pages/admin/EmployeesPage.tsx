@@ -417,6 +417,7 @@ function NewEmployeeSheet({
       emergencyContact: "",
       previousCompany: "",
       lastPay: "",
+      immediateFamily: "",
       notes: "",
       cnicDocumentUrl: "",
       cnicDocumentName: "",
@@ -533,6 +534,7 @@ function NewEmployeeSheet({
             form.emergencyContactNumber || form.emergencyContact || undefined,
           previousCompany: form.previousCompany || undefined,
           lastPay: form.lastPay ? Number(form.lastPay) : undefined,
+          immediateFamily: form.immediateFamily || undefined,
           notes: form.notes || undefined,
           cnicDocumentUrl: form.cnicDocumentUrl || undefined,
           cnicDocumentName: form.cnicDocumentName || undefined,
@@ -1200,6 +1202,17 @@ function NewEmployeeSheet({
                   }
                 />
               </Field>
+              <div className="sm:col-span-2">
+                <Field label="Family members">
+                  <Input
+                    value={form.immediateFamily}
+                    onChange={(e) =>
+                      setForm({ ...form, immediateFamily: e.target.value })
+                    }
+                    placeholder="Optional family member details"
+                  />
+                </Field>
+              </div>
               <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3">
                 <Field label="Last 3 months payslip 1">
                   <SimpleUploadField

@@ -9,8 +9,10 @@ import {
   getSessionUser,
   hashPassword,
   requireAuth,
+  toBooleanFlag,
   verifyPassword,
 } from "../lib/auth";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -78,7 +80,7 @@ router.post("/auth/change-password", requireAuth(), async (req, res): Promise<vo
     return;
   }
 
-  if (!user.mustChangePassword) {
+  if (!toBooleanFlag(user.mustChangePassword)) {
     if (!parsed.data.currentPassword) {
       res
         .status(400)
@@ -105,12 +107,19 @@ router.post("/auth/change-password", requireAuth(), async (req, res): Promise<vo
   // / browser they were logged in on is signed out. Keep the current session
   // (where the password change happened) so the user stays signed in here.
   const currentSid = req.sessionID;
-  await pool.execute(
-    `DELETE FROM user_sessions
-     WHERE JSON_UNQUOTE(JSON_EXTRACT(CAST(sess AS JSON), '$.userId')) = ?
-       AND sid <> ?`,
-    [String(userId), currentSid],
-  );
+  try {
+    await pool.execute(
+      `DELETE FROM user_sessions
+       WHERE JSON_UNQUOTE(JSON_EXTRACT(CAST(sess AS JSON), '$.userId')) = ?
+         AND sid <> ?`,
+      [String(userId), currentSid],
+    );
+  } catch (error) {
+    logger.warn(
+      { err: error, userId },
+      "Could not clear other sessions after password change",
+    );
+  }
 
   res.json({ success: true });
 });

@@ -10,6 +10,7 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { ymd } from "../lib/dates";
 import {
+  attendanceTodayYmd,
   clearManualAttendanceOverride,
   markManualAttendanceOverride,
   normalizeAttendanceStatus,
@@ -572,8 +573,8 @@ router.get(
   async (req, res): Promise<void> => {
     const dateParam = typeof req.query.date === "string" ? req.query.date : "";
     const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(dateParam);
-    const targetDate = isValidDate ? dateParam : ymd(new Date());
-    const today = ymd(new Date());
+    const targetDate = isValidDate ? dateParam : attendanceTodayYmd();
+    const today = attendanceTodayYmd();
     const allEmps = await db.select().from(employeesTable);
     const settings = await getSettings();
     const holidaySet = toHolidaySet(settings);
@@ -811,7 +812,7 @@ router.get(
       }
     }
 
-    const todayStr = ymd(new Date());
+    const todayStr = attendanceTodayYmd();
     const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
     const days: Array<{
       date: string;

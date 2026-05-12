@@ -13,8 +13,10 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
 import {
+  getMatchedProvidentFundContribution,
   getProvidentFundPolicyStartDate,
   isProvidentFundPolicyActiveForPeriod,
+  resolveProvidentFundPercent,
 } from "../lib/provident-fund-policy";
 import { applyPermanentIncrementToCompensation } from "../lib/salary";
 import { getSettings } from "./settings";
@@ -127,6 +129,7 @@ async function computeProvidentFundBalance(
   employeeId: number,
   opts?: { excludeRequestId?: number; includePending?: boolean },
 ) {
+  const settings = await getSettings();
   const employeeRows = await db
     .select()
     .from(employeesTable)
@@ -161,6 +164,10 @@ async function computeProvidentFundBalance(
     .select()
     .from(salaryComponentsTable)
     .where(eq(salaryComponentsTable.employeeId, employeeId));
+  const effectiveProvidentFundPercent = resolveProvidentFundPercent(
+    employee.providentFundPercent,
+    settings.defaultProvidentFundPercent,
+  );
 
   const totalContributed = round2(
     payslips.reduce((sum, payslip) => {
@@ -179,10 +186,13 @@ async function computeProvidentFundBalance(
           0,
         );
       const pfFromProfile =
-        pfFromComponent <= 0 && employee.providentFundPercent != null
-          ? (Number(employee.providentFundPercent) / 100) * basicSalary
+        pfFromComponent <= 0 && effectiveProvidentFundPercent > 0
+          ? (effectiveProvidentFundPercent / 100) * basicSalary
           : 0;
-      return sum + pfFromComponent + pfFromProfile;
+      return (
+        sum +
+        getMatchedProvidentFundContribution(pfFromComponent + pfFromProfile)
+      );
     }, 0),
   );
 

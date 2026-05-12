@@ -201,11 +201,13 @@ export function AdminSalaryPage() {
   const displayedDefaultAllowances =
     monthPayslip?.allowances ?? effectiveCompensation.defaultAllowances;
   const totalSalary = displayedBasicSalary + displayedDefaultAllowances;
+  const effectiveProvidentFundPercent =
+    emp?.providentFundPercent ?? Number(settings?.defaultProvidentFundPercent ?? 0);
   const salaryPreview = computeSalaryStructurePreview({
     basicSalary: displayedBasicSalary,
     defaultAllowances: displayedDefaultAllowances,
     components: visibleComponents,
-    providentFundPercent: emp?.providentFundPercent,
+    providentFundPercent: effectiveProvidentFundPercent,
     month,
     year,
     useDesignationFixedOverride: !isPastPeriod,
@@ -345,8 +347,8 @@ export function AdminSalaryPage() {
                 icon={<Receipt className="h-4 w-4" />}
                 label="PF deduction"
                 value={
-                  emp.providentFundPercent != null && emp.providentFundPercent > 0
-                    ? `${emp.providentFundPercent}% of basic`
+                  effectiveProvidentFundPercent > 0
+                    ? `${effectiveProvidentFundPercent}% of basic`
                     : "—"
                 }
               />
@@ -466,7 +468,7 @@ export function AdminSalaryPage() {
                   <MoneySummaryCard
                     label="PF deduction"
                     value={formatCurrency(
-                      ((emp.providentFundPercent ?? 0) / 100) * displayedBasicSalary,
+                      (effectiveProvidentFundPercent / 100) * displayedBasicSalary,
                     )}
                     tone="down"
                   />
