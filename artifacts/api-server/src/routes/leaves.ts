@@ -67,6 +67,20 @@ async function usedFor(employeeId: number, year: number) {
 
 type AttachmentItem = { url: string; name: string };
 
+function normalizeMentionedIds(ids: unknown): number[] {
+  if (!Array.isArray(ids)) return [];
+  return ids.filter((id): id is number => typeof id === "number" && Number.isFinite(id));
+}
+
+function toIsoString(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+  return null;
+}
+
 function mergedAttachments(r: {
   attachmentUrl: string | null;
   attachmentName: string | null;
@@ -102,11 +116,12 @@ function normalizeAttachments(
 }
 
 async function loadMentioned(ids: number[] | null | undefined) {
-  if (!ids || ids.length === 0) return [];
+  const normalizedIds = normalizeMentionedIds(ids);
+  if (normalizedIds.length === 0) return [];
   const rows = await db
     .select({ id: employeesTable.id, name: employeesTable.name })
     .from(employeesTable)
-    .where(inArray(employeesTable.id, ids));
+    .where(inArray(employeesTable.id, normalizedIds));
   return rows;
 }
 
@@ -114,7 +129,8 @@ async function serialize(
   r: typeof leaveRequestsTable.$inferSelect,
   employeeName: string,
 ) {
-  const mentions = await loadMentioned(r.mentionedEmployeeIds ?? []);
+  const mentionedEmployeeIds = normalizeMentionedIds(r.mentionedEmployeeIds);
+  const mentions = await loadMentioned(mentionedEmployeeIds);
   return {
     id: r.id,
     employeeId: r.employeeId,
@@ -128,9 +144,10 @@ async function serialize(
     attachmentUrl: r.attachmentUrl,
     attachmentName: r.attachmentName,
     attachments: mergedAttachments(r),
-    mentionedEmployeeIds: r.mentionedEmployeeIds ?? [],
+    mentionedEmployeeIds,
     mentionedEmployees: mentions,
-    appliedAt: r.appliedAt.toISOString(),
+    appliedAt: toIsoString(r.appliedAt),
+    reviewedAt: toIsoString(r.reviewedAt),
   };
 }
 
@@ -400,9 +417,15 @@ async function setStatus(id: number, status: "approved" | "rejected") {
   const result = await db
     .update(leaveRequestsTable)
     .set({ status, reviewedAt: new Date() })
-    .where(eq(leaveRequestsTable.id, id))
-    ;
-  if (!result[0].affectedRows) {
+    .where(eq(leaveRequestsTable.id, id));
+  const affectedRows =
+    typeof result === "object" &&
+    result !== null &&
+    "affectedRows" in result &&
+    typeof result.affectedRows === "number"
+      ? result.affectedRows
+      : 0;
+  if (affectedRows === 0) {
     return null;
   }
   const rows = await db

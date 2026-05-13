@@ -223,7 +223,7 @@ export function EmployeesPage() {
             >
               <div className="flex items-start gap-3">
                 <Link href={`/admin/employees/${e.id}`}>
-                  <EmployeeAvatar name={e.name} size="lg" />
+                  <EmployeeAvatar name={e.name} url={e.avatarUrl ?? null} size="lg" />
                 </Link>
                 <div className="min-w-0 flex-1">
                   <Link
