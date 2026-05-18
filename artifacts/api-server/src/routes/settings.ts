@@ -12,6 +12,12 @@ type GeneratedHoliday = {
   country: "us" | "pk" | "other";
 };
 
+type StoredHoliday = {
+  date: string;
+  name: string;
+  country?: unknown;
+};
+
 function parseJsonArray(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   if (typeof value !== "string") return [];
@@ -21,6 +27,15 @@ function parseJsonArray(value: unknown): unknown[] {
   } catch {
     return [];
   }
+}
+
+function isStoredHoliday(value: unknown): value is StoredHoliday {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as StoredHoliday).date === "string" &&
+      typeof (value as StoredHoliday).name === "string",
+  );
 }
 
 function toHolidayCountry(value: unknown): "us" | "pk" | "other" | undefined {
@@ -192,7 +207,7 @@ function normalizeStoredPublicHolidays(
 ) {
   const normalized = sortHolidays(
     parseJsonArray(holidays)
-      .filter((holiday) => typeof holiday?.date === "string" && typeof holiday?.name === "string")
+      .filter(isStoredHoliday)
       .map((holiday) => ({
         date: toHolidayDate(holiday.date),
         name: holiday.name.trim(),
@@ -342,7 +357,7 @@ export async function getSettings(): Promise<AppSettings> {
     );
     const currentPublicHolidays = sortHolidays(
       parseJsonArray(current.publicHolidays)
-        .filter((holiday) => typeof holiday?.date === "string" && typeof holiday?.name === "string")
+        .filter(isStoredHoliday)
         .map((holiday) => ({
           date: toHolidayDate(holiday.date),
           name: holiday.name.trim(),

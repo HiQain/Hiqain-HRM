@@ -9,6 +9,7 @@ import type { UpdateEmployeeRequestPositionType } from './updateEmployeeRequestP
 
 export interface UpdateEmployeeRequest {
   name?: string;
+  isActive?: boolean | null;
   personalEmail?: string | null;
   phone?: string | null;
   position?: string | null;
@@ -35,6 +36,9 @@ export interface UpdateEmployeeRequest {
   address?: string | null;
   employeeCode?: string | null;
   maritalStatus?: string | null;
+  wifeName?: string | null;
+  wifeDateOfBirth?: Date | null;
+  kidsCount?: number | null;
   leftDate?: Date | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;

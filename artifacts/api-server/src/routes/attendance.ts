@@ -10,6 +10,7 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { ymd } from "../lib/dates";
 import {
+  attendanceCandidateShiftDates,
   attendanceTodayYmd,
   clearManualAttendanceOverride,
   markManualAttendanceOverride,
@@ -18,9 +19,13 @@ import {
   officeEndForShiftDate,
   officeStartForShiftDate,
   resolveAttendanceShiftDate,
+  selectActiveAttendanceRecord,
+  shiftDateByDays,
+  isOvernightShift,
 } from "../lib/attendance";
 import { isPayrollOffDay, toHolidaySet } from "../lib/payroll";
 import { getSettings } from "./settings";
+import { inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -123,6 +128,7 @@ router.post(
     const emp = empRows[0]!;
     const now = new Date();
     const shiftDate = resolveAttendanceShiftDate(emp, now);
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
 
     const existing = await db
       .select()
@@ -130,12 +136,21 @@ router.post(
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, shiftDate),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
+      .orderBy(attendanceTable.date);
 
-    if (existing.length && existing[0]!.checkInTime) {
+    const activeRecord = selectActiveAttendanceRecord(existing, emp, now);
+    const existingForShiftDate =
+      existing.find((record) => record.date === shiftDate) ?? null;
+
+    if (activeRecord?.checkInTime && !activeRecord.checkOutTime) {
+      res.status(400).json({ message: "Already checked in for the active shift" });
+      return;
+    }
+
+    if (existingForShiftDate?.checkInTime) {
       res.status(400).json({ message: "Already checked in today" });
       return;
     }
@@ -189,22 +204,22 @@ router.post(
         : "present";
 
     let record;
-    if (existing.length) {
+    if (existingForShiftDate) {
       await db
         .update(attendanceTable)
         .set({
           checkInTime: now,
           isLate,
           status,
-          notes: clearManualAttendanceOverride(existing[0]!.notes),
+          notes: clearManualAttendanceOverride(existingForShiftDate.notes),
           pausedAt: null,
           pausedMinutes: 0,
         })
-        .where(eq(attendanceTable.id, existing[0]!.id));
+        .where(eq(attendanceTable.id, existingForShiftDate.id));
       const updatedRows = await db
         .select()
         .from(attendanceTable)
-        .where(eq(attendanceTable.id, existing[0]!.id))
+        .where(eq(attendanceTable.id, existingForShiftDate.id))
         .limit(1);
       record = updatedRows[0]!;
     } else {
@@ -251,7 +266,7 @@ router.post(
       .limit(1);
     const emp = empRows[0]!;
     const now = new Date();
-    const shiftDate = resolveAttendanceShiftDate(emp, now);
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
 
     const settings = await getSettings();
     const holidaySet = toHolidaySet(settings);
@@ -261,16 +276,17 @@ router.post(
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, shiftDate),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
+      .orderBy(attendanceTable.date);
 
-    if (!rows.length || !rows[0]!.checkInTime) {
+    const rec = selectActiveAttendanceRecord(rows, emp, now);
+
+    if (!rec?.checkInTime) {
       res.status(400).json({ message: "You haven't checked in for this shift" });
       return;
     }
-    const rec = rows[0]!;
     const activePauseMinutes = rec.pausedAt
       ? Math.max(0, Math.floor((now.getTime() - rec.pausedAt.getTime()) / 60000))
       : 0;
@@ -337,18 +353,20 @@ router.get(
       .where(eq(employeesTable.id, user.employeeId))
       .limit(1);
     const emp = empRows[0]!;
-    const today = resolveAttendanceShiftDate(emp, new Date());
+    const now = new Date();
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
     const rows = await db
       .select()
       .from(attendanceTable)
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, today),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
-    if (!rows.length) {
+      .orderBy(attendanceTable.date);
+    const activeRecord = selectActiveAttendanceRecord(rows, emp, now);
+    if (!activeRecord) {
       res.json({
         hasCheckedIn: false,
         hasCheckedOut: false,
@@ -357,7 +375,7 @@ router.get(
       });
       return;
     }
-    const r = rows[0]!;
+    const r = activeRecord;
     res.json({
       hasCheckedIn: !!r.checkInTime,
       hasCheckedOut: !!r.checkOutTime,
@@ -405,24 +423,25 @@ router.post(
       .where(eq(employeesTable.id, user.employeeId))
       .limit(1);
     const emp = empRows[0]!;
-    const shiftDate = resolveAttendanceShiftDate(emp, new Date());
+    const now = new Date();
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
     const rows = await db
       .select()
       .from(attendanceTable)
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, shiftDate),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
+      .orderBy(attendanceTable.date);
 
-    if (!rows.length || !rows[0]!.checkInTime) {
+    const rec = selectActiveAttendanceRecord(rows, emp, now);
+
+    if (!rec?.checkInTime) {
       res.status(400).json({ message: "You need to check in first" });
       return;
     }
-
-    const rec = rows[0]!;
     if (rec.checkOutTime) {
       res.status(400).json({ message: "You have already checked out" });
       return;
@@ -432,7 +451,6 @@ router.post(
       return;
     }
 
-    const now = new Date();
     await db
       .update(attendanceTable)
       .set({ pausedAt: now })
@@ -462,24 +480,24 @@ router.post(
       .limit(1);
     const emp = empRows[0]!;
     const now = new Date();
-    const shiftDate = resolveAttendanceShiftDate(emp, now);
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
     const rows = await db
       .select()
       .from(attendanceTable)
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, shiftDate),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
+      .orderBy(attendanceTable.date);
 
-    if (!rows.length || !rows[0]!.checkInTime) {
+    const rec = selectActiveAttendanceRecord(rows, emp, now);
+
+    if (!rec?.checkInTime) {
       res.status(400).json({ message: "You need to check in first" });
       return;
     }
-
-    const rec = rows[0]!;
     if (rec.checkOutTime) {
       res.status(400).json({ message: "You have already checked out" });
       return;
@@ -571,11 +589,41 @@ router.get(
   "/attendance/today-summary",
   requireAuth(["admin", "hr"]),
   async (req, res): Promise<void> => {
+    const now = new Date();
     const dateParam = typeof req.query.date === "string" ? req.query.date : "";
     const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(dateParam);
-    const targetDate = isValidDate ? dateParam : attendanceTodayYmd();
-    const today = attendanceTodayYmd();
     const allEmps = await db.select().from(employeesTable);
+    const today = attendanceTodayYmd(now);
+    const previousDay = shiftDateByDays(today, -1);
+    let defaultDate = today;
+
+    if (!isValidDate) {
+      const overnightEmployeeIds = allEmps
+        .filter((employee) => isOvernightShift(employee))
+        .map((employee) => employee.id);
+
+      if (overnightEmployeeIds.length > 0) {
+        const openShiftRows = await db
+          .select()
+          .from(attendanceTable)
+          .where(
+            and(
+              eq(attendanceTable.date, previousDay),
+              inArray(attendanceTable.employeeId, overnightEmployeeIds),
+            ),
+          );
+
+        if (
+          openShiftRows.some(
+            (record) => !!record.checkInTime && !record.checkOutTime,
+          )
+        ) {
+          defaultDate = previousDay;
+        }
+      }
+    }
+
+    const targetDate = isValidDate ? dateParam : defaultDate;
     const settings = await getSettings();
     const holidaySet = toHolidaySet(settings);
     const targetDow = new Date(`${targetDate}T00:00:00Z`).getUTCDay();

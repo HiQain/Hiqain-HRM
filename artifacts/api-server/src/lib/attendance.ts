@@ -51,6 +51,10 @@ function shiftDateFromOffset(dateStr: string, daysDelta: number): string {
   return `${nextYear}-${nextMonth}-${nextDay}`;
 }
 
+export function shiftDateByDays(dateStr: string, daysDelta: number): string {
+  return shiftDateFromOffset(dateStr, daysDelta);
+}
+
 function shiftStartDate(dateStr: string, officeStartTime: string): Date {
   const { h, m } = parseHHMM(officeStartTime);
   const { year, month, day } = shiftDateParts(dateStr);
@@ -87,6 +91,41 @@ export function resolveAttendanceShiftDate(
     return shiftDateFromOffset(today, -1);
   }
   return today;
+}
+
+export function attendanceCandidateShiftDates(
+  emp: Pick<EmployeeRow, "officeStartTime" | "officeEndTime">,
+  now: Date,
+): string[] {
+  const today = ymdInAttendanceTimezone(now);
+  if (!isOvernightShift(emp)) {
+    return [today];
+  }
+
+  const previous = shiftDateFromOffset(today, -1);
+  return [today, previous];
+}
+
+export function selectActiveAttendanceRecord<
+  T extends { date: string; checkInTime: Date | null; checkOutTime: Date | null },
+>(
+  records: T[],
+  emp: Pick<EmployeeRow, "officeStartTime" | "officeEndTime">,
+  now: Date,
+): T | undefined {
+  if (records.length === 0) {
+    return undefined;
+  }
+
+  const openRecord = records.find(
+    (record) => !!record.checkInTime && !record.checkOutTime,
+  );
+  if (openRecord) {
+    return openRecord;
+  }
+
+  const resolvedShiftDate = resolveAttendanceShiftDate(emp, now);
+  return records.find((record) => record.date === resolvedShiftDate) ?? records[0];
 }
 
 export function officeStartForShiftDate(

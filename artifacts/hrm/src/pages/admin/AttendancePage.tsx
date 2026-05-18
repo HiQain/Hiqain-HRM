@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -114,22 +114,35 @@ function isLockedAttendanceStatus(status: string) {
 }
 
 export function AdminAttendancePage() {
-  const today = ymdLocal(new Date());
+  const localToday = ymdLocal(new Date());
   const { data: employees } = useListEmployees();
-  const [date, setDate] = useState<string>(today);
+  const [date, setDate] = useState<string | undefined>(undefined);
+  const [todayAnchor, setTodayAnchor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [sortByJoiningDate, setSortByJoiningDate] = useState(false);
 
-  const params = { date };
+  const params = date ? { date } : undefined;
   const { data, isLoading } = useGetTodayAttendanceSummary(params, {
     query: { queryKey: getGetTodayAttendanceSummaryQueryKey(params) },
   });
 
+  useEffect(() => {
+    if (!data?.date) return;
+    if (!todayAnchor) {
+      setTodayAnchor(data.date);
+    }
+    if (!date) {
+      setDate(data.date);
+    }
+  }, [data?.date, date, todayAnchor]);
+
   const qc = useQueryClient();
   const override = useOverrideAttendance();
   const [editingEmpId, setEditingEmpId] = useState<number | null>(null);
+  const effectiveDate = date ?? data?.date ?? localToday;
+  const operationalToday = todayAnchor ?? data?.date ?? localToday;
 
   const handleStatusChange = (
     employeeId: number,
@@ -137,7 +150,7 @@ export function AdminAttendancePage() {
   ) => {
     setEditingEmpId(employeeId);
     override.mutate(
-      { data: { employeeId, date, status: newStatus } },
+      { data: { employeeId, date: effectiveDate, status: newStatus } },
       {
         onSuccess: async () => {
           toast.success("Attendance updated");
@@ -154,8 +167,8 @@ export function AdminAttendancePage() {
     );
   };
 
-  const isToday = date === today;
-  const isPast = date < today;
+  const isToday = effectiveDate === operationalToday;
+  const isPast = effectiveDate < operationalToday;
   const employeeMeta = useMemo(
     () =>
       new Map(
@@ -253,18 +266,18 @@ export function AdminAttendancePage() {
           variant="outline"
           size="icon"
           aria-label="Previous day"
-          onClick={() => setDate((d) => shiftDate(d, -1))}
+          onClick={() => setDate((d) => shiftDate(d ?? effectiveDate, -1))}
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <div className="w-[220px]">
-          <DateField value={date} onChange={setDate} />
+          <DateField value={effectiveDate} onChange={setDate} />
         </div>
         <Button
           variant="outline"
           size="icon"
           aria-label="Next day"
-          onClick={() => setDate((d) => shiftDate(d, 1))}
+          onClick={() => setDate((d) => shiftDate(d ?? effectiveDate, 1))}
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -272,7 +285,7 @@ export function AdminAttendancePage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setDate(today)}
+            onClick={() => setDate(operationalToday)}
             className="ml-1"
           >
             <CalendarDays className="mr-1.5 h-4 w-4" />

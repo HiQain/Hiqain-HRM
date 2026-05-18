@@ -12,6 +12,7 @@ export interface Employee {
   userId?: number;
   name: string;
   email: string;
+  isActive?: boolean | null;
   personalEmail?: string | null;
   phone?: string | null;
   position?: string | null;
@@ -36,6 +37,9 @@ export interface Employee {
   avatarUrl?: string | null;
   employeeCode?: string | null;
   maritalStatus?: string | null;
+  wifeName?: string | null;
+  wifeDateOfBirth?: Date | null;
+  kidsCount?: number | null;
   leftDate?: Date | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;

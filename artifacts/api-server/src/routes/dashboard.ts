@@ -8,12 +8,13 @@ import {
   salaryEventsTable,
   usersTable,
 } from "@workspace/db";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { parseDate, ymd } from "../lib/dates";
 import {
+  attendanceCandidateShiftDates,
   normalizeAttendanceStatus,
-  resolveAttendanceShiftDate,
+  selectActiveAttendanceRecord,
 } from "../lib/attendance";
 
 const router: IRouter = Router();
@@ -200,18 +201,18 @@ router.get(
     };
 
     const now = new Date();
-    const today = resolveAttendanceShiftDate(e, now);
+    const candidateDates = attendanceCandidateShiftDates(e, now);
     const todayRows = await db
       .select()
       .from(attendanceTable)
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, today),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
-    const todayRec = todayRows[0];
+      .orderBy(attendanceTable.date);
+    const todayRec = selectActiveAttendanceRecord(todayRows, e, now);
     const activePauseMinutes = todayRec?.pausedAt
       ? Math.max(0, Math.floor((now.getTime() - todayRec.pausedAt.getTime()) / 60000))
       : 0;

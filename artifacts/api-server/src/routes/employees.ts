@@ -25,15 +25,63 @@ import { getSettings } from "./settings";
 const router: IRouter = Router();
 const PRIMARY_PAYROLL_BANK_NAME = "Bank Al Habib";
 
+function buildEmployeeCode(sequence: number): string {
+  return `EMP-${String(sequence).padStart(3, "0")}`;
+}
+
+function parseEmployeeCodeSequence(code: string | null | undefined): number {
+  if (!code) return 0;
+  const match = /^EMP-(\d+)$/i.exec(code.trim());
+  if (!match) return 0;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function getNextEmployeeCode(): Promise<string> {
+  const rows = await db
+    .select({ employeeCode: employeesTable.employeeCode })
+    .from(employeesTable);
+  const maxSequence = rows.reduce(
+    (max, row) => Math.max(max, parseEmployeeCodeSequence(row.employeeCode)),
+    0,
+  );
+  return buildEmployeeCode(Math.max(maxSequence, rows.length) + 1);
+}
+
 function subtractDay(d: Date): Date {
   const r = new Date(d.getTime());
   r.setUTCDate(r.getUTCDate() - 1);
   return r;
 }
 
+function parseKidsNames(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter(Boolean);
+  } catch {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+}
+
+function serializeKidsNames(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const names = value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+  return names.length ? JSON.stringify(names) : null;
+}
+
 function serializeEmployee(
   e: typeof employeesTable.$inferSelect,
   email: string,
+  isActive: boolean,
 ) {
   const joining = parseDate(e.joiningDate);
   const probationEnd = subtractDay(addMonths(joining, e.probationMonths));
@@ -51,6 +99,7 @@ function serializeEmployee(
     userId: e.userId,
     name: e.name,
     email,
+    isActive,
     personalEmail: e.personalEmail,
     phone: e.phone,
     position: e.position,
@@ -74,6 +123,10 @@ function serializeEmployee(
     // New fields
     employeeCode: e.employeeCode,
     maritalStatus: e.maritalStatus,
+    wifeName: e.wifeName,
+    wifeDateOfBirth: e.wifeDateOfBirth,
+    kidsCount: e.kidsCount != null ? Number(e.kidsCount) : null,
+    kidsNames: parseKidsNames(e.kidsNames),
     leftDate: e.leftDate,
     emergencyContactName: e.emergencyContactName,
     emergencyContactNumber: e.emergencyContactNumber,
@@ -174,11 +227,16 @@ router.get("/employees", requireAuth(["admin", "hr"]), async (_req, res) => {
     .select({
       employee: employeesTable,
       email: usersTable.email,
+      isActive: usersTable.isActive,
     })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .orderBy(desc(employeesTable.createdAt));
-  res.json(rows.map(({ employee, email }) => serializeEmployee(employee, email)));
+  res.json(
+    rows.map(({ employee, email, isActive }) =>
+      serializeEmployee(employee, email, Boolean(isActive)),
+    ),
+  );
 });
 
 function proRatedQuota(quota: number, joiningDate: string): number {
@@ -233,6 +291,7 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
       email,
       passwordHash,
       role: resolvedRole,
+      isActive: (data as any).isActive ?? true,
       mustChangePassword: true,
     })
     .$returningId();
@@ -243,9 +302,7 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
   }
 
   // Auto-generate employee code if not provided
-  const allEmps = await db.select({ id: employeesTable.id }).from(employeesTable);
-  const nextNum = allEmps.length + 1;
-  const autoCode = `EMP-${String(nextNum).padStart(3, "0")}`;
+  const autoCode = await getNextEmployeeCode();
 
   const joiningDateStr = data.joiningDate as unknown as string;
   const baseCasual = data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
@@ -291,6 +348,12 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
       address: data.address ?? null,
       employeeCode: (data as any).employeeCode ?? autoCode,
       maritalStatus: (data as any).maritalStatus ?? null,
+      wifeName: (data as any).wifeName ?? null,
+      wifeDateOfBirth:
+        ((data as any).wifeDateOfBirth as unknown as string) ?? null,
+      kidsCount:
+        (data as any).kidsCount != null ? String((data as any).kidsCount) : null,
+      kidsNames: serializeKidsNames((data as any).kidsNames),
       emergencyContactName: (data as any).emergencyContactName ?? null,
       emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
       emergencyContactRelation:
@@ -338,7 +401,9 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
     res.status(500).json({ message: "Created employee could not be loaded" });
     return;
   }
-  res.status(201).json(serializeEmployee(employee, email));
+  res.status(201).json(
+    serializeEmployee(employee, email, Boolean((data as any).isActive ?? true)),
+  );
 });
 
 router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
@@ -393,6 +458,7 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
           email,
           passwordHash,
           role: safeRole,
+          isActive: (data as any).isActive ?? true,
           mustChangePassword: true,
         })
         .$returningId();
@@ -400,8 +466,7 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
       if (!userId) {
         throw new Error("Failed to create user");
       }
-      const allEmps = await db.select({ id: employeesTable.id }).from(employeesTable);
-      const autoCode = `EMP-${String(allEmps.length + 1).padStart(3, "0")}`;
+      const autoCode = await getNextEmployeeCode();
       const joiningDateStr = data.joiningDate as unknown as string;
       const baseCasual =
         data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
@@ -444,6 +509,12 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
         address: data.address ?? null,
         employeeCode: autoCode,
         maritalStatus: (data as any).maritalStatus ?? null,
+        wifeName: (data as any).wifeName ?? null,
+        wifeDateOfBirth:
+          ((data as any).wifeDateOfBirth as unknown as string) ?? null,
+        kidsCount:
+          (data as any).kidsCount != null ? String((data as any).kidsCount) : null,
+        kidsNames: serializeKidsNames((data as any).kidsNames),
         emergencyContactName: (data as any).emergencyContactName ?? null,
         emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
         emergencyContactRelation:
@@ -512,7 +583,11 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
     return;
   }
   const rows = await db
-    .select({ employee: employeesTable, email: usersTable.email })
+    .select({
+      employee: employeesTable,
+      email: usersTable.email,
+      isActive: usersTable.isActive,
+    })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .where(eq(employeesTable.id, id))
@@ -529,7 +604,7 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
     .where(eq(salaryEventsTable.employeeId, id))
     .orderBy(desc(salaryEventsTable.date));
 
-  const base = serializeEmployee(row.employee, row.email);
+  const base = serializeEmployee(row.employee, row.email, Boolean(row.isActive));
   const joining = parseDate(row.employee.joiningDate);
   const now = new Date();
   const workDurationMonths = diffMonths(joining, now);
@@ -638,6 +713,14 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
   if (extraText.employeeCode !== undefined) updates.employeeCode = extraText.employeeCode;
   if (extraText.maritalStatus !== undefined)
     updates.maritalStatus = extraText.maritalStatus;
+  if (extraText.wifeName !== undefined) updates.wifeName = extraText.wifeName;
+  if (extra.wifeDateOfBirth !== undefined)
+    updates.wifeDateOfBirth = extra.wifeDateOfBirth as string | null;
+  if (extra.kidsCount !== undefined)
+    updates.kidsCount =
+      typeof extra.kidsCount === "number" ? String(extra.kidsCount) : null;
+  if (extra.kidsNames !== undefined)
+    updates.kidsNames = serializeKidsNames(extra.kidsNames);
   if (extraText.leftDate !== undefined) updates.leftDate = extraText.leftDate;
   if (extraText.emergencyContactName !== undefined)
     updates.emergencyContactName = extraText.emergencyContactName;
@@ -715,6 +798,12 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
       extra.providentFundPercent != null ? String(extra.providentFundPercent) : null;
 
   await db.update(employeesTable).set(updates).where(eq(employeesTable.id, id));
+  if (typeof extra.isActive === "boolean" && previous?.userId) {
+    await db
+      .update(usersTable)
+      .set({ isActive: extra.isActive })
+      .where(eq(usersTable.id, previous.userId));
+  }
 
   // Log designation change journey event
   if (
@@ -732,7 +821,11 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
   }
 
   const rows = await db
-    .select({ employee: employeesTable, email: usersTable.email })
+    .select({
+      employee: employeesTable,
+      email: usersTable.email,
+      isActive: usersTable.isActive,
+    })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .where(eq(employeesTable.id, id))
@@ -742,7 +835,7 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
     res.status(404).json({ message: "Employee not found" });
     return;
   }
-  res.json(serializeEmployee(row.employee, row.email));
+  res.json(serializeEmployee(row.employee, row.email, Boolean(row.isActive)));
 });
 
 router.delete("/employees/:id", requireAuth(["admin"]), async (req, res): Promise<void> => {
@@ -769,7 +862,11 @@ router.get("/employees/:id/journey", requireAuth(), async (req, res): Promise<vo
     return;
   }
   const rows = await db
-    .select({ employee: employeesTable, email: usersTable.email })
+    .select({
+      employee: employeesTable,
+      email: usersTable.email,
+      isActive: usersTable.isActive,
+    })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .where(eq(employeesTable.id, id))
@@ -780,7 +877,7 @@ router.get("/employees/:id/journey", requireAuth(), async (req, res): Promise<vo
     return;
   }
 
-  const employee = serializeEmployee(row.employee, row.email);
+  const employee = serializeEmployee(row.employee, row.email, Boolean(row.isActive));
   const joining = parseDate(row.employee.joiningDate);
   const probationEnd = subtractDay(addMonths(joining, row.employee.probationMonths));
   const nowYear = new Date().getUTCFullYear();

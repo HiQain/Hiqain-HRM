@@ -3,10 +3,11 @@ import {
   LoginBody,
   ChangePasswordBody,
 } from "@workspace/api-zod";
-import { db, usersTable, pool } from "@workspace/db";
+import { db, pool, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   getSessionUser,
+  getUserByEmail,
   hashPassword,
   requireAuth,
   toBooleanFlag,
@@ -23,14 +24,13 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
   const { email, password } = parsed.data;
-  const rows = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, email.toLowerCase()))
-    .limit(1);
-  const user = rows[0];
+  const user = await getUserByEmail(email);
   if (!user) {
     res.status(401).json({ message: "Invalid email or password" });
+    return;
+  }
+  if (!user.isActive) {
+    res.status(403).json({ message: "This account is deactivated" });
     return;
   }
   const ok = await verifyPassword(password, user.passwordHash);

@@ -11,6 +11,7 @@ import type { CreateEmployeeRequestRole } from './createEmployeeRequestRole';
 export interface CreateEmployeeRequest {
   name: string;
   email: string;
+  isActive?: boolean | null;
   /** @minLength 6 */
   password: string;
   /** Defaults to employee. Admin members get full HRM rights; HR members get all admin rights except destructive deletes and creating other admins. */
@@ -41,6 +42,9 @@ export interface CreateEmployeeRequest {
   address?: string | null;
   employeeCode?: string | null;
   maritalStatus?: string | null;
+  wifeName?: string | null;
+  wifeDateOfBirth?: Date | null;
+  kidsCount?: number | null;
   leftDate?: Date | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;
