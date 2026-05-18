@@ -21,11 +21,12 @@ export function resolveAssetUrl(url: string | null | undefined): string {
   if (isAbsoluteAssetUrl(trimmed)) return trimmed;
 
   if (/^\/?api\/uploads\//i.test(trimmed)) {
-    return `/${trimmed.replace(/^\/?api\//i, "")}`;
+    return getApiUrl(trimmed.startsWith("/") ? trimmed : `/${trimmed}`);
   }
 
   if (/^\/?uploads\//i.test(trimmed)) {
-    return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+    const normalizedUploadPath = trimmed.replace(/^\/?/, "");
+    return getApiUrl(`/api/${normalizedUploadPath}`);
   }
 
   return getApiUrl(trimmed.startsWith("/") ? trimmed : `/${trimmed}`);
@@ -41,7 +42,7 @@ export function getAssetUrlCandidates(url: string | null | undefined): string[] 
     candidates.push(trimmed.startsWith("/") ? trimmed : `/${trimmed}`);
 
     if (/^\/?uploads\//i.test(trimmed)) {
-      candidates.push(`/api/${trimmed.replace(/^\/?/, "")}`);
+      candidates.push(getApiUrl(`/api/${trimmed.replace(/^\/?/, "")}`));
     } else if (/^\/?api\/uploads\//i.test(trimmed)) {
       candidates.push(`/${trimmed.replace(/^\/?api\//i, "")}`);
     }
