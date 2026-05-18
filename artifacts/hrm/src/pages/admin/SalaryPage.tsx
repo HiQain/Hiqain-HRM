@@ -72,6 +72,17 @@ import {
   isManualTaxComponent,
 } from "@/lib/salary";
 
+function getDisplayedPayrollTax(
+  deductions: Array<{ label: string; amount: number }> | undefined,
+  fallbackTax: number,
+) {
+  const matchedTax = deductions?.find((line) => /\bpayroll\s*tax\b/i.test(line.label));
+  if (matchedTax) return matchedTax.amount;
+
+  const genericTax = deductions?.find((line) => /\btax\b/i.test(line.label));
+  return genericTax?.amount ?? fallbackTax;
+}
+
 export function AdminSalaryPage() {
   const { data: employees } = useListEmployees();
   const now = new Date();
@@ -212,11 +223,12 @@ export function AdminSalaryPage() {
     year,
     useDesignationFixedOverride: !isPastPeriod,
   });
-  const generatedPayrollTax =
-    monthPayslip?.salaryBreakdown?.deductions?.find((line) => line.label === "Payroll Tax")
-      ?.amount ?? null;
+  const generatedPayrollTax = getDisplayedPayrollTax(
+    monthPayslip?.salaryBreakdown?.deductions,
+    salaryPreview.tax,
+  );
   const currentTax = monthPayslip
-    ? generatedPayrollTax ?? 0
+    ? generatedPayrollTax
     : salaryPreview.tax;
   const currentPerDaySalary = totalSalary / 30;
   const monthPayslipLatePenalty =

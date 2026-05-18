@@ -40,7 +40,7 @@ const STYLES: Record<Status, string> = {
   half_day: "bg-purple-50 text-purple-700 ring-purple-200",
   remote_work: "bg-teal-50 text-teal-700 ring-teal-200",
   weekend: "bg-slate-50 text-slate-500 ring-slate-200",
-  holiday: "bg-indigo-50 text-indigo-700 ring-indigo-200",
+  holiday: "bg-indigo-50 text-indigo-600 ring-indigo-300",
   future: "bg-slate-50 text-slate-400 ring-slate-200",
   none: "bg-slate-50 text-slate-400 ring-slate-200",
   pending: "bg-amber-50 text-amber-700 ring-amber-200",

@@ -33,6 +33,17 @@ import {
   isManualTaxComponent,
 } from "@/lib/salary";
 
+function getDisplayedPayrollTax(
+  deductions: Array<{ label: string; amount: number }> | undefined,
+  fallbackTax: number,
+) {
+  const matchedTax = deductions?.find((line) => /\bpayroll\s*tax\b/i.test(line.label));
+  if (matchedTax) return matchedTax.amount;
+
+  const genericTax = deductions?.find((line) => /\btax\b/i.test(line.label));
+  return genericTax?.amount ?? fallbackTax;
+}
+
 export function MySalaryPage() {
   const { data: me } = useGetMe();
   const employeeId = me?.employeeId ?? 0;
@@ -106,9 +117,10 @@ export function MySalaryPage() {
     month: currentMonth,
     year: currentYear,
   });
-  const latestPayrollTax =
-    latestPayslip?.salaryBreakdown?.deductions?.find((line) => line.label === "Payroll Tax")
-      ?.amount ?? null;
+  const latestPayrollTax = getDisplayedPayrollTax(
+    latestPayslip?.salaryBreakdown?.deductions,
+    salaryPreview.tax,
+  );
   const currentProjectedTax = salaryPreview.tax;
   const latestLatePenalty =
     latestPayslip && latestPayslip.totalWorkingDays > 0
@@ -173,7 +185,7 @@ export function MySalaryPage() {
         <StatCard
           icon={<Landmark className="h-4 w-4" />}
           label="Tax"
-          value={formatCurrency(currentProjectedTax)}
+          value={formatCurrency(latestPayslip ? latestPayrollTax : currentProjectedTax)}
         />
       </div>
 
@@ -212,7 +224,7 @@ export function MySalaryPage() {
             />
             <PayrollPreviewCard
               label="Payroll tax"
-              value={formatCurrency(currentProjectedTax)}
+              value={formatCurrency(latestPayrollTax)}
               tone="down"
             />
             <PayrollPreviewCard
@@ -253,11 +265,7 @@ export function MySalaryPage() {
             <StatCard
               icon={<Receipt className="h-4 w-4" />}
               label="Tax"
-              value={formatCurrency(
-                latestPayslip.salaryBreakdown?.deductions?.find(
-                  (line) => line.label === "Payroll Tax",
-                )?.amount ?? 0,
-              )}
+              value={formatCurrency(latestPayrollTax)}
             />
             <StatCard
               icon={<Wallet className="h-4 w-4" />}
