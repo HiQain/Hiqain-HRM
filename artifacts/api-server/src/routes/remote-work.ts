@@ -7,6 +7,7 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
+import { notifyEmployeeUser, notifyRoles } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -112,7 +113,7 @@ router.get("/remote-work", requireAuth(), async (req, res): Promise<void> => {
   res.json(out);
 });
 
-router.post("/remote-work", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.post("/remote-work", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.status(400).json({ message: "No employee profile" });
@@ -185,12 +186,24 @@ router.post("/remote-work", requireAuth(["employee"]), async (req, res): Promise
     res.status(500).json({ message: "Created request could not be loaded" });
     return;
   }
+  await notifyRoles(["admin", "hr"], {
+    type: "remote_work",
+    title: "New remote work request",
+    message: `${emp.name} submitted a remote work request.`,
+    href: "/admin/requests",
+  });
+  await notifyEmployeeUser(user.employeeId, {
+    type: "remote_work",
+    title: "Remote work request submitted",
+    message: "Your remote work request has been submitted for review.",
+    href: "/employee/requests",
+  });
   res.status(201).json(await serialize(request, emp.name));
 });
 
 router.patch(
   "/remote-work/:id",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     const id = Number(req.params.id);
@@ -257,7 +270,7 @@ router.patch(
 
 router.delete(
   "/remote-work/:id",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     const id = Number(req.params.id);
@@ -342,6 +355,12 @@ router.post(
       .from(employeesTable)
       .where(eq(employeesTable.id, row.employeeId))
       .limit(1);
+    await notifyEmployeeUser(row.employeeId, {
+      type: "remote_work",
+      title: "Remote work request approved",
+      message: "Your remote work request was approved.",
+      href: "/employee/requests",
+    });
     res.json(await serialize(row, empRows[0]?.name ?? ""));
   },
 );
@@ -375,6 +394,12 @@ router.post(
       .from(employeesTable)
       .where(eq(employeesTable.id, row.employeeId))
       .limit(1);
+    await notifyEmployeeUser(row.employeeId, {
+      type: "remote_work",
+      title: "Remote work request rejected",
+      message: "Your remote work request was rejected.",
+      href: "/employee/requests",
+    });
     res.json(await serialize(row, empRows[0]?.name ?? ""));
   },
 );

@@ -1,4 +1,4 @@
-import { memo, type ReactNode, useCallback, useState } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -25,6 +25,8 @@ import {
   PiggyBank,
   Package,
   Settings as SettingsIcon,
+  Bell,
+  HeartPulse,
 } from "lucide-react";
 import {
   useLogout,
@@ -37,6 +39,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { EmployeeAvatar } from "./EmployeeAvatar";
 import { useTheme } from "@/hooks/use-theme";
+import {
+  useMarkNotificationRead,
+  useNotifications,
+} from "@/lib/notifications";
 
 type NavItem = { label: string; href: string; icon: typeof LayoutDashboard };
 
@@ -51,6 +57,7 @@ const ADMIN_NAV: NavItem[] = [
   },
   { label: "Leave Requests", href: "/admin/leaves", icon: CalendarRange },
   { label: "Requests", href: "/admin/requests", icon: Inbox },
+  { label: "Medical", href: "/admin/medical", icon: HeartPulse },
   { label: "Salary", href: "/admin/salary", icon: Wallet },
   { label: "View", href: "/admin/view", icon: LayoutGrid },
   { label: "Inventory", href: "/admin/inventory", icon: Package },
@@ -66,11 +73,32 @@ const EMP_NAV: NavItem[] = [
   { label: "Leaves", href: "/employee/leaves", icon: ClipboardList },
   { label: "Inventory", href: "/employee/inventory", icon: Package },
   { label: "Requests", href: "/employee/requests", icon: FilePlus2 },
+  { label: "Medical", href: "/employee/medical", icon: HeartPulse },
   { label: "Salary", href: "/employee/salary", icon: Wallet },
   { label: "Provident Fund", href: "/employee/provident-fund", icon: PiggyBank },
   { label: "Payslips", href: "/employee/payslips", icon: Receipt },
   { label: "News Feed", href: "/employee/feed", icon: PartyPopper },
   { label: "Settings", href: "/employee/settings", icon: SettingsIcon },
+];
+
+const HR_NAV: NavItem[] = [
+  { label: "My Dashboard", href: "/employee", icon: LayoutDashboard },
+  { label: "Profile", href: "/employee/profile", icon: UserCircle },
+  { label: "Attendance", href: "/employee/attendance", icon: CalendarCheck },
+  { label: "Leaves", href: "/employee/leaves", icon: ClipboardList },
+  { label: "Inventory", href: "/employee/inventory", icon: Package },
+  { label: "Requests", href: "/employee/requests", icon: FilePlus2 },
+  { label: "Medical", href: "/employee/medical", icon: HeartPulse },
+  { label: "Salary", href: "/employee/salary", icon: Wallet },
+  { label: "Provident Fund", href: "/employee/provident-fund", icon: PiggyBank },
+  { label: "Payslips", href: "/employee/payslips", icon: Receipt },
+  { label: "Feed", href: "/employee/feed", icon: PartyPopper },
+  { label: "Team", href: "/admin/employees", icon: Users },
+  { label: "Team Attendance", href: "/admin/attendance", icon: CalendarDays },
+  { label: "Team Requests", href: "/admin/requests", icon: Inbox },
+  { label: "Team Inventory", href: "/admin/inventory", icon: Package },
+  { label: "Team View", href: "/admin/view", icon: LayoutGrid },
+  { label: "Settings", href: "/admin/settings", icon: SettingsIcon },
 ];
 
 export function AppShell({
@@ -86,7 +114,8 @@ export function AppShell({
   };
   children: ReactNode;
 }) {
-  const nav = user.role !== "employee" ? ADMIN_NAV : EMP_NAV;
+  const nav =
+    user.role === "admin" ? ADMIN_NAV : user.role === "hr" ? HR_NAV : EMP_NAV;
   const [open, setOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -152,6 +181,7 @@ export function AppShell({
       <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card px-4 lg:hidden">
         <BrandMark />
         <div className="flex items-center gap-2">
+          <NotificationButton userRole={user.role} mobile />
           <button
             className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border"
             onClick={toggle}
@@ -238,7 +268,13 @@ export function AppShell({
 
         {/* Main */}
         <main className={cn("min-w-0 flex-1 overflow-x-hidden", desktopOpen && "lg:pl-60")}>
+          <div className="sticky top-0 z-20 hidden border-b border-border bg-card/95 px-6 py-3 backdrop-blur lg:block">
+            <div className="mx-auto flex w-full max-w-7xl items-center justify-end gap-2">
+              <NotificationButton userRole={user.role} />
+            </div>
+          </div>
           <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
+            <NotificationSync userRole={user.role} />
             {children}
           </div>
         </main>
@@ -354,6 +390,110 @@ const SidebarRail = memo(function SidebarRail({
     </div>
   );
 });
+
+function NotificationButton({
+  userRole,
+  mobile = false,
+}: {
+  userRole: "admin" | "hr" | "employee";
+  mobile?: boolean;
+}) {
+  const [location, setLocation] = useLocation();
+  const { data } = useNotifications(true);
+  const unreadCount = data?.length ?? 0;
+  const href =
+    userRole === "admin" ? "/admin/notifications" : "/employee/notifications";
+  const active = location === href;
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        if (typeof Notification !== "undefined" && Notification.permission === "default") {
+          try {
+            await Notification.requestPermission();
+          } catch {
+            // ignore permission errors
+          }
+        }
+        setLocation(href);
+      }}
+      className={cn(
+        "relative inline-flex items-center justify-center rounded-md border border-border bg-background text-foreground transition hover:bg-muted",
+        mobile ? "h-9 w-9" : "h-10 w-10",
+        active && "bg-primary text-primary-foreground",
+      )}
+      aria-label="Notifications"
+      title="Notifications"
+    >
+      <Bell className="h-4 w-4" />
+      {unreadCount > 0 ? (
+        <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function NotificationSync({
+  userRole,
+}: {
+  userRole: "admin" | "hr" | "employee";
+}) {
+  const { data } = useNotifications(false);
+  const markRead = useMarkNotificationRead();
+  const [, setLocation] = useLocation();
+  const initializedRef = useRef(false);
+  const seenIdsRef = useRef<Set<number>>(new Set());
+  const fallbackHref =
+    userRole === "admin" ? "/admin/notifications" : "/employee/notifications";
+
+  useEffect(() => {
+    if (!data) return;
+
+    if (!initializedRef.current) {
+      seenIdsRef.current = new Set(data.map((item) => item.id));
+      initializedRef.current = true;
+      return;
+    }
+
+    for (const item of data) {
+      if (seenIdsRef.current.has(item.id)) continue;
+      seenIdsRef.current.add(item.id);
+      if (item.isRead) continue;
+
+      toast(item.title, {
+        description: item.message,
+        action: item.href
+          ? {
+              label: "Open",
+              onClick: () => {
+                if (!item.isRead) markRead.mutate(item.id);
+                setLocation(item.href || fallbackHref);
+              },
+            }
+          : undefined,
+      });
+
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        const browserNotification = new Notification(item.title, {
+          body: item.message,
+        });
+        browserNotification.onclick = () => {
+          window.focus();
+          if (!item.isRead) markRead.mutate(item.id);
+          if (item.href) {
+            setLocation(item.href);
+          }
+          browserNotification.close();
+        };
+      }
+    }
+  }, [data, fallbackHref, markRead, setLocation]);
+
+  return null;
+}
 
 const BrandMark = memo(function BrandMark() {
   return (

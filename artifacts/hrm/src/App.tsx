@@ -21,7 +21,9 @@ import { AdminSalaryPage } from "@/pages/admin/SalaryPage";
 import { AdminSettingsPage } from "@/pages/admin/SettingsPage";
 import { AdminInventoryPage } from "@/pages/admin/InventoryPage";
 import { AdminMonthlyViewPage } from "@/pages/admin/MonthlyViewPage";
+import { AdminMedicalPage } from "@/pages/admin/AdminMedicalPage";
 import { EmployeeDashboard } from "@/pages/employee/EmployeeDashboard";
+import { MyMedicalPage } from "@/pages/employee/MyMedicalPage";
 import { EmployeeProfilePage } from "@/pages/employee/EmployeeProfilePage";
 import { MyAttendancePage } from "@/pages/employee/MyAttendancePage";
 import { MyInventoryPage } from "@/pages/employee/MyInventoryPage";
@@ -33,6 +35,7 @@ import { MyProvidentFundPage } from "@/pages/employee/MyProvidentFundPage";
 import { MySettingsPage } from "@/pages/employee/MySettingsPage";
 import { FeedPage } from "@/pages/FeedPage";
 import { CelebrationPopup } from "@/components/CelebrationPopup";
+import { NotificationsPage } from "@/pages/NotificationsPage";
 
 function FullScreenLoader() {
   return (
@@ -48,6 +51,10 @@ function RedirectToAdmin() {
 
 function RedirectToEmployee() {
   return <Redirect to="/employee" />;
+}
+
+function RedirectToHome({ role }: { role: "admin" | "hr" | "employee" }) {
+  return <Redirect to={role === "admin" ? "/admin" : "/employee"} />;
 }
 
 function ChangePasswordRoute() {
@@ -84,7 +91,7 @@ function AuthGate() {
   return (
     <AppShell user={user}>
       <CelebrationPopup />
-      {user.role !== "employee" ? (
+      {user.role === "admin" ? (
         <Switch>
           <Route path="/" component={RedirectToAdmin} />
           <Route path="/admin" component={AdminDashboard} />
@@ -100,11 +107,54 @@ function AuthGate() {
           <Route path="/admin/payslips" component={AdminPayslipsPage} />
           <Route path="/admin/salary" component={AdminSalaryPage} />
           <Route path="/admin/view" component={AdminMonthlyViewPage} />
+          <Route path="/admin/medical" component={AdminMedicalPage} />
           <Route path="/admin/inventory" component={AdminInventoryPage} />
           <Route path="/admin/feed" component={FeedPage} />
+          <Route path="/admin/notifications" component={NotificationsPage} />
           <Route path="/admin/settings" component={AdminSettingsPage} />
           <Route path="/change-password" component={ChangePasswordRoute} />
           <Route component={RedirectToAdmin} />
+        </Switch>
+      ) : user.role === "hr" ? (
+        <Switch>
+          <Route path="/">
+            <RedirectToHome role={user.role} />
+          </Route>
+          <Route path="/admin" component={AdminDashboard} />
+          <Route path="/admin/employees" component={EmployeesPage} />
+          <Route path="/admin/employees/:id" component={EmployeeDetailPage} />
+          <Route path="/admin/attendance" component={AdminAttendancePage} />
+          <Route
+            path="/admin/attendance-calendar"
+            component={AdminAttendanceCalendarPage}
+          />
+          <Route path="/admin/leaves" component={AdminLeavesPage} />
+          <Route path="/admin/requests" component={AdminRequestsPage} />
+          <Route path="/admin/payslips" component={AdminPayslipsPage} />
+          <Route path="/admin/salary" component={AdminSalaryPage} />
+          <Route path="/admin/view" component={AdminMonthlyViewPage} />
+          <Route path="/admin/medical" component={AdminMedicalPage} />
+          <Route path="/admin/inventory" component={AdminInventoryPage} />
+          <Route path="/admin/feed" component={FeedPage} />
+          <Route path="/admin/notifications" component={NotificationsPage} />
+          <Route path="/admin/settings" component={AdminSettingsPage} />
+          <Route path="/employee" component={EmployeeDashboard} />
+          <Route path="/employee/profile" component={EmployeeProfilePage} />
+          <Route path="/employee/attendance" component={MyAttendancePage} />
+          <Route path="/employee/inventory" component={MyInventoryPage} />
+          <Route path="/employee/leaves" component={MyLeavesPage} />
+          <Route path="/employee/medical" component={MyMedicalPage} />
+          <Route path="/employee/requests" component={MyRequestsPage} />
+          <Route path="/employee/payslips" component={MyPayslipsPage} />
+          <Route path="/employee/salary" component={MySalaryPage} />
+          <Route path="/employee/provident-fund" component={MyProvidentFundPage} />
+          <Route path="/employee/settings" component={MySettingsPage} />
+          <Route path="/employee/feed" component={FeedPage} />
+          <Route path="/employee/notifications" component={NotificationsPage} />
+          <Route path="/change-password" component={ChangePasswordRoute} />
+          <Route>
+            <RedirectToHome role={user.role} />
+          </Route>
         </Switch>
       ) : (
         <Switch>
@@ -114,12 +164,14 @@ function AuthGate() {
           <Route path="/employee/attendance" component={MyAttendancePage} />
           <Route path="/employee/inventory" component={MyInventoryPage} />
           <Route path="/employee/leaves" component={MyLeavesPage} />
+          <Route path="/employee/medical" component={MyMedicalPage} />
           <Route path="/employee/requests" component={MyRequestsPage} />
           <Route path="/employee/payslips" component={MyPayslipsPage} />
           <Route path="/employee/salary" component={MySalaryPage} />
           <Route path="/employee/provident-fund" component={MyProvidentFundPage} />
           <Route path="/employee/settings" component={MySettingsPage} />
           <Route path="/employee/feed" component={FeedPage} />
+          <Route path="/employee/notifications" component={NotificationsPage} />
           <Route path="/change-password" component={ChangePasswordRoute} />
           <Route component={RedirectToEmployee} />
         </Switch>

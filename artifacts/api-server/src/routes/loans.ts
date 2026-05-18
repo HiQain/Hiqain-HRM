@@ -171,7 +171,7 @@ router.get("/loans", requireAuth(["admin", "hr"]), async (_req, res) => {
   res.json(out);
 });
 
-router.get("/loans/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.get("/loans/me", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.json([]);
@@ -181,7 +181,7 @@ router.get("/loans/me", requireAuth(["employee"]), async (req, res): Promise<voi
   res.json(out);
 });
 
-router.get("/loans/eligibility", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.get("/loans/eligibility", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res

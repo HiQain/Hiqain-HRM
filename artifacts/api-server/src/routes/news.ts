@@ -3,6 +3,7 @@ import { CreateNewsPostBody } from "@workspace/api-zod";
 import { db, newsPostsTable, usersTable, employeesTable } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { notifyRoles } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -83,6 +84,18 @@ router.post("/news", requireAuth(["admin", "hr"]), async (req, res): Promise<voi
     .where(eq(usersTable.id, userId))
     .limit(1);
   const author = authorRows[0];
+  await notifyRoles(["employee", "hr"], {
+    type: "news_post",
+    title: data.title,
+    message: "A new news feed post has been published.",
+    href: "/employee/feed",
+  });
+  await notifyRoles(["admin"], {
+    type: "news_post",
+    title: data.title,
+    message: "A new news feed post has been published.",
+    href: "/admin/feed",
+  });
   res
     .status(201)
     .json(serialize(post, author?.employeeName ?? author?.email ?? "HR"));

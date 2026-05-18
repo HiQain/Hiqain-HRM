@@ -12,6 +12,7 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
+import { notifyEmployeeUser, notifyRoles } from "../lib/notifications";
 import {
   getMatchedProvidentFundContribution,
   getProvidentFundPolicyStartDate,
@@ -290,8 +291,9 @@ router.get("/requests", requireAuth(), async (req, res): Promise<void> => {
   const user = getUser(req);
   const type = req.query.type as string | undefined;
   const status = req.query.status as string | undefined;
+  const selfOnly = req.query.self === "1";
   const filters = [];
-  if (user.role === "employee") {
+  if (user.role === "employee" || (user.role === "hr" && selfOnly)) {
     if (!user.employeeId) {
       res.json([]);
       return;
@@ -343,7 +345,7 @@ function dateRange(start: string, end: string | null | undefined): string[] {
   return out;
 }
 
-router.post("/requests", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.post("/requests", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.status(400).json({ message: "No employee profile" });
@@ -477,10 +479,22 @@ router.post("/requests", requireAuth(["employee"]), async (req, res): Promise<vo
     res.status(500).json({ message: "Created request could not be loaded" });
     return;
   }
+  await notifyRoles(["admin", "hr"], {
+    type: "general_request",
+    title: "New request submitted",
+    message: `${emp.name} submitted a ${String(type).replace(/_/g, " ")} request.`,
+    href: "/admin/requests",
+  });
+  await notifyEmployeeUser(user.employeeId, {
+    type: "general_request",
+    title: "Request submitted",
+    message: "Your request has been submitted for review.",
+    href: "/employee/requests",
+  });
   res.status(201).json(await serialize(request, emp.name));
 });
 
-router.patch("/requests/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.patch("/requests/:id", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -589,7 +603,7 @@ router.patch("/requests/:id", requireAuth(["employee"]), async (req, res): Promi
   res.json(await serialize(updated, empRows[0]?.name ?? ""));
 });
 
-router.delete("/requests/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.delete("/requests/:id", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -782,6 +796,12 @@ router.post(
       .from(employeesTable)
       .where(eq(employeesTable.id, row.employeeId))
       .limit(1);
+    await notifyEmployeeUser(row.employeeId, {
+      type: "general_request",
+      title: "Request approved",
+      message: `Your ${row.type.replace(/_/g, " ")} request was approved.`,
+      href: "/employee/requests",
+    });
     res.json(await serialize(row, empRows[0]?.name ?? ""));
   },
 );
@@ -815,6 +835,12 @@ router.post(
       .from(employeesTable)
       .where(eq(employeesTable.id, row.employeeId))
       .limit(1);
+    await notifyEmployeeUser(row.employeeId, {
+      type: "general_request",
+      title: "Request rejected",
+      message: `Your ${row.type.replace(/_/g, " ")} request was rejected.`,
+      href: "/employee/requests",
+    });
     res.json(await serialize(row, empRows[0]?.name ?? ""));
   },
 );

@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
+import { notifyEmployeeUser } from "../lib/notifications";
 import { addMonths, parseDate } from "../lib/dates";
 import { normalizeAttendanceStatus } from "../lib/attendance";
 import { ymd } from "../lib/dates";
@@ -636,10 +637,16 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
       Number(settings.defaultProvidentFundPercent),
     ),
   );
+  await notifyEmployeeUser(employeeId, {
+    type: "payslip",
+    title: "Payslip generated",
+    message: `Your payslip for ${month}/${year} is now available.`,
+    href: "/employee/payslips",
+  });
   res.status(201).json(out);
 });
 
-router.get("/payslips/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.get("/payslips/me", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.json([]);

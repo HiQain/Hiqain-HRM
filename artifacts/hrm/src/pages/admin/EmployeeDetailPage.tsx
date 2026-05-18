@@ -205,19 +205,6 @@ export function EmployeeDetailPage() {
             </Badge>
           </div>
         </div>
-        <div className="flex flex-col items-stretch gap-2 sm:items-end">
-          <Button
-            type="button"
-            onClick={() => openEmployeeEditor(employee.id)}
-            className="gap-2"
-          >
-            <Pencil className="h-4 w-4" />
-            Edit employee
-          </Button>
-          <p className="text-xs text-muted-foreground sm:text-right">
-            Activate or deactivate this user from the edit drawer.
-          </p>
-        </div>
         <div className="grid grid-cols-2 gap-3 text-xs sm:text-right">
           <div className="rounded-lg bg-muted/40 p-3 text-center">
             <p className="text-muted-foreground">Basic salary</p>
@@ -308,7 +295,11 @@ function ProfileTab({ employee }: { employee: any }) {
             or deactivate the user.
           </p>
         </div>
-        <Button type="button" onClick={() => openEmployeeEditor(employee.id)} className="gap-2">
+        <Button
+          type="button"
+          onClick={() => openEmployeeEditor(employee.id)}
+          className="gap-2"
+        >
           <Pencil className="h-4 w-4" />
           Edit employee
         </Button>
@@ -319,6 +310,7 @@ function ProfileTab({ employee }: { employee: any }) {
           <ReadonlyField label="Employee code" value={employee.employeeCode} />
           <ReadonlyField label="Full name" value={employee.name} />
           <ReadonlyField label="Work email" value={employee.email} />
+          <ReadonlyField label="Account role" value={employee.role} />
           <ReadonlyField label="Personal email" value={employee.personalEmail} />
           <ReadonlyField label="Phone number" value={employee.phone} />
           <ReadonlyField label="Account status" value={employee.isActive === false ? "Inactive" : "Active"} />
@@ -373,6 +365,36 @@ function ProfileTab({ employee }: { employee: any }) {
                 ? String(employee.providentFundPercent)
                 : null
             }
+          />
+        </ReadonlyGrid>
+      </ReadonlySection>
+
+      <ReadonlySection title="Medical allowance">
+        <ReadonlyGrid>
+          <ReadonlyField
+            label="Medical status"
+            value={employee.medicalEnabled ? "Enabled" : "Disabled"}
+          />
+          <ReadonlyField
+            label="Yearly IPD allowance (PKR)"
+            value={employee.medicalOverallLimit != null ? formatCurrency(employee.medicalOverallLimit) : null}
+          />
+          <ReadonlyField
+            label="Per day limit (PKR)"
+            value={employee.medicalDailyLimit != null ? formatCurrency(employee.medicalDailyLimit) : null}
+          />
+          <ReadonlyField
+            label="Covered members"
+            value={
+              [
+                employee.name,
+                employee.wifeName,
+                ...(Array.isArray(employee.kidsNames) ? employee.kidsNames : []),
+              ]
+                .filter(Boolean)
+                .join(", ")
+            }
+            className="md:col-span-2"
           />
         </ReadonlyGrid>
       </ReadonlySection>

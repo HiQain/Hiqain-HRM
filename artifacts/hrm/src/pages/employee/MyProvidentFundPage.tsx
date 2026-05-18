@@ -25,10 +25,13 @@ export function MyProvidentFundPage() {
     query: { queryKey: getGetMyPayslipsQueryKey(), enabled: employeeId > 0 },
   });
   const { data: pfRequests } = useListGeneralRequests(
-    { type: "pf_withdrawal" as any },
+    { type: "pf_withdrawal" as any, ...(me?.role === "hr" ? { self: "1" } : {}) } as any,
     {
       query: {
-        queryKey: getListGeneralRequestsQueryKey({ type: "pf_withdrawal" as any }),
+        queryKey: getListGeneralRequestsQueryKey({
+          type: "pf_withdrawal" as any,
+          ...(me?.role === "hr" ? { self: "1" } : {}),
+        } as any),
         enabled: employeeId > 0,
       },
     },

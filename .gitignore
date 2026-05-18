@@ -50,3 +50,6 @@ Thumbs.db
 
 # deployment artifacts
 artifacts/*deploy*.zip
+
+# local uploaded credentials and generated upload metadata
+artifacts/api-server/uploads/*.json

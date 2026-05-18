@@ -113,7 +113,7 @@ function serializeRecord(
 
 router.post(
   "/attendance/check-in",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -252,7 +252,7 @@ router.post(
 
 router.post(
   "/attendance/check-out",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -335,7 +335,7 @@ router.post(
 
 router.get(
   "/attendance/today",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -410,7 +410,7 @@ function monthRange(month?: string): {
 
 router.post(
   "/attendance/pause",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -466,7 +466,7 @@ router.post(
 
 router.post(
   "/attendance/resume",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -527,7 +527,7 @@ router.post(
   },
 );
 
-router.get("/attendance/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.get("/attendance/me", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.json([]);

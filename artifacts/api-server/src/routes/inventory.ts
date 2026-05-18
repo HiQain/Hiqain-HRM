@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
+import { notifyEmployeeUser, notifyRoles } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -301,10 +302,22 @@ async function createInventoryRequestHandler(req: any, res: any): Promise<void> 
       rows[0]?.requestedItemName ?? item?.name ?? "Custom item request",
     ),
   );
+  await notifyRoles(["admin", "hr"], {
+    type: "inventory_request",
+    title: "New inventory request",
+    message: `${employee.name} submitted an inventory request.`,
+    href: "/admin/inventory",
+  });
+  await notifyEmployeeUser(user.employeeId, {
+    type: "inventory_request",
+    title: "Inventory request submitted",
+    message: "Your inventory request has been submitted for review.",
+    href: "/employee/inventory",
+  });
 }
 
-router.post("/inventory/requests", requireAuth(["employee"]), createInventoryRequestHandler);
-router.post("/inventory/requests/me", requireAuth(["employee"]), createInventoryRequestHandler);
+router.post("/inventory/requests", requireAuth(["employee", "hr"]), createInventoryRequestHandler);
+router.post("/inventory/requests/me", requireAuth(["employee", "hr"]), createInventoryRequestHandler);
 
 router.post("/inventory/requests/:id/approve", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
@@ -381,6 +394,12 @@ router.post("/inventory/requests/:id/approve", requireAuth(["admin", "hr"]), asy
       updatedRows[0]?.requestedItemName ?? row.item.name,
     ),
   );
+  await notifyEmployeeUser(row.request.employeeId, {
+    type: "inventory_request",
+    title: "Inventory request approved",
+    message: "Your inventory request was approved and item assigned.",
+    href: "/employee/inventory",
+  });
 });
 
 router.post("/inventory/requests/:id/reject", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
@@ -427,6 +446,12 @@ router.post("/inventory/requests/:id/reject", requireAuth(["admin", "hr"]), asyn
       updatedRows[0]?.requestedItemName ?? row.itemName ?? "Custom item request",
     ),
   );
+  await notifyEmployeeUser(row.request.employeeId, {
+    type: "inventory_request",
+    title: "Inventory request rejected",
+    message: "Your inventory request was rejected.",
+    href: "/employee/inventory",
+  });
 });
 
 router.get("/inventory/assignments", requireAuth(["admin", "hr"]), async (_req, res): Promise<void> => {
@@ -520,9 +545,15 @@ router.post("/inventory/assignments", requireAuth(["admin", "hr"]), async (req, 
   res.status(201).json(
     serializeAssignment(rows[0]!, employee.name, item.name),
   );
+  await notifyEmployeeUser(employeeId, {
+    type: "inventory_assignment",
+    title: "Inventory item assigned",
+    message: `${item.name} has been assigned to you.`,
+    href: "/employee/inventory",
+  });
 });
 
-router.get("/inventory/assignments/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.get("/inventory/assignments/me", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.json([]);

@@ -15,6 +15,7 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 import { getUser, hashPassword, requireAuth } from "../lib/auth";
 import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
+import { notifyEmployeeUser } from "../lib/notifications";
 import {
   applyPermanentIncrementToCompensation,
   inferPercentageBaseAmount,
@@ -82,6 +83,7 @@ function serializeEmployee(
   e: typeof employeesTable.$inferSelect,
   email: string,
   isActive: boolean,
+  role: "admin" | "hr" | "employee" = "employee",
 ) {
   const joining = parseDate(e.joiningDate);
   const probationEnd = subtractDay(addMonths(joining, e.probationMonths));
@@ -99,6 +101,7 @@ function serializeEmployee(
     userId: e.userId,
     name: e.name,
     email,
+    role,
     isActive,
     personalEmail: e.personalEmail,
     phone: e.phone,
@@ -170,6 +173,11 @@ function serializeEmployee(
     secondaryBankName: e.secondaryBankName,
     secondaryBankIban: e.secondaryBankIban,
     secondaryBankBranchCode: e.secondaryBankBranchCode,
+    medicalEnabled: Boolean(e.medicalEnabled),
+    medicalDailyLimit: Number(e.medicalDailyLimit ?? 0),
+    medicalOverallLimit: Number(e.medicalOverallLimit ?? 0),
+    medicalOpdLimit: 0,
+    medicalIpdLimit: Number(e.medicalOverallLimit ?? 0),
     providentFundPercent:
       e.providentFundPercent != null ? Number(e.providentFundPercent) : null,
   };
@@ -228,13 +236,14 @@ router.get("/employees", requireAuth(["admin", "hr"]), async (_req, res) => {
       employee: employeesTable,
       email: usersTable.email,
       isActive: usersTable.isActive,
+      role: usersTable.role,
     })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .orderBy(desc(employeesTable.createdAt));
   res.json(
-    rows.map(({ employee, email, isActive }) =>
-      serializeEmployee(employee, email, Boolean(isActive)),
+    rows.map(({ employee, email, isActive, role }) =>
+      serializeEmployee(employee, email, Boolean(isActive), role),
     ),
   );
 });
@@ -383,6 +392,11 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
       lastPayslipTwoName: (data as any).lastPayslipTwoName ?? null,
       lastPayslipThreeUrl: (data as any).lastPayslipThreeUrl ?? null,
       lastPayslipThreeName: (data as any).lastPayslipThreeName ?? null,
+      medicalEnabled: Boolean(req.body?.medicalEnabled ?? false),
+      medicalDailyLimit: String(Number(req.body?.medicalDailyLimit ?? 0) || 0),
+      medicalOverallLimit: String(Number(req.body?.medicalOverallLimit ?? 0) || 0),
+      medicalOpdLimit: "0",
+      medicalIpdLimit: String(Number(req.body?.medicalOverallLimit ?? 0) || 0),
       ...bankValues,
     })
     .$returningId();
@@ -401,8 +415,19 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
     res.status(500).json({ message: "Created employee could not be loaded" });
     return;
   }
+  await notifyEmployeeUser(employeeId, {
+    type: "account_created",
+    title: "Welcome to HRM",
+    message: "Your employee account has been created. Sign in to view your profile and daily tools.",
+    href: "/employee",
+  });
   res.status(201).json(
-    serializeEmployee(employee, email, Boolean((data as any).isActive ?? true)),
+    serializeEmployee(
+      employee,
+      email,
+      Boolean((data as any).isActive ?? true),
+      resolvedRole,
+    ),
   );
 });
 
@@ -587,6 +612,7 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
       employee: employeesTable,
       email: usersTable.email,
       isActive: usersTable.isActive,
+      role: usersTable.role,
     })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
@@ -604,7 +630,12 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
     .where(eq(salaryEventsTable.employeeId, id))
     .orderBy(desc(salaryEventsTable.date));
 
-  const base = serializeEmployee(row.employee, row.email, Boolean(row.isActive));
+  const base = serializeEmployee(
+    row.employee,
+    row.email,
+    Boolean(row.isActive),
+    row.role,
+  );
   const joining = parseDate(row.employee.joiningDate);
   const now = new Date();
   const workDurationMonths = diffMonths(joining, now);
@@ -796,6 +827,18 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
   if (extra.providentFundPercent !== undefined)
     updates.providentFundPercent =
       extra.providentFundPercent != null ? String(extra.providentFundPercent) : null;
+  if (typeof req.body?.medicalEnabled === "boolean") {
+    updates.medicalEnabled = req.body.medicalEnabled;
+  }
+  if (req.body?.medicalDailyLimit !== undefined) {
+    updates.medicalDailyLimit = String(Number(req.body.medicalDailyLimit ?? 0) || 0);
+  }
+  if (req.body?.medicalOverallLimit !== undefined) {
+    const overallLimit = String(Number(req.body.medicalOverallLimit ?? 0) || 0);
+    updates.medicalOverallLimit = overallLimit;
+    updates.medicalOpdLimit = "0";
+    updates.medicalIpdLimit = overallLimit;
+  }
 
   await db.update(employeesTable).set(updates).where(eq(employeesTable.id, id));
   if (typeof extra.isActive === "boolean" && previous?.userId) {
@@ -803,6 +846,38 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
       .update(usersTable)
       .set({ isActive: extra.isActive })
       .where(eq(usersTable.id, previous.userId));
+  }
+  const requestedRole = req.body?.role;
+  if (
+    previous?.userId &&
+    (actor.role === "admin" ||
+      (actor.role === "hr" && requestedRole !== "admin")) &&
+    typeof requestedRole === "string" &&
+    ["admin", "hr", "employee"].includes(requestedRole)
+  ) {
+    await db
+      .update(usersTable)
+      .set({ role: requestedRole as "admin" | "hr" | "employee" })
+      .where(eq(usersTable.id, previous.userId));
+    await notifyEmployeeUser(id, {
+      type: "role_change",
+      title: "Account role updated",
+      message: `Your account role is now ${requestedRole.toUpperCase()}.`,
+      href: requestedRole === "employee" || requestedRole === "hr" ? "/employee" : `/admin/employees/${id}`,
+    });
+  }
+  const medicalChanged =
+    previous &&
+    (updates.medicalEnabled !== undefined ||
+      updates.medicalDailyLimit !== undefined ||
+      updates.medicalOverallLimit !== undefined);
+  if (medicalChanged) {
+    await notifyEmployeeUser(id, {
+      type: "medical_allowance",
+      title: "Medical allowance updated",
+      message: "Your yearly IPD medical allowance or daily medical limit has been updated.",
+      href: "/employee/medical",
+    });
   }
 
   // Log designation change journey event
@@ -825,6 +900,7 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
       employee: employeesTable,
       email: usersTable.email,
       isActive: usersTable.isActive,
+      role: usersTable.role,
     })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
@@ -835,7 +911,9 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
     res.status(404).json({ message: "Employee not found" });
     return;
   }
-  res.json(serializeEmployee(row.employee, row.email, Boolean(row.isActive)));
+  res.json(
+    serializeEmployee(row.employee, row.email, Boolean(row.isActive), row.role),
+  );
 });
 
 router.delete("/employees/:id", requireAuth(["admin"]), async (req, res): Promise<void> => {
@@ -866,6 +944,7 @@ router.get("/employees/:id/journey", requireAuth(), async (req, res): Promise<vo
       employee: employeesTable,
       email: usersTable.email,
       isActive: usersTable.isActive,
+      role: usersTable.role,
     })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
@@ -877,7 +956,12 @@ router.get("/employees/:id/journey", requireAuth(), async (req, res): Promise<vo
     return;
   }
 
-  const employee = serializeEmployee(row.employee, row.email, Boolean(row.isActive));
+  const employee = serializeEmployee(
+    row.employee,
+    row.email,
+    Boolean(row.isActive),
+    row.role,
+  );
   const joining = parseDate(row.employee.joiningDate);
   const probationEnd = subtractDay(addMonths(joining, row.employee.probationMonths));
   const nowYear = new Date().getUTCFullYear();

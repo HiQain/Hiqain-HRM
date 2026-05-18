@@ -383,7 +383,11 @@ export function EmployeesPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Salary</p>
-                  <p className="font-medium">{formatCurrency(e.basicSalary)}</p>
+                  <p className="font-medium">
+                    {formatCurrency(
+                      Number(e.basicSalary ?? 0) + Number(e.allowances ?? 0),
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
@@ -467,7 +471,7 @@ function NewEmployeeSheet({
           name: editingEmployee.name ?? "",
           email: editingEmployee.email ?? "",
           password: "",
-          role: "employee" as "admin" | "hr" | "employee",
+          role: editingEmployee.role === "admin" ? "admin" : "employee",
           isActive: editingEmployee.isActive !== false,
           phone: normalizePakistanPhoneInput(editingEmployee.phone ?? ""),
           position: editingEmployee.position ?? "",
@@ -566,6 +570,11 @@ function NewEmployeeSheet({
           secondaryBankIban: editingEmployee.secondaryBankIban ?? "",
           secondaryBankBranchCode:
             editingEmployee.secondaryBankBranchCode ?? "",
+          medicalEnabled: Boolean(editingEmployee.medicalEnabled ?? false),
+          medicalDailyLimit: String(editingEmployee.medicalDailyLimit ?? 0),
+          medicalOverallLimit: String(editingEmployee.medicalOverallLimit ?? 0),
+          medicalOpdLimit: String(editingEmployee.medicalOpdLimit ?? 0),
+          medicalIpdLimit: String(editingEmployee.medicalIpdLimit ?? 0),
         };
       }
       const defaultTotalSalary = 100000;
@@ -574,7 +583,7 @@ function NewEmployeeSheet({
       name: "",
       email: "",
       password: DEFAULT_EMPLOYEE_PASSWORD,
-      role: "employee" as "admin" | "hr" | "employee",
+      role: "employee" as "admin" | "employee",
       isActive: true,
       phone: "+92",
       position: "",
@@ -648,6 +657,11 @@ function NewEmployeeSheet({
       secondaryBankName: "",
       secondaryBankIban: "",
       secondaryBankBranchCode: "",
+      medicalEnabled: false,
+      medicalDailyLimit: "",
+      medicalOverallLimit: "",
+      medicalOpdLimit: "",
+      medicalIpdLimit: "",
     };
     },
     [editingEmployee, generatedEmployeeCode, settings],
@@ -796,12 +810,17 @@ function NewEmployeeSheet({
       secondaryBankName: form.secondaryBankName || undefined,
       secondaryBankIban: form.secondaryBankIban || undefined,
       secondaryBankBranchCode: form.secondaryBankBranchCode || undefined,
+      medicalEnabled: form.medicalEnabled,
+      medicalDailyLimit: Number(form.medicalDailyLimit) || 0,
+      medicalOverallLimit: Number(form.medicalOverallLimit) || 0,
+      medicalOpdLimit: 0,
+      medicalIpdLimit: Number(form.medicalOverallLimit) || 0,
       isActive: form.isActive,
     } as any;
 
     if (isEditing) {
       update.mutate(
-        { id: editingEmployee.id, data: payload },
+        { id: editingEmployee.id, data: { ...payload, role: form.role } as any },
         {
           onSuccess: () => {
             toast.success(`${form.name} updated`);
@@ -847,7 +866,7 @@ function NewEmployeeSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-5xl">
+      <SheetContent className="w-full sm:max-w-5xl">
         <SheetHeader>
           <SheetTitle>{isEditing ? "Edit employee" : "Add employee"}</SheetTitle>
           <SheetDescription>
@@ -945,30 +964,27 @@ function NewEmployeeSheet({
                       minLength={6}
                     />
                   </Field>
-                  <Field label="Account role" required>
-                    <Select
-                      value={form.role}
-                      onValueChange={(v) =>
-                        setForm({
-                          ...form,
-                          role: v as "admin" | "hr" | "employee",
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="employee">Employee</SelectItem>
-                        <SelectItem value="hr">HR</SelectItem>
-                        {isAdmin && (
-                          <SelectItem value="admin">Admin</SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </Field>
                 </>
               )}
+              <Field label="Account role" required>
+                <Select
+                  value={form.role}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      role: v as "admin" | "employee",
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="employee">Employee</SelectItem>
+                    {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="Phone number">
                 <Input
                   value={form.phone}
@@ -1393,6 +1409,57 @@ function NewEmployeeSheet({
                         annualLeaveQuota: Number(e.target.value),
                       });
                     }
+                  }
+                />
+              </Field>
+            </div>
+          </Section>
+
+          <Section title="Medical allowance">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Medical enabled">
+                <Select
+                  value={form.medicalEnabled ? "enabled" : "disabled"}
+                  onValueChange={(value) =>
+                    setForm({ ...form, medicalEnabled: value === "enabled" })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="enabled">Enabled</SelectItem>
+                    <SelectItem value="disabled">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Yearly IPD allowance (PKR)">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatNumberInput(form.medicalOverallLimit)}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      medicalOverallLimit: e.target.value
+                        ? String(parseNumberInput(e.target.value))
+                        : "",
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Per day limit (PKR)">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatNumberInput(form.medicalDailyLimit)}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      medicalDailyLimit: e.target.value
+                        ? String(parseNumberInput(e.target.value))
+                        : "",
+                    })
                   }
                 />
               </Field>

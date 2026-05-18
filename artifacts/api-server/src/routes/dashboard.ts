@@ -148,7 +148,7 @@ router.get(
 
 router.get(
   "/dashboard/employee",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
