@@ -530,6 +530,10 @@ function NewEmployeeSheet({
               : "",
           immediateFamily: editingEmployee.immediateFamily ?? "",
           notes: editingEmployee.notes ?? "",
+          employmentContractUrl:
+            editingEmployee.employmentContractUrl ?? "",
+          employmentContractName:
+            editingEmployee.employmentContractName ?? "",
           cnicDocumentUrl: editingEmployee.cnicDocumentUrl ?? "",
           cnicDocumentName: editingEmployee.cnicDocumentName ?? "",
           cnicFrontDocumentUrl: editingEmployee.cnicFrontDocumentUrl ?? "",
@@ -618,6 +622,8 @@ function NewEmployeeSheet({
       lastPay: "",
       immediateFamily: "",
       notes: "",
+      employmentContractUrl: "",
+      employmentContractName: "",
       cnicDocumentUrl: "",
       cnicDocumentName: "",
       cnicFrontDocumentUrl: "",
@@ -764,6 +770,8 @@ function NewEmployeeSheet({
       lastPay: form.lastPay ? Number(form.lastPay) : undefined,
       immediateFamily: form.immediateFamily || undefined,
       notes: form.notes || undefined,
+      employmentContractUrl: form.employmentContractUrl || undefined,
+      employmentContractName: form.employmentContractName || undefined,
       cnicDocumentUrl: form.cnicDocumentUrl || undefined,
       cnicDocumentName: form.cnicDocumentName || undefined,
       cnicFrontDocumentUrl: form.cnicFrontDocumentUrl || undefined,
@@ -1575,6 +1583,26 @@ function NewEmployeeSheet({
                   }
                 />
               </Field>
+              <Field label="Employment contract">
+                <SimpleUploadField
+                  fileUrl={form.employmentContractUrl}
+                  fileName={form.employmentContractName}
+                  onUploaded={(file) =>
+                    setForm((current) => ({
+                      ...current,
+                      employmentContractUrl: file.url,
+                      employmentContractName: file.name,
+                    }))
+                  }
+                  onClear={() =>
+                    setForm((current) => ({
+                      ...current,
+                      employmentContractUrl: "",
+                      employmentContractName: "",
+                    }))
+                  }
+                />
+              </Field>
               <Field label="Previous company">
                 <Input
                   value={form.previousCompany}
@@ -2162,7 +2190,7 @@ function SimpleUploadField({
           <img
             src={resolveAssetUrl(fileUrl)}
             alt={normalizedLabel}
-            className="h-48 w-full object-contain bg-muted/30"
+            className="h-56 w-full object-cover bg-muted/30"
           />
         </a>
       ) : (
@@ -2177,14 +2205,24 @@ function SimpleUploadField({
       )}
 
       <div className="space-y-2">
-        <a
-          href={resolveAssetUrl(fileUrl)}
-          target="_blank"
-          rel="noreferrer"
-          className="block truncate text-sm font-medium text-primary hover:underline"
-        >
-          {normalizedLabel}
-        </a>
+        <div className="flex items-center justify-between gap-3">
+          <a
+            href={resolveAssetUrl(fileUrl)}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate text-sm font-medium text-primary hover:underline"
+          >
+            {normalizedLabel}
+          </a>
+          <a
+            href={resolveAssetUrl(fileUrl)}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 text-xs font-medium text-primary hover:underline"
+          >
+            Open
+          </a>
+        </div>
         <div className="flex items-center gap-2">
           <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">
             {uploading ? "Uploading..." : "Replace"}
