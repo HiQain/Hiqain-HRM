@@ -26,11 +26,12 @@ import { computeLoanEligibility } from "./loans";
 const router: IRouter = Router();
 
 async function loadMentioned(ids: number[] | null | undefined) {
-  if (!ids || ids.length === 0) return [];
+  const normalizedIds = normalizeMentionedIds(ids);
+  if (normalizedIds.length === 0) return [];
   return db
     .select({ id: employeesTable.id, name: employeesTable.name })
     .from(employeesTable)
-    .where(inArray(employeesTable.id, ids));
+    .where(inArray(employeesTable.id, normalizedIds));
 }
 
 type AttachmentItem = { url: string; name: string };
@@ -47,9 +48,9 @@ type RequestType =
 function mergedAttachments(r: {
   attachmentUrl: string | null;
   attachmentName: string | null;
-  attachments: AttachmentItem[] | null;
+  attachments: AttachmentItem[] | string | null;
 }): AttachmentItem[] {
-  const list = Array.isArray(r.attachments) ? [...r.attachments] : [];
+  const list = normalizeStoredAttachments(r.attachments);
   if (
     r.attachmentUrl &&
     r.attachmentName &&
@@ -81,11 +82,71 @@ function normalizeAttachments(
   return out;
 }
 
+function normalizeMentionedIds(value: unknown): number[] {
+  const source = (() => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  })();
+
+  return source.filter(
+    (item): item is number => typeof item === "number" && Number.isFinite(item),
+  );
+}
+
+function normalizeStoredAttachments(value: unknown): AttachmentItem[] {
+  const source = (() => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  })();
+
+  const out: AttachmentItem[] = [];
+  for (const item of source) {
+    if (
+      item &&
+      typeof item === "object" &&
+      typeof (item as { url?: unknown }).url === "string" &&
+      typeof (item as { name?: unknown }).name === "string"
+    ) {
+      out.push({
+        url: (item as { url: string }).url,
+        name: (item as { name: string }).name,
+      });
+    }
+  }
+  return out;
+}
+
+function toIsoString(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+  return null;
+}
+
 async function serialize(
   r: typeof generalRequestsTable.$inferSelect,
   employeeName: string,
 ) {
-  const mentions = await loadMentioned(r.mentionedEmployeeIds ?? []);
+  const mentionedEmployeeIds = normalizeMentionedIds(r.mentionedEmployeeIds);
+  const mentions = await loadMentioned(mentionedEmployeeIds);
   return {
     id: r.id,
     employeeId: r.employeeId,
@@ -99,11 +160,11 @@ async function serialize(
     attachmentUrl: r.attachmentUrl,
     attachmentName: r.attachmentName,
     attachments: mergedAttachments(r),
-    mentionedEmployeeIds: r.mentionedEmployeeIds ?? [],
+    mentionedEmployeeIds,
     mentionedEmployees: mentions,
     status: r.status,
-    appliedAt: r.appliedAt.toISOString(),
-    reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+    appliedAt: toIsoString(r.appliedAt),
+    reviewedAt: toIsoString(r.reviewedAt),
   };
 }
 

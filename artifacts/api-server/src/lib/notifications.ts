@@ -1,5 +1,6 @@
 import { db, employeesTable, notificationsTable, usersTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
+import { logger } from "./logger";
 
 type NotificationPayload = {
   type?: string;
@@ -9,28 +10,39 @@ type NotificationPayload = {
 };
 
 export async function notifyUser(userId: number, payload: NotificationPayload) {
-  await db.insert(notificationsTable).values({
-    userId,
-    type: payload.type ?? "system",
-    title: payload.title,
-    message: payload.message,
-    href: payload.href ?? null,
-  });
+  try {
+    await db.insert(notificationsTable).values({
+      userId,
+      type: payload.type ?? "system",
+      title: payload.title,
+      message: payload.message,
+      href: payload.href ?? null,
+    });
+  } catch (error) {
+    logger.error({ err: error, userId }, "Could not create notification");
+  }
 }
 
 export async function notifyUsers(userIds: number[], payload: NotificationPayload) {
   const uniqueUserIds = Array.from(new Set(userIds.filter((value) => value > 0)));
   if (uniqueUserIds.length === 0) return;
 
-  await db.insert(notificationsTable).values(
-    uniqueUserIds.map((userId) => ({
-      userId,
-      type: payload.type ?? "system",
-      title: payload.title,
-      message: payload.message,
-      href: payload.href ?? null,
-    })),
-  );
+  try {
+    await db.insert(notificationsTable).values(
+      uniqueUserIds.map((userId) => ({
+        userId,
+        type: payload.type ?? "system",
+        title: payload.title,
+        message: payload.message,
+        href: payload.href ?? null,
+      })),
+    );
+  } catch (error) {
+    logger.error(
+      { err: error, userIds: uniqueUserIds },
+      "Could not create notifications",
+    );
+  }
 }
 
 export async function notifyRoles(

@@ -594,36 +594,7 @@ router.get(
     const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(dateParam);
     const allEmps = await db.select().from(employeesTable);
     const today = attendanceTodayYmd(now);
-    const previousDay = shiftDateByDays(today, -1);
-    let defaultDate = today;
-
-    if (!isValidDate) {
-      const overnightEmployeeIds = allEmps
-        .filter((employee) => isOvernightShift(employee))
-        .map((employee) => employee.id);
-
-      if (overnightEmployeeIds.length > 0) {
-        const openShiftRows = await db
-          .select()
-          .from(attendanceTable)
-          .where(
-            and(
-              eq(attendanceTable.date, previousDay),
-              inArray(attendanceTable.employeeId, overnightEmployeeIds),
-            ),
-          );
-
-        if (
-          openShiftRows.some(
-            (record) => !!record.checkInTime && !record.checkOutTime,
-          )
-        ) {
-          defaultDate = previousDay;
-        }
-      }
-    }
-
-    const targetDate = isValidDate ? dateParam : defaultDate;
+    const targetDate = isValidDate ? dateParam : today;
     const settings = await getSettings();
     const holidaySet = toHolidaySet(settings);
     const targetDow = new Date(`${targetDate}T00:00:00Z`).getUTCDay();

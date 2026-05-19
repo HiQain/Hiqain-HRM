@@ -119,6 +119,56 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
     "medical_ipd_limit",
     "`medical_ipd_limit` DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER `medical_opd_limit`",
   );
+  await ensureColumn(
+    "general_requests",
+    "date_to",
+    "`date_to` DATE NULL AFTER `date`",
+  );
+  await ensureColumn(
+    "general_requests",
+    "attachment_url",
+    "`attachment_url` VARCHAR(1024) NULL AFTER `reason`",
+  );
+  await ensureColumn(
+    "general_requests",
+    "attachment_name",
+    "`attachment_name` VARCHAR(255) NULL AFTER `attachment_url`",
+  );
+  await ensureColumn(
+    "general_requests",
+    "attachments",
+    "`attachments` JSON NOT NULL DEFAULT ('[]') AFTER `attachment_name`",
+  );
+  await ensureColumn(
+    "general_requests",
+    "mentioned_employee_ids",
+    "`mentioned_employee_ids` JSON NOT NULL DEFAULT ('[]') AFTER `attachments`",
+  );
+  await ensureColumn(
+    "general_requests",
+    "installment_months",
+    "`installment_months` INT NULL AFTER `status`",
+  );
+  await ensureColumn(
+    "leave_requests",
+    "attachments",
+    "`attachments` JSON NOT NULL DEFAULT ('[]') AFTER `attachment_name`",
+  );
+  await ensureColumn(
+    "leave_requests",
+    "mentioned_employee_ids",
+    "`mentioned_employee_ids` JSON NOT NULL DEFAULT ('[]') AFTER `attachments`",
+  );
+  await ensureColumn(
+    "remote_work_requests",
+    "attachments",
+    "`attachments` JSON NOT NULL DEFAULT ('[]') AFTER `attachment_name`",
+  );
+  await ensureColumn(
+    "remote_work_requests",
+    "mentioned_employee_ids",
+    "`mentioned_employee_ids` JSON NOT NULL DEFAULT ('[]') AFTER `attachments`",
+  );
 
   await ensureTable(
     "medical_claims",
