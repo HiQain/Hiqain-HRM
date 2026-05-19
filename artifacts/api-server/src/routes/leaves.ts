@@ -8,25 +8,20 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
-import { daysBetweenInclusive, parseDate, parseHHMM, ymd } from "../lib/dates";
-import { officeMinutes } from "../lib/attendance";
+import { daysBetweenInclusive, parseDate, ymd } from "../lib/dates";
+import {
+  officeEndForShiftDate,
+  officeMinutes,
+  officeStartForShiftDate,
+} from "../lib/attendance";
 import { notifyEmployeeUser, notifyRoles } from "../lib/notifications";
 
 function leaveDayTimes(
   emp: typeof employeesTable.$inferSelect,
   dateStr: string,
 ): { checkInTime: Date; checkOutTime: Date; workedMinutes: number } {
-  const start = parseHHMM(emp.officeStartTime);
-  const end = parseHHMM(emp.officeEndTime);
-  const checkInTime = new Date(`${dateStr}T00:00:00Z`);
-  checkInTime.setUTCHours(start.h, start.m, 0, 0);
-  const checkOutTime = new Date(`${dateStr}T00:00:00Z`);
-  checkOutTime.setUTCHours(end.h, end.m, 0, 0);
-  if (
-    end.h * 60 + end.m <= start.h * 60 + start.m
-  ) {
-    checkOutTime.setUTCDate(checkOutTime.getUTCDate() + 1);
-  }
+  const checkInTime = officeStartForShiftDate(emp, dateStr);
+  const checkOutTime = officeEndForShiftDate(emp, dateStr);
   const workedMinutes = officeMinutes(emp);
   return { checkInTime, checkOutTime, workedMinutes };
 }

@@ -408,6 +408,13 @@ function monthRange(month?: string): {
   return { start, end, year: y, month: m };
 }
 
+function summaryQueryDates(targetDate: string, operationalToday: string): string[] {
+  if (targetDate !== operationalToday) {
+    return [targetDate];
+  }
+  return [targetDate, shiftDateByDays(targetDate, -1)];
+}
+
 router.post(
   "/attendance/pause",
   requireAuth(["employee", "hr"]),
@@ -595,6 +602,7 @@ router.get(
     const allEmps = await db.select().from(employeesTable);
     const today = attendanceTodayYmd(now);
     const targetDate = isValidDate ? dateParam : today;
+    const queryDates = summaryQueryDates(targetDate, today);
     const settings = await getSettings();
     const holidaySet = toHolidaySet(settings);
     const targetDow = new Date(`${targetDate}T00:00:00Z`).getUTCDay();
@@ -604,8 +612,13 @@ router.get(
     const records = await db
       .select()
       .from(attendanceTable)
-      .where(eq(attendanceTable.date, targetDate));
-    const recMap = new Map(records.map((r) => [r.employeeId, r]));
+      .where(inArray(attendanceTable.date, queryDates));
+    const recMap = new Map<number, Array<typeof attendanceTable.$inferSelect>>();
+    for (const record of records) {
+      const employeeRecords = recMap.get(record.employeeId) ?? [];
+      employeeRecords.push(record);
+      recMap.set(record.employeeId, employeeRecords);
+    }
 
     // Approved leaves overlapping the target date
     const leaveRows = await db
@@ -630,7 +643,11 @@ router.get(
     let halfDay = 0;
     let remoteWork = 0;
     for (const emp of allEmps) {
-      const r = recMap.get(emp.id);
+      const employeeRecords = recMap.get(emp.id) ?? [];
+      const r =
+        targetDate === today
+          ? selectActiveAttendanceRecord(employeeRecords, emp, now)
+          : employeeRecords.find((record) => record.date === targetDate);
       if (targetDate < emp.joiningDate) {
         out.push({
           id: -emp.id,

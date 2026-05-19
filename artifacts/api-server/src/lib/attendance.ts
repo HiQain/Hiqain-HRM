@@ -125,7 +125,7 @@ export function selectActiveAttendanceRecord<
   }
 
   const resolvedShiftDate = resolveAttendanceShiftDate(emp, now);
-  return records.find((record) => record.date === resolvedShiftDate) ?? records[0];
+  return records.find((record) => record.date === resolvedShiftDate);
 }
 
 export function officeStartForShiftDate(
