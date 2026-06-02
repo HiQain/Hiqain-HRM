@@ -54,8 +54,12 @@ import { useGetMe } from "@workspace/api-client-react";
 import { daysBetweenInclusive, formatDate, formatDateShort } from "@/lib/utils";
 
 export function MyLeavesPage() {
+  const { data: me } = useGetMe();
+  const leaveParams = me?.role === "hr" ? ({ self: "1" } as any) : undefined;
   const { data: balance } = useGetMyLeaveBalance();
-  const { data: leaves, isLoading } = useListLeaves();
+  const { data: leaves, isLoading } = useListLeaves(leaveParams as any, {
+    query: { queryKey: getListLeavesQueryKey(leaveParams as any) },
+  });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LeaveRequest | null>(null);
 

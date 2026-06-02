@@ -9,7 +9,7 @@ import {
   useListMyInventoryAssignments,
   useListMyInventoryRequests,
 } from "@workspace/api-client-react";
-import { CheckCircle2, Package, Plus, Wrench } from "lucide-react";
+import { CheckCircle2, Plus, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
@@ -51,12 +51,11 @@ export function MyInventoryPage() {
   const availableItems = items ?? [];
   const stats = useMemo(
     () => ({
-      availableSkus: availableItems.length,
       activeAssignments: (assignments ?? []).filter((assignment) => assignment.active).length,
       pendingRequests: (requests ?? []).filter((request) => request.status === "pending").length,
       approvedRequests: (requests ?? []).filter((request) => request.status === "approved").length,
     }),
-    [assignments, availableItems.length, requests],
+    [assignments, requests],
   );
 
   const resetDialog = useCallback(() => {
@@ -125,8 +124,7 @@ export function MyInventoryPage() {
         actions={pageActions}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Available Items" value={stats.availableSkus} icon={Package} tone="info" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Assigned to Me" value={stats.activeAssignments} icon={Wrench} tone="success" />
         <StatCard label="Pending Requests" value={stats.pendingRequests} icon={Plus} tone="warning" />
         <StatCard label="Approved Requests" value={stats.approvedRequests} icon={CheckCircle2} tone="success" />

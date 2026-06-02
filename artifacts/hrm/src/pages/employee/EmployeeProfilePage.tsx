@@ -179,13 +179,31 @@ export function EmployeeProfilePage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           CNIC document
         </p>
-        {employee.cnicDocumentUrl ? (
-          <div className="mt-3">
-            <FilePreview
-              url={employee.cnicDocumentUrl}
-              name={employee.cnicDocumentName}
-              label="CNIC document"
-            />
+        {employee.cnicDocumentUrl ||
+        employee.cnicFrontDocumentUrl ||
+        employee.cnicBackDocumentUrl ? (
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {employee.cnicDocumentUrl ? (
+              <FilePreview
+                url={employee.cnicDocumentUrl}
+                name={employee.cnicDocumentName}
+                label="CNIC document"
+              />
+            ) : null}
+            {employee.cnicFrontDocumentUrl ? (
+              <FilePreview
+                url={employee.cnicFrontDocumentUrl}
+                name={employee.cnicFrontDocumentName}
+                label="Front CNIC"
+              />
+            ) : null}
+            {employee.cnicBackDocumentUrl ? (
+              <FilePreview
+                url={employee.cnicBackDocumentUrl}
+                name={employee.cnicBackDocumentName}
+                label="Back CNIC"
+              />
+            ) : null}
           </div>
         ) : (
           <p className="mt-3 text-sm text-muted-foreground">

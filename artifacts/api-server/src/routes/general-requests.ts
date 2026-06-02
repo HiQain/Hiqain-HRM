@@ -12,9 +12,12 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
+import { notifyEmployeeUser, notifyRoles } from "../lib/notifications";
 import {
+  getMatchedProvidentFundContribution,
   getProvidentFundPolicyStartDate,
   isProvidentFundPolicyActiveForPeriod,
+  resolveProvidentFundPercent,
 } from "../lib/provident-fund-policy";
 import { applyPermanentIncrementToCompensation } from "../lib/salary";
 import { getSettings } from "./settings";
@@ -23,11 +26,12 @@ import { computeLoanEligibility } from "./loans";
 const router: IRouter = Router();
 
 async function loadMentioned(ids: number[] | null | undefined) {
-  if (!ids || ids.length === 0) return [];
+  const normalizedIds = normalizeMentionedIds(ids);
+  if (normalizedIds.length === 0) return [];
   return db
     .select({ id: employeesTable.id, name: employeesTable.name })
     .from(employeesTable)
-    .where(inArray(employeesTable.id, ids));
+    .where(inArray(employeesTable.id, normalizedIds));
 }
 
 type AttachmentItem = { url: string; name: string };
@@ -44,9 +48,9 @@ type RequestType =
 function mergedAttachments(r: {
   attachmentUrl: string | null;
   attachmentName: string | null;
-  attachments: AttachmentItem[] | null;
+  attachments: AttachmentItem[] | string | null;
 }): AttachmentItem[] {
-  const list = Array.isArray(r.attachments) ? [...r.attachments] : [];
+  const list = normalizeStoredAttachments(r.attachments);
   if (
     r.attachmentUrl &&
     r.attachmentName &&
@@ -78,11 +82,71 @@ function normalizeAttachments(
   return out;
 }
 
+function normalizeMentionedIds(value: unknown): number[] {
+  const source = (() => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  })();
+
+  return source.filter(
+    (item): item is number => typeof item === "number" && Number.isFinite(item),
+  );
+}
+
+function normalizeStoredAttachments(value: unknown): AttachmentItem[] {
+  const source = (() => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  })();
+
+  const out: AttachmentItem[] = [];
+  for (const item of source) {
+    if (
+      item &&
+      typeof item === "object" &&
+      typeof (item as { url?: unknown }).url === "string" &&
+      typeof (item as { name?: unknown }).name === "string"
+    ) {
+      out.push({
+        url: (item as { url: string }).url,
+        name: (item as { name: string }).name,
+      });
+    }
+  }
+  return out;
+}
+
+function toIsoString(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+  return null;
+}
+
 async function serialize(
   r: typeof generalRequestsTable.$inferSelect,
   employeeName: string,
 ) {
-  const mentions = await loadMentioned(r.mentionedEmployeeIds ?? []);
+  const mentionedEmployeeIds = normalizeMentionedIds(r.mentionedEmployeeIds);
+  const mentions = await loadMentioned(mentionedEmployeeIds);
   return {
     id: r.id,
     employeeId: r.employeeId,
@@ -96,11 +160,11 @@ async function serialize(
     attachmentUrl: r.attachmentUrl,
     attachmentName: r.attachmentName,
     attachments: mergedAttachments(r),
-    mentionedEmployeeIds: r.mentionedEmployeeIds ?? [],
+    mentionedEmployeeIds,
     mentionedEmployees: mentions,
     status: r.status,
-    appliedAt: r.appliedAt.toISOString(),
-    reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+    appliedAt: toIsoString(r.appliedAt),
+    reviewedAt: toIsoString(r.reviewedAt),
   };
 }
 
@@ -127,6 +191,7 @@ async function computeProvidentFundBalance(
   employeeId: number,
   opts?: { excludeRequestId?: number; includePending?: boolean },
 ) {
+  const settings = await getSettings();
   const employeeRows = await db
     .select()
     .from(employeesTable)
@@ -161,6 +226,10 @@ async function computeProvidentFundBalance(
     .select()
     .from(salaryComponentsTable)
     .where(eq(salaryComponentsTable.employeeId, employeeId));
+  const effectiveProvidentFundPercent = resolveProvidentFundPercent(
+    employee.providentFundPercent,
+    settings.defaultProvidentFundPercent,
+  );
 
   const totalContributed = round2(
     payslips.reduce((sum, payslip) => {
@@ -179,10 +248,13 @@ async function computeProvidentFundBalance(
           0,
         );
       const pfFromProfile =
-        pfFromComponent <= 0 && employee.providentFundPercent != null
-          ? (Number(employee.providentFundPercent) / 100) * basicSalary
+        pfFromComponent <= 0 && effectiveProvidentFundPercent > 0
+          ? (effectiveProvidentFundPercent / 100) * basicSalary
           : 0;
-      return sum + pfFromComponent + pfFromProfile;
+      return (
+        sum +
+        getMatchedProvidentFundContribution(pfFromComponent + pfFromProfile)
+      );
     }, 0),
   );
 
@@ -280,8 +352,9 @@ router.get("/requests", requireAuth(), async (req, res): Promise<void> => {
   const user = getUser(req);
   const type = req.query.type as string | undefined;
   const status = req.query.status as string | undefined;
+  const selfOnly = req.query.self === "1";
   const filters = [];
-  if (user.role === "employee") {
+  if (user.role === "employee" || (user.role === "hr" && selfOnly)) {
     if (!user.employeeId) {
       res.json([]);
       return;
@@ -333,7 +406,7 @@ function dateRange(start: string, end: string | null | undefined): string[] {
   return out;
 }
 
-router.post("/requests", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.post("/requests", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.status(400).json({ message: "No employee profile" });
@@ -467,10 +540,22 @@ router.post("/requests", requireAuth(["employee"]), async (req, res): Promise<vo
     res.status(500).json({ message: "Created request could not be loaded" });
     return;
   }
+  await notifyRoles(["admin", "hr"], {
+    type: "general_request",
+    title: "New request submitted",
+    message: `${emp.name} submitted a ${String(type).replace(/_/g, " ")} request.`,
+    href: "/admin/requests",
+  });
+  await notifyEmployeeUser(user.employeeId, {
+    type: "general_request",
+    title: "Request submitted",
+    message: "Your request has been submitted for review.",
+    href: "/employee/requests",
+  });
   res.status(201).json(await serialize(request, emp.name));
 });
 
-router.patch("/requests/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.patch("/requests/:id", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -579,7 +664,7 @@ router.patch("/requests/:id", requireAuth(["employee"]), async (req, res): Promi
   res.json(await serialize(updated, empRows[0]?.name ?? ""));
 });
 
-router.delete("/requests/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.delete("/requests/:id", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -772,6 +857,12 @@ router.post(
       .from(employeesTable)
       .where(eq(employeesTable.id, row.employeeId))
       .limit(1);
+    await notifyEmployeeUser(row.employeeId, {
+      type: "general_request",
+      title: "Request approved",
+      message: `Your ${row.type.replace(/_/g, " ")} request was approved.`,
+      href: "/employee/requests",
+    });
     res.json(await serialize(row, empRows[0]?.name ?? ""));
   },
 );
@@ -805,6 +896,12 @@ router.post(
       .from(employeesTable)
       .where(eq(employeesTable.id, row.employeeId))
       .limit(1);
+    await notifyEmployeeUser(row.employeeId, {
+      type: "general_request",
+      title: "Request rejected",
+      message: `Your ${row.type.replace(/_/g, " ")} request was rejected.`,
+      href: "/employee/requests",
+    });
     res.json(await serialize(row, empRows[0]?.name ?? ""));
   },
 );

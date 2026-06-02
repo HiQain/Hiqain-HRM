@@ -75,7 +75,7 @@ export function ProvidentFundLedgerCard({
           Eligible after {formatDate(summary.eligibleAfterDate)}
         </span>
         <span className="text-muted-foreground">
-          PF starts after probation completion.
+          PF starts after probation completion and company matches each employee contribution.
         </span>
       </div>
 

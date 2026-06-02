@@ -72,6 +72,17 @@ import {
   isManualTaxComponent,
 } from "@/lib/salary";
 
+function getDisplayedPayrollTax(
+  deductions: Array<{ label: string; amount: number }> | undefined,
+  fallbackTax: number,
+) {
+  const matchedTax = deductions?.find((line) => /\bpayroll\s*tax\b/i.test(line.label));
+  if (matchedTax) return matchedTax.amount;
+
+  const genericTax = deductions?.find((line) => /\btax\b/i.test(line.label));
+  return genericTax?.amount ?? fallbackTax;
+}
+
 export function AdminSalaryPage() {
   const { data: employees } = useListEmployees();
   const now = new Date();
@@ -201,20 +212,23 @@ export function AdminSalaryPage() {
   const displayedDefaultAllowances =
     monthPayslip?.allowances ?? effectiveCompensation.defaultAllowances;
   const totalSalary = displayedBasicSalary + displayedDefaultAllowances;
+  const effectiveProvidentFundPercent =
+    emp?.providentFundPercent ?? Number(settings?.defaultProvidentFundPercent ?? 0);
   const salaryPreview = computeSalaryStructurePreview({
     basicSalary: displayedBasicSalary,
     defaultAllowances: displayedDefaultAllowances,
     components: visibleComponents,
-    providentFundPercent: emp?.providentFundPercent,
+    providentFundPercent: effectiveProvidentFundPercent,
     month,
     year,
     useDesignationFixedOverride: !isPastPeriod,
   });
-  const generatedPayrollTax =
-    monthPayslip?.salaryBreakdown?.deductions?.find((line) => line.label === "Payroll Tax")
-      ?.amount ?? null;
+  const generatedPayrollTax = getDisplayedPayrollTax(
+    monthPayslip?.salaryBreakdown?.deductions,
+    salaryPreview.tax,
+  );
   const currentTax = monthPayslip
-    ? generatedPayrollTax ?? 0
+    ? generatedPayrollTax
     : salaryPreview.tax;
   const currentPerDaySalary = totalSalary / 30;
   const monthPayslipLatePenalty =
@@ -345,8 +359,8 @@ export function AdminSalaryPage() {
                 icon={<Receipt className="h-4 w-4" />}
                 label="PF deduction"
                 value={
-                  emp.providentFundPercent != null && emp.providentFundPercent > 0
-                    ? `${emp.providentFundPercent}% of basic`
+                  effectiveProvidentFundPercent > 0
+                    ? `${effectiveProvidentFundPercent}% of basic`
                     : "—"
                 }
               />
@@ -466,7 +480,7 @@ export function AdminSalaryPage() {
                   <MoneySummaryCard
                     label="PF deduction"
                     value={formatCurrency(
-                      ((emp.providentFundPercent ?? 0) / 100) * displayedBasicSalary,
+                      (effectiveProvidentFundPercent / 100) * displayedBasicSalary,
                     )}
                     tone="down"
                   />

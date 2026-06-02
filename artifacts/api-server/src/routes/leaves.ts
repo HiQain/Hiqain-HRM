@@ -8,24 +8,20 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
-import { daysBetweenInclusive, parseDate, parseHHMM, ymd } from "../lib/dates";
-import { officeMinutes } from "../lib/attendance";
+import { daysBetweenInclusive, parseDate, ymd } from "../lib/dates";
+import {
+  officeEndForShiftDate,
+  officeMinutes,
+  officeStartForShiftDate,
+} from "../lib/attendance";
+import { notifyEmployeeUser, notifyRoles } from "../lib/notifications";
 
 function leaveDayTimes(
   emp: typeof employeesTable.$inferSelect,
   dateStr: string,
 ): { checkInTime: Date; checkOutTime: Date; workedMinutes: number } {
-  const start = parseHHMM(emp.officeStartTime);
-  const end = parseHHMM(emp.officeEndTime);
-  const checkInTime = new Date(`${dateStr}T00:00:00Z`);
-  checkInTime.setUTCHours(start.h, start.m, 0, 0);
-  const checkOutTime = new Date(`${dateStr}T00:00:00Z`);
-  checkOutTime.setUTCHours(end.h, end.m, 0, 0);
-  if (
-    end.h * 60 + end.m <= start.h * 60 + start.m
-  ) {
-    checkOutTime.setUTCDate(checkOutTime.getUTCDate() + 1);
-  }
+  const checkInTime = officeStartForShiftDate(emp, dateStr);
+  const checkOutTime = officeEndForShiftDate(emp, dateStr);
   const workedMinutes = officeMinutes(emp);
   return { checkInTime, checkOutTime, workedMinutes };
 }
@@ -67,6 +63,20 @@ async function usedFor(employeeId: number, year: number) {
 
 type AttachmentItem = { url: string; name: string };
 
+function normalizeMentionedIds(ids: unknown): number[] {
+  if (!Array.isArray(ids)) return [];
+  return ids.filter((id): id is number => typeof id === "number" && Number.isFinite(id));
+}
+
+function toIsoString(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+  return null;
+}
+
 function mergedAttachments(r: {
   attachmentUrl: string | null;
   attachmentName: string | null;
@@ -102,11 +112,12 @@ function normalizeAttachments(
 }
 
 async function loadMentioned(ids: number[] | null | undefined) {
-  if (!ids || ids.length === 0) return [];
+  const normalizedIds = normalizeMentionedIds(ids);
+  if (normalizedIds.length === 0) return [];
   const rows = await db
     .select({ id: employeesTable.id, name: employeesTable.name })
     .from(employeesTable)
-    .where(inArray(employeesTable.id, ids));
+    .where(inArray(employeesTable.id, normalizedIds));
   return rows;
 }
 
@@ -114,7 +125,8 @@ async function serialize(
   r: typeof leaveRequestsTable.$inferSelect,
   employeeName: string,
 ) {
-  const mentions = await loadMentioned(r.mentionedEmployeeIds ?? []);
+  const mentionedEmployeeIds = normalizeMentionedIds(r.mentionedEmployeeIds);
+  const mentions = await loadMentioned(mentionedEmployeeIds);
   return {
     id: r.id,
     employeeId: r.employeeId,
@@ -128,17 +140,19 @@ async function serialize(
     attachmentUrl: r.attachmentUrl,
     attachmentName: r.attachmentName,
     attachments: mergedAttachments(r),
-    mentionedEmployeeIds: r.mentionedEmployeeIds ?? [],
+    mentionedEmployeeIds,
     mentionedEmployees: mentions,
-    appliedAt: r.appliedAt.toISOString(),
+    appliedAt: toIsoString(r.appliedAt),
+    reviewedAt: toIsoString(r.reviewedAt),
   };
 }
 
 router.get("/leaves", requireAuth(), async (req, res): Promise<void> => {
   const user = getUser(req);
   const status = req.query.status as string | undefined;
+  const selfOnly = req.query.self === "1";
   const filters = [];
-  if (user.role === "employee") {
+  if (user.role === "employee" || (user.role === "hr" && selfOnly)) {
     if (!user.employeeId) {
       res.json([]);
       return;
@@ -169,7 +183,7 @@ router.get("/leaves", requireAuth(), async (req, res): Promise<void> => {
   res.json(out);
 });
 
-router.post("/leaves", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.post("/leaves", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.status(400).json({ message: "No employee profile" });
@@ -287,10 +301,22 @@ router.post("/leaves", requireAuth(["employee"]), async (req, res): Promise<void
     res.status(500).json({ message: "Created leave request could not be loaded" });
     return;
   }
+  await notifyRoles(["admin", "hr"], {
+    type: "leave_request",
+    title: "New leave request",
+    message: `${emp.name} submitted a ${request.type} leave request.`,
+    href: "/admin/leaves",
+  });
+  await notifyEmployeeUser(user.employeeId, {
+    type: "leave_request",
+    title: "Leave request submitted",
+    message: "Your leave request has been submitted for review.",
+    href: "/employee/leaves",
+  });
   res.status(201).json(await serialize(request, emp.name));
 });
 
-router.patch("/leaves/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.patch("/leaves/:id", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -369,7 +395,7 @@ router.patch("/leaves/:id", requireAuth(["employee"]), async (req, res): Promise
   res.json(await serialize(updated, empRows[0]?.name ?? ""));
 });
 
-router.delete("/leaves/:id", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.delete("/leaves/:id", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   const id = Number(req.params.id);
   const existing = await db
@@ -400,9 +426,15 @@ async function setStatus(id: number, status: "approved" | "rejected") {
   const result = await db
     .update(leaveRequestsTable)
     .set({ status, reviewedAt: new Date() })
-    .where(eq(leaveRequestsTable.id, id))
-    ;
-  if (!result[0].affectedRows) {
+    .where(eq(leaveRequestsTable.id, id));
+  const affectedRows =
+    typeof result === "object" &&
+    result !== null &&
+    "affectedRows" in result &&
+    typeof result.affectedRows === "number"
+      ? result.affectedRows
+      : 0;
+  if (affectedRows === 0) {
     return null;
   }
   const rows = await db
@@ -469,6 +501,12 @@ router.post("/leaves/:id/approve", requireAuth(["admin", "hr"]), async (req, res
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
 
+  await notifyEmployeeUser(updated.employeeId, {
+    type: "leave_request",
+    title: "Leave request approved",
+    message: `Your ${updated.type} leave request was approved.`,
+    href: "/employee/leaves",
+  });
   res.json(await serialize(updated, emp.name));
 });
 
@@ -484,10 +522,16 @@ router.post("/leaves/:id/reject", requireAuth(["admin", "hr"]), async (req, res)
     .from(employeesTable)
     .where(eq(employeesTable.id, updated.employeeId))
     .limit(1);
+  await notifyEmployeeUser(updated.employeeId, {
+    type: "leave_request",
+    title: "Leave request rejected",
+    message: `Your ${updated.type} leave request was rejected.`,
+    href: "/employee/leaves",
+  });
   res.json(await serialize(updated, empRows[0]?.name ?? ""));
 });
 
-router.get("/leaves/balance", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.get("/leaves/balance", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.json({

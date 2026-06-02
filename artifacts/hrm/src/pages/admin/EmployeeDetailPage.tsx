@@ -126,6 +126,11 @@ function splitAllowanceBreakdown(allowances: number) {
   return { homeRent, utilityBills };
 }
 
+function openEmployeeEditor(employeeId: number) {
+  window.localStorage.setItem("hrm-edit-employee-id", String(employeeId));
+  window.location.href = "/admin/employees";
+}
+
 export function EmployeeDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
@@ -162,7 +167,11 @@ export function EmployeeDetailPage() {
 
       {/* Hero */}
       <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-6 shadow-sm sm:flex-row sm:items-center">
-        <EmployeeAvatar name={employee.name} size="xl" />
+        <EmployeeAvatar
+          name={employee.name}
+          url={employee.avatarUrl ?? null}
+          size="xl"
+        />
         <div className="flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">
             {employee.name}
@@ -172,6 +181,16 @@ export function EmployeeDetailPage() {
             {employee.department && ` · ${employee.department}`}
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium",
+                employee.isActive === false
+                  ? "bg-rose-50 text-rose-700"
+                  : "bg-emerald-50 text-emerald-700",
+              )}
+            >
+              {employee.isActive === false ? "Inactive" : "Active"}
+            </span>
             <Badge icon={Briefcase}>
               Joined {formatDate(employee.joiningDate)}
             </Badge>
@@ -260,731 +279,174 @@ function Badge({
 }
 
 function ProfileTab({ employee }: { employee: any }) {
-  const qc = useQueryClient();
-  const update = useUpdateEmployee();
   const totalSalary = Number(employee.basicSalary) + Number(employee.allowances);
-  const [form, setForm] = useState({
-    name: employee.name,
-    personalEmail: employee.personalEmail ?? "",
-    phone: employee.phone ?? "",
-    position: employee.position ?? "",
-    department: employee.department ?? "",
-    positionType: (employee.positionType ?? "onsite") as "onsite" | "remote",
-    joiningDate: employee.joiningDate,
-    probationMonths: employee.probationMonths,
-    officeStartTime: employee.officeStartTime,
-    officeEndTime: employee.officeEndTime,
-    gracePeriodMinutes: employee.gracePeriodMinutes,
-    totalSalary,
-    basicSalary: employee.basicSalary,
-    allowances: employee.allowances,
-    casualLeaveQuota: employee.casualLeaveQuota ?? 10,
-    sickLeaveQuota: employee.sickLeaveQuota ?? 10,
-    annualLeaveQuota: employee.annualLeaveQuota ?? 14,
-    dateOfBirth: employee.dateOfBirth ?? "",
-    address: employee.address ?? "",
-    employeeCode: employee.employeeCode ?? "",
-    maritalStatus: employee.maritalStatus ?? "",
-    leftDate: employee.leftDate ?? "",
-    emergencyContactName: employee.emergencyContactName ?? "",
-    emergencyContactNumber:
-      employee.emergencyContactNumber ?? employee.emergencyContact ?? "",
-    emergencyContactRelation: employee.emergencyContactRelation ?? "",
-    emergencyContact: employee.emergencyContact ?? "",
-    cnic: employee.cnic ?? "",
-    lastQualification: employee.lastQualification ?? "",
-    previousCompany: employee.previousCompany ?? "",
-    lastPay: employee.lastPay != null ? String(employee.lastPay) : "",
-    notes: employee.notes ?? "",
-    cnicDocumentUrl: employee.cnicDocumentUrl ?? "",
-    cnicDocumentName: employee.cnicDocumentName ?? "",
-    cnicFrontDocumentUrl: employee.cnicFrontDocumentUrl ?? "",
-    cnicFrontDocumentName: employee.cnicFrontDocumentName ?? "",
-    cnicBackDocumentUrl: employee.cnicBackDocumentUrl ?? "",
-    cnicBackDocumentName: employee.cnicBackDocumentName ?? "",
-    qualificationDocumentUrl: employee.qualificationDocumentUrl ?? "",
-    qualificationDocumentName: employee.qualificationDocumentName ?? "",
-    lastPayslipOneUrl: employee.lastPayslipOneUrl ?? "",
-    lastPayslipOneName: employee.lastPayslipOneName ?? "",
-    lastPayslipTwoUrl: employee.lastPayslipTwoUrl ?? "",
-    lastPayslipTwoName: employee.lastPayslipTwoName ?? "",
-    lastPayslipThreeUrl: employee.lastPayslipThreeUrl ?? "",
-    lastPayslipThreeName: employee.lastPayslipThreeName ?? "",
-    primaryBankAccountTitle:
-      employee.primaryBankAccountTitle ?? employee.bankAccountTitle ?? "",
-    primaryBankAccountNumber:
-      employee.primaryBankAccountNumber ?? employee.bankAccountNumber ?? "",
-    primaryBankName:
-      employee.primaryBankName ?? employee.bankName ?? PRIMARY_PAYROLL_BANK,
-    primaryBankIban: employee.primaryBankIban ?? employee.bankIban ?? "",
-    primaryBankBranchCode:
-      employee.primaryBankBranchCode ?? employee.bankBranchCode ?? "",
-    secondaryBankAccountTitle: employee.secondaryBankAccountTitle ?? "",
-    secondaryBankAccountNumber: employee.secondaryBankAccountNumber ?? "",
-    secondaryBankName: employee.secondaryBankName ?? "",
-    secondaryBankIban: employee.secondaryBankIban ?? "",
-    secondaryBankBranchCode: employee.secondaryBankBranchCode ?? "",
-  });
   const allowanceBreakdown = useMemo(
-    () => splitAllowanceBreakdown(Number(form.allowances) || 0),
-    [form.allowances],
+    () => splitAllowanceBreakdown(Number(employee.allowances) || 0),
+    [employee.allowances],
   );
 
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    update.mutate(
-      {
-        id: employee.id,
-        data: {
-          name: form.name,
-          personalEmail: form.personalEmail.trim() || undefined,
-          phone: form.phone || undefined,
-          position: form.position || undefined,
-          department: form.department || undefined,
-          positionType: form.positionType,
-          joiningDate: form.joiningDate as unknown as string,
-          probationMonths: Number(form.probationMonths),
-          officeStartTime: form.officeStartTime,
-          officeEndTime: form.officeEndTime,
-          gracePeriodMinutes: Number(form.gracePeriodMinutes),
-          basicSalary: Number(form.basicSalary),
-          allowances: Number(form.allowances),
-          casualLeaveQuota: Number(form.casualLeaveQuota),
-          sickLeaveQuota: Number(form.sickLeaveQuota),
-          annualLeaveQuota: Number(form.annualLeaveQuota),
-          dateOfBirth: form.dateOfBirth
-            ? (form.dateOfBirth as unknown as string)
-            : undefined,
-          address: form.address || undefined,
-          employeeCode: form.employeeCode || undefined,
-          maritalStatus: form.maritalStatus || undefined,
-          leftDate: form.leftDate ? (form.leftDate as unknown as string) : undefined,
-          emergencyContactName: form.emergencyContactName || undefined,
-          emergencyContactNumber: form.emergencyContactNumber || undefined,
-          emergencyContactRelation:
-            form.emergencyContactRelation || undefined,
-          emergencyContact:
-            form.emergencyContactNumber || form.emergencyContact || undefined,
-          cnic: form.cnic || undefined,
-          lastQualification: form.lastQualification || undefined,
-          previousCompany: form.previousCompany || undefined,
-          lastPay: form.lastPay ? Number(form.lastPay) : undefined,
-          notes: form.notes || undefined,
-          cnicDocumentUrl: form.cnicDocumentUrl || undefined,
-          cnicDocumentName: form.cnicDocumentName || undefined,
-          cnicFrontDocumentUrl: form.cnicFrontDocumentUrl || undefined,
-          cnicFrontDocumentName: form.cnicFrontDocumentName || undefined,
-          cnicBackDocumentUrl: form.cnicBackDocumentUrl || undefined,
-          cnicBackDocumentName: form.cnicBackDocumentName || undefined,
-          qualificationDocumentUrl:
-            form.qualificationDocumentUrl || undefined,
-          qualificationDocumentName:
-            form.qualificationDocumentName || undefined,
-          lastPayslipOneUrl: form.lastPayslipOneUrl || undefined,
-          lastPayslipOneName: form.lastPayslipOneName || undefined,
-          lastPayslipTwoUrl: form.lastPayslipTwoUrl || undefined,
-          lastPayslipTwoName: form.lastPayslipTwoName || undefined,
-          lastPayslipThreeUrl: form.lastPayslipThreeUrl || undefined,
-          lastPayslipThreeName: form.lastPayslipThreeName || undefined,
-          primaryBankAccountTitle: form.primaryBankAccountTitle || undefined,
-          primaryBankAccountNumber:
-            form.primaryBankAccountNumber || undefined,
-          primaryBankName: PRIMARY_PAYROLL_BANK,
-          primaryBankIban: form.primaryBankIban || undefined,
-          primaryBankBranchCode: form.primaryBankBranchCode || undefined,
-          secondaryBankAccountTitle:
-            form.secondaryBankAccountTitle || undefined,
-          secondaryBankAccountNumber:
-            form.secondaryBankAccountNumber || undefined,
-          secondaryBankName: form.secondaryBankName || undefined,
-          secondaryBankIban: form.secondaryBankIban || undefined,
-          secondaryBankBranchCode:
-            form.secondaryBankBranchCode || undefined,
-        } as any,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Profile updated");
-          qc.invalidateQueries({
-            queryKey: getGetEmployeeQueryKey(employee.id),
-          });
-          qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
-        },
-        onError: () => toast.error("Could not update profile"),
-      },
-    );
-  };
-
   return (
-      <form
-        onSubmit={onSubmit}
-        className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-sm"
-      >
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Editable details
-        </p>
-        <div className="space-y-4">
-          <AvatarUploader
-            employeeId={employee.id}
-            currentName={employee.name}
-            currentUrl={employee.avatarUrl ?? null}
+    <div className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold">Profile overview</p>
+          <p className="text-sm text-muted-foreground">
+            This page is now view-only. Use the edit drawer to update details
+            or deactivate the user.
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={() => openEmployeeEditor(employee.id)}
+          className="gap-2"
+        >
+          <Pencil className="h-4 w-4" />
+          Edit employee
+        </Button>
+      </div>
+
+      <ReadonlySection title="User details">
+        <ReadonlyGrid>
+          <ReadonlyField label="Employee code" value={employee.employeeCode} />
+          <ReadonlyField label="Full name" value={employee.name} />
+          <ReadonlyField label="Work email" value={employee.email} />
+          <ReadonlyField label="Account role" value={employee.role} />
+          <ReadonlyField label="Personal email" value={employee.personalEmail} />
+          <ReadonlyField label="Phone number" value={employee.phone} />
+          <ReadonlyField label="Account status" value={employee.isActive === false ? "Inactive" : "Active"} />
+          <ReadonlyField label="Position" value={employee.position} />
+          <ReadonlyField label="Department" value={employee.department} />
+          <ReadonlyField label="Marital status" value={employee.maritalStatus} />
+          <ReadonlyField label="Wife name" value={employee.wifeName} />
+          <ReadonlyField label="Kids" value={employee.kidsCount != null ? String(employee.kidsCount) : null} />
+          <ReadonlyField
+            label="Kids names"
+            value={
+              Array.isArray(employee.kidsNames) && employee.kidsNames.length
+                ? employee.kidsNames.join(", ")
+                : null
+            }
+            className="md:col-span-2"
           />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <DocumentUploader
-              label="Front CNIC"
-              uploadLabel="Uploading front CNIC..."
-              employeeId={employee.id}
-              currentUrl={form.cnicFrontDocumentUrl || null}
-              currentName={form.cnicFrontDocumentName || null}
-              payloadKeys={{
-                url: "cnicFrontDocumentUrl",
-                name: "cnicFrontDocumentName",
-              }}
-            />
-            <DocumentUploader
-              label="Back CNIC"
-              uploadLabel="Uploading back CNIC..."
-              employeeId={employee.id}
-              currentUrl={form.cnicBackDocumentUrl || null}
-              currentName={form.cnicBackDocumentName || null}
-              payloadKeys={{
-                url: "cnicBackDocumentUrl",
-                name: "cnicBackDocumentName",
-              }}
-            />
-            <ContractUploader
-              employeeId={employee.id}
-              currentUrl={employee.employmentContractUrl ?? null}
-              currentName={employee.employmentContractName ?? null}
-            />
-          </div>
+        </ReadonlyGrid>
+      </ReadonlySection>
+
+      <ReadonlySection title="Work details">
+        <ReadonlyGrid>
+          <ReadonlyField label="Work location" value={employee.positionType === "remote" ? "Remote" : "Onsite"} />
+          <ReadonlyField label="Joining date" value={formatDate(employee.joiningDate)} />
+          <ReadonlyField label="Date of birth" value={employee.dateOfBirth ? formatDate(employee.dateOfBirth) : null} />
+          <ReadonlyField label="Probation (months)" value={String(employee.probationMonths ?? "—")} />
+          <ReadonlyField label="Left date" value={employee.leftDate ? formatDate(employee.leftDate) : null} />
+        </ReadonlyGrid>
+      </ReadonlySection>
+
+      <ReadonlySection title="Schedule">
+        <ReadonlyGrid columns="three">
+          <ReadonlyField label="Grace period (min)" value={String(employee.gracePeriodMinutes ?? "—")} />
+          <ReadonlyField label="Office start" value={employee.officeStartTime} />
+          <ReadonlyField label="Office end" value={employee.officeEndTime} />
+        </ReadonlyGrid>
+      </ReadonlySection>
+
+      <ReadonlySection title="Compensation">
+        <ReadonlyGrid>
+          <ReadonlyField label="Total salary (PKR)" value={formatCurrency(totalSalary)} />
+          <ReadonlyField label="Basic salary (PKR)" value={formatCurrency(employee.basicSalary)} />
+          <ReadonlyField label="Home rent (PKR)" value={formatCurrency(allowanceBreakdown.homeRent)} />
+          <ReadonlyField label="Utility bills (PKR)" value={formatCurrency(allowanceBreakdown.utilityBills)} />
+          <ReadonlyField label="Casual leave" value={String(employee.casualLeaveQuota ?? "—")} />
+          <ReadonlyField label="Sick leave" value={String(employee.sickLeaveQuota ?? "—")} />
+          <ReadonlyField label="Annual leave" value={String(employee.annualLeaveQuota ?? "—")} />
+          <ReadonlyField
+            label="Provident Fund (% of basic)"
+            value={
+              employee.providentFundPercent != null
+                ? String(employee.providentFundPercent)
+                : null
+            }
+          />
+        </ReadonlyGrid>
+      </ReadonlySection>
+
+      <ReadonlySection title="Medical allowance">
+        <ReadonlyGrid>
+          <ReadonlyField
+            label="Medical status"
+            value={employee.medicalEnabled ? "Enabled" : "Disabled"}
+          />
+          <ReadonlyField
+            label="Yearly IPD allowance (PKR)"
+            value={employee.medicalOverallLimit != null ? formatCurrency(employee.medicalOverallLimit) : null}
+          />
+          <ReadonlyField
+            label="Per day limit (PKR)"
+            value={employee.medicalDailyLimit != null ? formatCurrency(employee.medicalDailyLimit) : null}
+          />
+          <ReadonlyField
+            label="Covered members"
+            value={
+              [
+                employee.name,
+                employee.wifeName,
+                ...(Array.isArray(employee.kidsNames) ? employee.kidsNames : []),
+              ]
+                .filter(Boolean)
+                .join(", ")
+            }
+            className="md:col-span-2"
+          />
+        </ReadonlyGrid>
+      </ReadonlySection>
+
+      <ReadonlySection title="Primary bank details">
+        <ReadonlyGrid>
+          <ReadonlyField label="Account title" value={employee.primaryBankAccountTitle ?? employee.bankAccountTitle} />
+          <ReadonlyField label="Account number" value={employee.primaryBankAccountNumber ?? employee.bankAccountNumber} />
+          <ReadonlyField label="Bank name" value={employee.primaryBankName ?? employee.bankName ?? PRIMARY_PAYROLL_BANK} />
+          <ReadonlyField label="IBAN" value={employee.primaryBankIban ?? employee.bankIban} />
+          <ReadonlyField label="Branch code" value={employee.primaryBankBranchCode ?? employee.bankBranchCode} />
+        </ReadonlyGrid>
+      </ReadonlySection>
+
+      <ReadonlySection title="Secondary bank details">
+        <ReadonlyGrid>
+          <ReadonlyField label="Account title" value={employee.secondaryBankAccountTitle} />
+          <ReadonlyField label="Account number" value={employee.secondaryBankAccountNumber} />
+          <ReadonlyField label="Bank name" value={employee.secondaryBankName} />
+          <ReadonlyField label="IBAN" value={employee.secondaryBankIban} />
+          <ReadonlyField label="Branch code" value={employee.secondaryBankBranchCode} />
+        </ReadonlyGrid>
+      </ReadonlySection>
+
+      <ReadonlySection title="Background">
+        <ReadonlyGrid>
+          <ReadonlyField label="CNIC" value={employee.cnic} />
+          <ReadonlyField label="Emergency contact name" value={employee.emergencyContactName} />
+          <ReadonlyField label="Emergency contact number" value={employee.emergencyContactNumber ?? employee.emergencyContact} />
+          <ReadonlyField label="Relation" value={employee.emergencyContactRelation} />
+          <ReadonlyField label="Last qualification" value={employee.lastQualification} />
+          <ReadonlyField label="Previous company" value={employee.previousCompany} />
+          <ReadonlyField label="Last pay (PKR)" value={employee.lastPay != null ? formatCurrency(employee.lastPay) : null} />
+          <ReadonlyField label="Family members" value={employee.immediateFamily} className="md:col-span-2" multiline />
+          <ReadonlyField label="Address" value={employee.address} className="md:col-span-2" multiline />
+          <ReadonlyField label="Notes" value={employee.notes} className="md:col-span-2" multiline />
+        </ReadonlyGrid>
+        <div className="grid gap-3 md:grid-cols-2">
+          <ReadonlyDocumentField label="Employment contract" url={employee.employmentContractUrl} name={employee.employmentContractName} />
+          <ReadonlyDocumentField label="Qualification document" url={employee.qualificationDocumentUrl} name={employee.qualificationDocumentName} />
+          <ReadonlyDocumentField label="Front CNIC" url={employee.cnicFrontDocumentUrl} name={employee.cnicFrontDocumentName} />
+          <ReadonlyDocumentField label="Back CNIC" url={employee.cnicBackDocumentUrl} name={employee.cnicBackDocumentName} />
+          <ReadonlyDocumentField label="Last 3 months payslip 1" url={employee.lastPayslipOneUrl} name={employee.lastPayslipOneName} />
+          <ReadonlyDocumentField label="Last 3 months payslip 2" url={employee.lastPayslipTwoUrl} name={employee.lastPayslipTwoName} />
+          <ReadonlyDocumentField label="Last 3 months payslip 3" url={employee.lastPayslipThreeUrl} name={employee.lastPayslipThreeName} />
         </div>
-        <SectionBlock title="User details">
-          <div className="grid gap-3 md:grid-cols-2">
-            <FormField label="Employee code">
-              <Input
-                value={form.employeeCode}
-                onChange={(e) =>
-                  setForm({ ...form, employeeCode: e.target.value })
-                }
-                placeholder="e.g. EMP-001"
-              />
-            </FormField>
-            <FormField label="Full name">
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </FormField>
-            <FormField label="Work phone">
-              <Input
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="+923XXXXXXXXX"
-              />
-            </FormField>
-            <FormField label="Personal email">
-              <Input
-                type="email"
-                value={form.personalEmail}
-                onChange={(e) =>
-                  setForm({ ...form, personalEmail: e.target.value })
-                }
-                placeholder="name@example.com"
-              />
-            </FormField>
-            <FormField label="Position">
-              <Input
-                value={form.position}
-                onChange={(e) => setForm({ ...form, position: e.target.value })}
-              />
-            </FormField>
-            <FormField label="Department">
-              <Input
-                value={form.department}
-                onChange={(e) => setForm({ ...form, department: e.target.value })}
-              />
-            </FormField>
-            <FormField label="Marital status">
-              <Select
-                value={form.maritalStatus || "unset"}
-                onValueChange={(v) =>
-                  setForm({
-                    ...form,
-                    maritalStatus: v === "unset" ? "" : v,
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select marital status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unset">Select marital status</SelectItem>
-                  <SelectItem value="Single">Single</SelectItem>
-                  <SelectItem value="Married">Married</SelectItem>
-                  <SelectItem value="Divorced">Divorced</SelectItem>
-                  <SelectItem value="Widowed">Widowed</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-          </div>
-        </SectionBlock>
-
-        <SectionBlock title="Work details">
-          <div className="grid gap-3 md:grid-cols-2">
-            <FormField label="Work location">
-              <Select
-                value={form.positionType}
-                onValueChange={(v) =>
-                  setForm({ ...form, positionType: v as "onsite" | "remote" })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="onsite">Onsite</SelectItem>
-                  <SelectItem value="remote">Remote</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-            <FormField label="Joining date">
-              <DateField
-                value={form.joiningDate}
-                onChange={(v) => setForm({ ...form, joiningDate: v })}
-              />
-            </FormField>
-            <FormField label="Date of birth">
-              <DateField
-                value={form.dateOfBirth}
-                onChange={(v) => setForm({ ...form, dateOfBirth: v })}
-              />
-            </FormField>
-            <FormField label="Probation (months)">
-              <Input
-                type="number"
-                min={0}
-                value={form.probationMonths}
-                onChange={(e) =>
-                  setForm({ ...form, probationMonths: Number(e.target.value) })
-                }
-              />
-            </FormField>
-            <FormField label="Left date">
-              <DateField
-                value={form.leftDate}
-                onChange={(v) => setForm({ ...form, leftDate: v })}
-              />
-            </FormField>
-          </div>
-        </SectionBlock>
-
-        <SectionBlock title="Schedule">
-          <div className="grid gap-3 md:grid-cols-3">
-            <FormField label="Grace period (min)">
-              <Input
-                type="number"
-                min={0}
-                value={form.gracePeriodMinutes}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    gracePeriodMinutes: Number(e.target.value),
-                  })
-                }
-              />
-            </FormField>
-            <FormField label="Office start">
-              <Input
-                type="time"
-                value={form.officeStartTime}
-                onChange={(e) =>
-                  setForm({ ...form, officeStartTime: e.target.value })
-                }
-              />
-            </FormField>
-            <FormField label="Office end">
-              <Input
-                type="time"
-                value={form.officeEndTime}
-                onChange={(e) =>
-                  setForm({ ...form, officeEndTime: e.target.value })
-                }
-              />
-            </FormField>
-          </div>
-        </SectionBlock>
-
-        <SectionBlock title="Compensation">
-          <div className="grid gap-3 md:grid-cols-2">
-            <FormField label="Total salary (PKR)">
-              <Input
-                type="number"
-                min={0}
-                value={form.totalSalary}
-                onChange={(e) =>
-                  setForm(() => {
-                    const totalSalary = Number(e.target.value);
-                    const split = splitTotalSalary(totalSalary);
-                    return {
-                      ...form,
-                      totalSalary,
-                      basicSalary: split.basicSalary,
-                      allowances: split.allowances,
-                    };
-                  })
-                }
-              />
-            </FormField>
-            <FormField label="Basic salary (PKR)">
-              <Input
-                type="number"
-                value={form.basicSalary}
-                readOnly
-              />
-            </FormField>
-            <FormField label="Home rent (PKR)">
-              <Input
-                type="number"
-                value={allowanceBreakdown.homeRent}
-                readOnly
-              />
-            </FormField>
-            <FormField label="Utility bills (PKR)">
-              <Input
-                type="number"
-                value={allowanceBreakdown.utilityBills}
-                readOnly
-              />
-            </FormField>
-          </div>
-          <p className="mt-3 text-sm text-muted-foreground">
-            The total salary is split automatically into 50% basic salary,
-            25% home rent, and 25% utility bills.
-          </p>
-          <div className="mt-3 grid items-start gap-3 md:grid-cols-3">
-            <FormField label="Casual leave">
-              <Input
-                type="number"
-                min={0}
-                value={form.casualLeaveQuota}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    casualLeaveQuota: Number(e.target.value),
-                  })
-                }
-              />
-            </FormField>
-            <FormField label="Sick leave">
-              <Input
-                type="number"
-                min={0}
-                value={form.sickLeaveQuota}
-                onChange={(e) =>
-                  setForm({ ...form, sickLeaveQuota: Number(e.target.value) })
-                }
-              />
-            </FormField>
-            <FormField label="Annual leave">
-              <Input
-                type="number"
-                min={0}
-                value={form.annualLeaveQuota}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    annualLeaveQuota: Number(e.target.value),
-                  })
-                }
-              />
-            </FormField>
-          </div>
-          <div className="mt-3">
-            <FormField label="Provident Fund (% of basic, optional)">
-              <Input
-                type="number"
-                min={0}
-                step="0.1"
-                defaultValue={employee.providentFundPercent ?? ""}
-                placeholder="e.g. 8.33"
-                onBlur={(e) => {
-                  const v = e.target.value === "" ? null : Number(e.target.value);
-                  update.mutate(
-                    { id: employee.id, data: { providentFundPercent: v } },
-                    {
-                      onSuccess: () => {
-                        toast.success("PF % saved");
-                        qc.invalidateQueries({
-                          queryKey: getGetEmployeeQueryKey(employee.id),
-                        });
-                      },
-                    },
-                  );
-                }}
-              />
-            </FormField>
-          </div>
-        </SectionBlock>
-
-        <SectionBlock title="Primary bank details">
-          <p className="-mt-1 mb-4 text-sm text-muted-foreground">
-            The payroll account is always maintained with Bank Al Habib.
-          </p>
-          <div className="grid gap-3 md:grid-cols-2">
-            <FormField label="Account title">
-              <Input
-                value={form.primaryBankAccountTitle}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    primaryBankAccountTitle: e.target.value,
-                  })
-                }
-                placeholder="Muhammad Ali"
-              />
-            </FormField>
-            <FormField label="Account number">
-              <Input
-                value={form.primaryBankAccountNumber}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    primaryBankAccountNumber: e.target.value,
-                  })
-                }
-                placeholder="0035123456789"
-              />
-            </FormField>
-            <FormField label="Bank name">
-              <Input
-                value={PRIMARY_PAYROLL_BANK}
-                readOnly
-              />
-            </FormField>
-            <FormField label="IBAN">
-              <Input
-                value={form.primaryBankIban}
-                onChange={(e) =>
-                  setForm({ ...form, primaryBankIban: e.target.value })
-                }
-                placeholder="PK12BAGB0001234567890123"
-              />
-            </FormField>
-            <FormField label="Branch code">
-              <Input
-                value={form.primaryBankBranchCode}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    primaryBankBranchCode: e.target.value,
-                  })
-                }
-                placeholder="0123"
-              />
-            </FormField>
-          </div>
-        </SectionBlock>
-
-        <SectionBlock title="Secondary bank details">
-          <p className="-mt-1 mb-4 text-sm text-muted-foreground">
-            This account can belong to any bank and may be used before
-            probation completion if needed.
-          </p>
-          <div className="grid gap-3 md:grid-cols-2">
-            <FormField label="Account title">
-              <Input
-                value={form.secondaryBankAccountTitle}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    secondaryBankAccountTitle: e.target.value,
-                  })
-                }
-                placeholder="Muhammad Ali"
-              />
-            </FormField>
-            <FormField label="Account number">
-              <Input
-                value={form.secondaryBankAccountNumber}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    secondaryBankAccountNumber: e.target.value,
-                  })
-                }
-                placeholder="0035123456789"
-              />
-            </FormField>
-            <FormField label="Bank name">
-              <Input
-                value={form.secondaryBankName}
-                onChange={(e) =>
-                  setForm({ ...form, secondaryBankName: e.target.value })
-                }
-                placeholder="Meezan Bank"
-              />
-            </FormField>
-            <FormField label="IBAN">
-              <Input
-                value={form.secondaryBankIban}
-                onChange={(e) =>
-                  setForm({ ...form, secondaryBankIban: e.target.value })
-                }
-                placeholder="PK36MEZN0001234567890123"
-              />
-            </FormField>
-            <FormField label="Branch code">
-              <Input
-                value={form.secondaryBankBranchCode}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    secondaryBankBranchCode: e.target.value,
-                  })
-                }
-                placeholder="0123"
-              />
-            </FormField>
-          </div>
-        </SectionBlock>
-
-        <SectionBlock title="Background">
-          <div className="grid gap-3 md:grid-cols-2">
-            <FormField label="CNIC">
-              <Input
-                value={form.cnic}
-                onChange={(e) => setForm({ ...form, cnic: e.target.value })}
-                placeholder="XXXXX-XXXXXXX-X"
-              />
-            </FormField>
-            <FormField label="Emergency contact name">
-              <Input
-                value={form.emergencyContactName}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    emergencyContactName: e.target.value,
-                  })
-                }
-                placeholder="Muhammad Ali"
-              />
-            </FormField>
-            <FormField label="Emergency contact number">
-              <Input
-                value={form.emergencyContactNumber}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    emergencyContactNumber: e.target.value,
-                  })
-                }
-                placeholder="+923XXXXXXXXX"
-              />
-            </FormField>
-            <FormField label="Relation">
-              <Input
-                value={form.emergencyContactRelation}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    emergencyContactRelation: e.target.value,
-                  })
-                }
-                placeholder="e.g. Father"
-              />
-            </FormField>
-            <FormField label="Last qualification">
-              <Input
-                value={form.lastQualification}
-                onChange={(e) =>
-                  setForm({ ...form, lastQualification: e.target.value })
-                }
-                placeholder="e.g. BS Computer Science"
-              />
-            </FormField>
-            <DocumentUploader
-              label="Upload qualification"
-              uploadLabel="Uploading qualification..."
-              employeeId={employee.id}
-              currentUrl={form.qualificationDocumentUrl || null}
-              currentName={form.qualificationDocumentName || null}
-              payloadKeys={{
-                url: "qualificationDocumentUrl",
-                name: "qualificationDocumentName",
-              }}
-            />
-            <FormField label="Previous company">
-              <Input
-                value={form.previousCompany}
-                onChange={(e) =>
-                  setForm({ ...form, previousCompany: e.target.value })
-                }
-              />
-            </FormField>
-            <FormField label="Last pay (PKR)">
-              <Input
-                type="number"
-                min={0}
-                value={form.lastPay}
-                onChange={(e) => setForm({ ...form, lastPay: e.target.value })}
-                placeholder="e.g. 80000"
-              />
-            </FormField>
-            <DocumentUploader
-              label="Last 3 months payslip 1"
-              uploadLabel="Uploading payslip 1..."
-              employeeId={employee.id}
-              currentUrl={form.lastPayslipOneUrl || null}
-              currentName={form.lastPayslipOneName || null}
-              payloadKeys={{ url: "lastPayslipOneUrl", name: "lastPayslipOneName" }}
-            />
-            <DocumentUploader
-              label="Last 3 months payslip 2"
-              uploadLabel="Uploading payslip 2..."
-              employeeId={employee.id}
-              currentUrl={form.lastPayslipTwoUrl || null}
-              currentName={form.lastPayslipTwoName || null}
-              payloadKeys={{ url: "lastPayslipTwoUrl", name: "lastPayslipTwoName" }}
-            />
-            <DocumentUploader
-              label="Last 3 months payslip 3"
-              uploadLabel="Uploading payslip 3..."
-              employeeId={employee.id}
-              currentUrl={form.lastPayslipThreeUrl || null}
-              currentName={form.lastPayslipThreeName || null}
-              payloadKeys={{
-                url: "lastPayslipThreeUrl",
-                name: "lastPayslipThreeName",
-              }}
-            />
-            <FormField label="Address" className="md:col-span-2">
-              <Textarea
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                rows={2}
-              />
-            </FormField>
-            <FormField label="Notes" className="md:col-span-2">
-              <Textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                rows={2}
-                placeholder="Internal notes about this employee..."
-              />
-            </FormField>
-          </div>
-        </SectionBlock>
-        <div className="flex justify-end">
-          <Button type="submit" disabled={update.isPending}>
-            {update.isPending ? "Saving..." : "Save changes"}
-          </Button>
-        </div>
-      </form>
+      </ReadonlySection>
+    </div>
   );
 }
 
-function SectionBlock({
+function ReadonlySection({
   title,
   children,
 }: {
@@ -993,7 +455,7 @@ function SectionBlock({
 }) {
   return (
     <section className="rounded-xl border border-border bg-muted/20 p-4">
-      <p className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+      <p className="mb-4 text-sm font-semibold text-foreground">
         {title}
       </p>
       {children}
@@ -1001,19 +463,107 @@ function SectionBlock({
   );
 }
 
-function FormField({
-  label,
+function ReadonlyGrid({
   children,
+  columns = "two",
+}: {
+  children: React.ReactNode;
+  columns?: "two" | "three";
+}) {
+  return (
+    <div
+      className={cn(
+        "grid gap-3",
+        columns === "three" ? "md:grid-cols-3" : "md:grid-cols-2",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ReadonlyField({
+  label,
+  value,
   className,
+  multiline = false,
 }: {
   label: string;
-  children: React.ReactNode;
+  value: string | number | null | undefined;
   className?: string;
+  multiline?: boolean;
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-xs">{label}</Label>
-      {children}
+      <Label className="text-sm font-medium text-foreground">{label}</Label>
+      <div
+        className={cn(
+          "min-h-11 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground",
+          multiline && "min-h-20 whitespace-pre-wrap",
+        )}
+      >
+        {value !== null &&
+        value !== undefined &&
+        String(value).trim().length > 0
+          ? value
+          : "—"}
+      </div>
+    </div>
+  );
+}
+
+function ReadonlyDocumentField({
+  label,
+  url,
+  name,
+}: {
+  label: string;
+  url?: string | null;
+  name?: string | null;
+}) {
+  const fileName = name || "Attachment";
+  const normalizedUrl = url ?? null;
+  const isImage = normalizedUrl
+    ? /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(normalizedUrl)
+    : false;
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium text-foreground">{label}</Label>
+      <div className="rounded-md border border-border bg-background p-3 text-sm">
+        {normalizedUrl ? (
+          <div className="space-y-3">
+            {isImage ? (
+              <a href={normalizedUrl} target="_blank" rel="noreferrer">
+                <img
+                  src={normalizedUrl}
+                  alt={fileName}
+                  className="h-40 w-full rounded-md border border-border object-cover"
+                />
+              </a>
+            ) : (
+              <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+                Attachment available
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              <p className="truncate text-sm font-medium text-foreground">
+                {fileName}
+              </p>
+              <a
+                href={normalizedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 text-sm font-medium text-primary hover:underline"
+              >
+                Open
+              </a>
+            </div>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -1254,7 +804,7 @@ function ProvidentFundTab({
   return (
     <ProvidentFundLedgerCard
       title="Provident fund"
-      description="PF is tracked separately from salary. Contributions start after probation and withdrawal requests unlock after 1 year."
+      description="PF is tracked separately from salary. Contributions start after probation, and the company matches each employee contribution."
       summary={summary}
       emptyText="No PF contributions or withdrawals recorded for this employee yet."
     />

@@ -68,7 +68,7 @@ const DAY_BG: Record<string, string> = {
     "border-purple-200 hover:border-purple-300 bg-[linear-gradient(135deg,#faf5ff_0%,#faf5ff_50%,#e9d5ff_50%,#e9d5ff_100%)] hover:bg-[linear-gradient(135deg,#f5edff_0%,#f5edff_50%,#ddc7ff_50%,#ddc7ff_100%)]",
   remote_work: "bg-teal-50 hover:bg-teal-100 border-teal-200",
   weekend: "bg-slate-50 border-slate-200 text-slate-400",
-  holiday: "bg-indigo-50 border-indigo-200 text-indigo-500",
+  holiday: "bg-indigo-50 hover:bg-indigo-100 border-indigo-300 text-indigo-600",
   future: "bg-white border-dashed border-slate-200 text-slate-300",
   none: "bg-white border-dashed border-slate-200 text-slate-300",
 };

@@ -8,12 +8,15 @@ import {
   salaryEventsTable,
   usersTable,
 } from "@workspace/db";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { parseDate, ymd } from "../lib/dates";
 import {
+  attendanceTodayYmd,
+  attendanceCandidateShiftDates,
   normalizeAttendanceStatus,
-  resolveAttendanceShiftDate,
+  selectActiveAttendanceRecord,
+  shiftDateByDays,
 } from "../lib/attendance";
 
 const router: IRouter = Router();
@@ -23,13 +26,20 @@ router.get(
   requireAuth(["admin", "hr"]),
   async (_req, res) => {
     const allEmps = await db.select().from(employeesTable);
-    const today = ymd(new Date());
+    const now = new Date();
+    const today = attendanceTodayYmd(now);
+    const summaryDates = [today, shiftDateByDays(today, -1)];
 
     const attRecords = await db
       .select()
       .from(attendanceTable)
-      .where(eq(attendanceTable.date, today));
-    const attMap = new Map(attRecords.map((r) => [r.employeeId, r]));
+      .where(inArray(attendanceTable.date, summaryDates));
+    const attMap = new Map<number, Array<typeof attendanceTable.$inferSelect>>();
+    for (const record of attRecords) {
+      const employeeRecords = attMap.get(record.employeeId) ?? [];
+      employeeRecords.push(record);
+      attMap.set(record.employeeId, employeeRecords);
+    }
     let present = 0;
     let late = 0;
     let absent = 0;
@@ -37,7 +47,7 @@ router.get(
     let halfDay = 0;
     let remoteWork = 0;
     for (const e of allEmps) {
-      const r = attMap.get(e.id);
+      const r = selectActiveAttendanceRecord(attMap.get(e.id) ?? [], e, now);
       if (!r) absent += 1;
       else {
         const normalized = normalizeAttendanceStatus(r, e);
@@ -61,9 +71,9 @@ router.get(
       .where(eq(generalRequestsTable.status, "pending"));
 
     // Upcoming birthdays/anniversaries (next 30 days)
-    const now = new Date();
-    const inXDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const year = now.getUTCFullYear();
+    const calendarNow = new Date();
+    const inXDays = new Date(calendarNow.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const year = calendarNow.getUTCFullYear();
     const upcomingBirthdays: Array<{
       employeeId: number;
       employeeName: string;
@@ -82,7 +92,7 @@ router.get(
         let bday = new Date(
           Date.UTC(year, dob.getUTCMonth(), dob.getUTCDate()),
         );
-        if (bday < now)
+        if (bday < calendarNow)
           bday = new Date(
             Date.UTC(year + 1, dob.getUTCMonth(), dob.getUTCDate()),
           );
@@ -99,7 +109,7 @@ router.get(
       let ann = new Date(
         Date.UTC(year, join.getUTCMonth(), join.getUTCDate()),
       );
-      if (ann < now)
+      if (ann < calendarNow)
         ann = new Date(
           Date.UTC(year + 1, join.getUTCMonth(), join.getUTCDate()),
         );
@@ -147,7 +157,7 @@ router.get(
 
 router.get(
   "/dashboard/employee",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -200,18 +210,18 @@ router.get(
     };
 
     const now = new Date();
-    const today = resolveAttendanceShiftDate(e, now);
+    const candidateDates = attendanceCandidateShiftDates(e, now);
     const todayRows = await db
       .select()
       .from(attendanceTable)
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, today),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
-    const todayRec = todayRows[0];
+      .orderBy(attendanceTable.date);
+    const todayRec = selectActiveAttendanceRecord(todayRows, e, now);
     const activePauseMinutes = todayRec?.pausedAt
       ? Math.max(0, Math.floor((now.getTime() - todayRec.pausedAt.getTime()) / 60000))
       : 0;

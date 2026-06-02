@@ -3,8 +3,7 @@ import {
   employeesTable,
   usersTable,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { hashPassword } from "./auth";
+import { hashPassword, getUserByEmail } from "./auth";
 import { logger } from "./logger";
 import {
   getBootstrapAdminConfig,
@@ -21,13 +20,9 @@ export async function ensureSeed(): Promise<void> {
       "Skipping bootstrap admin seed because HRM_BOOTSTRAP_ADMIN_EMAIL/PASSWORD are not configured",
     );
   } else {
-  const existingAdmin = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, adminConfig.email))
-    .limit(1);
+  const existingAdmin = await getUserByEmail(adminConfig.email);
 
-  if (!existingAdmin.length) {
+  if (!existingAdmin) {
     const hash = await hashPassword(adminConfig.password);
     await db.insert(usersTable).values({
       email: adminConfig.email,

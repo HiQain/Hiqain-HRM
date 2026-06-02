@@ -87,8 +87,12 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export function MyRequestsPage() {
+  const { data: me } = useGetMe();
   const [tab, setTab] = useState<FilterType>("all");
-  const params = tab === "all" ? undefined : ({ type: tab } as any);
+  const params =
+    tab === "all"
+      ? (me?.role === "hr" ? ({ self: "1" } as any) : undefined)
+      : ({ type: tab, ...(me?.role === "hr" ? { self: "1" } : {}) } as any);
   const queryKey = getListGeneralRequestsQueryKey(params);
   const { data, isLoading } = useListGeneralRequests(params, {
     query: { queryKey },
@@ -325,10 +329,13 @@ function RequestDialog({
     },
   });
   const { data: pfRequests } = useListGeneralRequests(
-    { type: "pf_withdrawal" as any },
+    { type: "pf_withdrawal" as any, ...(me?.role === "hr" ? { self: "1" } : {}) } as any,
     {
       query: {
-        queryKey: getListGeneralRequestsQueryKey({ type: "pf_withdrawal" as any }),
+        queryKey: getListGeneralRequestsQueryKey({
+          type: "pf_withdrawal" as any,
+          ...(me?.role === "hr" ? { self: "1" } : {}),
+        } as any),
         enabled: open && employeeId > 0,
       },
     },
@@ -612,7 +619,7 @@ function RequestDialog({
                   <span className="font-semibold">
                     {formatCurrency(pfSummary.availableToRequest)}
                   </span>
-                  . PF starts after probation and withdrawal is allowed after 1 year of service.
+                  . PF starts after probation, company matches each employee contribution, and withdrawal is allowed after 1 year of service.
                 </>
               ) : (
                 <>

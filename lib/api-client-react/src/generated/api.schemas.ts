@@ -36,6 +36,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role: AuthUserRole;
+  isActive?: boolean;
   mustChangePassword: boolean;
   employeeId?: number | null;
 }
@@ -63,6 +64,7 @@ export interface Employee {
   userId?: number;
   name: string;
   email: string;
+  isActive?: boolean | null;
   personalEmail?: string | null;
   phone?: string | null;
   position?: string | null;
@@ -87,6 +89,9 @@ export interface Employee {
   avatarUrl?: string | null;
   employeeCode?: string | null;
   maritalStatus?: string | null;
+  wifeName?: string | null;
+  wifeDateOfBirth?: string | null;
+  kidsCount?: number | null;
   leftDate?: string | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;
@@ -198,6 +203,7 @@ export const CreateEmployeeRequestPositionType = {
 export interface CreateEmployeeRequest {
   name: string;
   email: string;
+  isActive?: boolean | null;
   /** @minLength 6 */
   password: string;
   /** Defaults to employee. Admin members get full HRM rights; HR members get all admin rights except destructive deletes and creating other admins. */
@@ -228,6 +234,9 @@ export interface CreateEmployeeRequest {
   address?: string | null;
   employeeCode?: string | null;
   maritalStatus?: string | null;
+  wifeName?: string | null;
+  wifeDateOfBirth?: string | null;
+  kidsCount?: number | null;
   leftDate?: string | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;
@@ -286,6 +295,7 @@ export const UpdateEmployeeRequestPositionType = {
 
 export interface UpdateEmployeeRequest {
   name?: string;
+  isActive?: boolean | null;
   personalEmail?: string | null;
   phone?: string | null;
   position?: string | null;
@@ -312,6 +322,9 @@ export interface UpdateEmployeeRequest {
   address?: string | null;
   employeeCode?: string | null;
   maritalStatus?: string | null;
+  wifeName?: string | null;
+  wifeDateOfBirth?: string | null;
+  kidsCount?: number | null;
   leftDate?: string | null;
   emergencyContactName?: string | null;
   emergencyContactNumber?: string | null;

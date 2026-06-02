@@ -2,11 +2,13 @@ import { useMemo } from "react";
 import {
   useGetMe,
   useGetEmployee,
+  useGetSettings,
   useListSalaryComponents,
   useGetMyLoans,
   useGetMyLoanEligibility,
   useGetMyPayslips,
   getGetEmployeeQueryKey,
+  getGetSettingsQueryKey,
   getListSalaryComponentsQueryKey,
   getGetMyLoansQueryKey,
   getGetMyLoanEligibilityQueryKey,
@@ -30,6 +32,17 @@ import {
   getDefaultAllowanceBreakdown,
   isManualTaxComponent,
 } from "@/lib/salary";
+
+function getDisplayedPayrollTax(
+  deductions: Array<{ label: string; amount: number }> | undefined,
+  fallbackTax: number,
+) {
+  const matchedTax = deductions?.find((line) => /\bpayroll\s*tax\b/i.test(line.label));
+  if (matchedTax) return matchedTax.amount;
+
+  const genericTax = deductions?.find((line) => /\btax\b/i.test(line.label));
+  return genericTax?.amount ?? fallbackTax;
+}
 
 export function MySalaryPage() {
   const { data: me } = useGetMe();
@@ -62,6 +75,9 @@ export function MySalaryPage() {
   const { data: payslips } = useGetMyPayslips({
     query: { queryKey: getGetMyPayslipsQueryKey(), enabled: employeeId > 0 },
   });
+  const { data: settings } = useGetSettings({
+    query: { queryKey: getGetSettingsQueryKey(), enabled: employeeId > 0 },
+  });
 
   if (empLoading || !emp) {
     return (
@@ -91,17 +107,20 @@ export function MySalaryPage() {
   const latestPayslip = payslips?.[0];
   const defaultAllowances = emp.allowances ?? 0;
   const totalSalary = emp.basicSalary + defaultAllowances;
+  const effectiveProvidentFundPercent =
+    emp.providentFundPercent ?? Number(settings?.defaultProvidentFundPercent ?? 0);
   const salaryPreview = computeSalaryStructurePreview({
     basicSalary: emp.basicSalary,
     defaultAllowances,
     components: visibleComponents,
-    providentFundPercent: emp.providentFundPercent,
+    providentFundPercent: effectiveProvidentFundPercent,
     month: currentMonth,
     year: currentYear,
   });
-  const latestPayrollTax =
-    latestPayslip?.salaryBreakdown?.deductions?.find((line) => line.label === "Payroll Tax")
-      ?.amount ?? null;
+  const latestPayrollTax = getDisplayedPayrollTax(
+    latestPayslip?.salaryBreakdown?.deductions,
+    salaryPreview.tax,
+  );
   const currentProjectedTax = salaryPreview.tax;
   const latestLatePenalty =
     latestPayslip && latestPayslip.totalWorkingDays > 0
@@ -158,15 +177,15 @@ export function MySalaryPage() {
           icon={<Receipt className="h-4 w-4" />}
           label="PF deduction"
           value={
-            emp.providentFundPercent != null && emp.providentFundPercent > 0
-              ? `${emp.providentFundPercent}% of basic`
+            effectiveProvidentFundPercent > 0
+              ? `${effectiveProvidentFundPercent}% of basic`
               : "—"
           }
         />
         <StatCard
           icon={<Landmark className="h-4 w-4" />}
           label="Tax"
-          value={formatCurrency(currentProjectedTax)}
+          value={formatCurrency(latestPayslip ? latestPayrollTax : currentProjectedTax)}
         />
       </div>
 
@@ -205,13 +224,13 @@ export function MySalaryPage() {
             />
             <PayrollPreviewCard
               label="Payroll tax"
-              value={formatCurrency(currentProjectedTax)}
+              value={formatCurrency(latestPayrollTax)}
               tone="down"
             />
             <PayrollPreviewCard
               label="PF deduction"
               value={formatCurrency(
-                ((emp.providentFundPercent ?? 0) / 100) * emp.basicSalary,
+                (effectiveProvidentFundPercent / 100) * emp.basicSalary,
               )}
               tone="down"
             />
@@ -246,11 +265,7 @@ export function MySalaryPage() {
             <StatCard
               icon={<Receipt className="h-4 w-4" />}
               label="Tax"
-              value={formatCurrency(
-                latestPayslip.salaryBreakdown?.deductions?.find(
-                  (line) => line.label === "Payroll Tax",
-                )?.amount ?? 0,
-              )}
+              value={formatCurrency(latestPayrollTax)}
             />
             <StatCard
               icon={<Wallet className="h-4 w-4" />}

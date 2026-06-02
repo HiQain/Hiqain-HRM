@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
+import { notifyEmployeeUser } from "../lib/notifications";
 import { addMonths, parseDate } from "../lib/dates";
 import { normalizeAttendanceStatus } from "../lib/attendance";
 import { ymd } from "../lib/dates";
@@ -22,7 +23,10 @@ import {
   isPayrollOffDay,
   toHolidaySet,
 } from "../lib/payroll";
-import { isProvidentFundPolicyActiveForPeriod } from "../lib/provident-fund-policy";
+import {
+  isProvidentFundPolicyActiveForPeriod,
+  resolveProvidentFundPercent,
+} from "../lib/provident-fund-policy";
 import { resolveCompensationForDate } from "../lib/salary";
 import { getSettings } from "./settings";
 
@@ -82,6 +86,7 @@ function buildPayslipBreakdown(
   payslip: typeof payslipsTable.$inferSelect,
   employee: typeof employeesTable.$inferSelect,
   components: Array<typeof salaryComponentsTable.$inferSelect>,
+  defaultProvidentFundPercent: number,
 ) {
   const basicSalary = Number(payslip.basicSalary);
   const defaultAllowances = Number(payslip.allowances);
@@ -150,11 +155,15 @@ function buildPayslipBreakdown(
   const additionalBonus = roundAmount(Number(payslip.bonus) - commissionTotal);
   earnings.push({ label: "Additional Bonus", amount: additionalBonus });
 
+  const effectiveProvidentFundPercent = resolveProvidentFundPercent(
+    employee.providentFundPercent,
+    defaultProvidentFundPercent,
+  );
   const providentFundFromProfile =
     shouldApplyProvidentFund &&
     providentFundFromComponent <= 0 &&
-    employee.providentFundPercent != null
-      ? roundAmount((Number(employee.providentFundPercent) / 100) * basicSalary)
+    effectiveProvidentFundPercent > 0
+      ? roundAmount((effectiveProvidentFundPercent / 100) * basicSalary)
       : 0;
   const providentFundAmount = roundAmount(
     providentFundFromComponent > 0
@@ -406,12 +415,17 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
     }
   }
 
-  // PF from employee.providentFundPercent (if no PF component already set)
+  const effectiveProvidentFundPercent = resolveProvidentFundPercent(
+    emp.providentFundPercent,
+    settings.defaultProvidentFundPercent,
+  );
+
+  // PF from employee.providentFundPercent or settings default (if no PF component already set)
   const pfFromProfile =
     shouldApplyProvidentFund &&
     providentFundFromComponent <= 0 &&
-    emp.providentFundPercent != null
-      ? (Number(emp.providentFundPercent) / 100) * baseDesignation
+    effectiveProvidentFundPercent > 0
+      ? (effectiveProvidentFundPercent / 100) * baseDesignation
       : 0;
   const bonus =
     eventBonus + componentBonus + nonTaxableExtraAmount + Number(bodyBonus ?? 0);
@@ -616,12 +630,23 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
     emp.name,
     email,
     emp.position,
-    buildPayslipBreakdown(payslip, emp, components),
+    buildPayslipBreakdown(
+      payslip,
+      emp,
+      components,
+      Number(settings.defaultProvidentFundPercent),
+    ),
   );
+  await notifyEmployeeUser(employeeId, {
+    type: "payslip",
+    title: "Payslip generated",
+    message: `Your payslip for ${month}/${year} is now available.`,
+    href: "/employee/payslips",
+  });
   res.status(201).json(out);
 });
 
-router.get("/payslips/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.get("/payslips/me", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.json([]);
@@ -638,6 +663,7 @@ router.get("/payslips/me", requireAuth(["employee"]), async (req, res): Promise<
     .select()
     .from(salaryComponentsTable)
     .where(eq(salaryComponentsTable.employeeId, user.employeeId));
+  const settings = await getSettings();
   const rows = await db
     .select()
     .from(payslipsTable)
@@ -650,7 +676,12 @@ router.get("/payslips/me", requireAuth(["employee"]), async (req, res): Promise<
         emp.employee.name,
         emp.email,
         emp.employee.position,
-        buildPayslipBreakdown(p, emp.employee, components),
+        buildPayslipBreakdown(
+          p,
+          emp.employee,
+          components,
+          Number(settings.defaultProvidentFundPercent),
+        ),
       ),
     ),
   );
@@ -676,6 +707,7 @@ router.get(
       .select()
       .from(salaryComponentsTable)
       .where(eq(salaryComponentsTable.employeeId, id));
+    const settings = await getSettings();
     const rows = await db
       .select()
       .from(payslipsTable)
@@ -688,7 +720,12 @@ router.get(
           emp.employee.name,
           emp.email,
           emp.employee.position,
-          buildPayslipBreakdown(p, emp.employee, components),
+          buildPayslipBreakdown(
+            p,
+            emp.employee,
+            components,
+            Number(settings.defaultProvidentFundPercent),
+          ),
         ),
       ),
     );
@@ -722,13 +759,19 @@ router.get("/payslips/:id", requireAuth(), async (req, res): Promise<void> => {
     .select()
     .from(salaryComponentsTable)
     .where(eq(salaryComponentsTable.employeeId, row.p.employeeId));
+  const settings = await getSettings();
   res.json(
     serialize(
       row.p,
       row.employee.name,
       row.email,
       row.employee.position,
-      buildPayslipBreakdown(row.p, row.employee, components),
+      buildPayslipBreakdown(
+        row.p,
+        row.employee,
+        components,
+        Number(settings.defaultProvidentFundPercent),
+      ),
     ),
   );
 });

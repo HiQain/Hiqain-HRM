@@ -3,7 +3,7 @@ import { Paperclip, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, resolveAssetUrl } from "@/lib/api";
 
 export interface Attachment {
   url: string;
@@ -63,7 +63,7 @@ export function AttachmentField({
       {value ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
           <a
-            href={value.url}
+            href={resolveAssetUrl(value.url)}
             target="_blank"
             rel="noreferrer"
             className="flex min-w-0 items-center gap-2 text-primary hover:underline"

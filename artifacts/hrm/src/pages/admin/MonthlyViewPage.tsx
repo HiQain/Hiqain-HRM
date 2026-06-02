@@ -112,6 +112,7 @@ export function AdminMonthlyViewPage() {
   const [monthValue, setMonthValue] = useState(currentMonthValue);
   const [attendanceScrollDate, setAttendanceScrollDate] = useState<string | null>(null);
   const attendanceScrollRef = useRef<HTMLDivElement | null>(null);
+  const today = currentDateValue();
   const { month, year } = useMemo(() => toMonthYear(monthValue), [monthValue]);
   const params = useMemo(() => ({ month, year }), [month, year]);
   const { data, isLoading } = useGetMonthlyAdminView(params, {
@@ -156,7 +157,7 @@ export function AdminMonthlyViewPage() {
               type="month"
               value={monthValue}
               onChange={(e) => setMonthValue(e.target.value)}
-              className="w-40 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
+              className="w-40 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
             />
           </div>
         }
@@ -171,13 +172,13 @@ export function AdminMonthlyViewPage() {
           <TabsList className="grid h-auto w-full max-w-md grid-cols-2 rounded-2xl bg-slate-100 p-1">
             <TabsTrigger
               value="attendance"
-              className="rounded-xl py-3 text-base data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="rounded-xl py-3 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm"
             >
               Attendance
             </TabsTrigger>
             <TabsTrigger
               value="salary"
-              className="rounded-xl py-3 text-base data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="rounded-xl py-3 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm"
             >
               Salary
             </TabsTrigger>
@@ -205,6 +206,7 @@ export function AdminMonthlyViewPage() {
             data={data}
             isLoading={isLoading}
             scrollContainerRef={attendanceScrollRef}
+            today={today}
           />
         </TabsContent>
 
@@ -220,10 +222,12 @@ function AttendanceSheet({
   data,
   isLoading,
   scrollContainerRef,
+  today,
 }: {
   data: GetMonthlyAdminViewQueryResult | undefined;
   isLoading: boolean;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
+  today: string;
 }) {
   return (
     <div className="max-w-full overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
@@ -237,7 +241,7 @@ function AttendanceSheet({
               <tr className="bg-slate-50">
                 <th
                   className={cn(
-                    "sticky border border-slate-200 bg-slate-50 px-4 py-3 text-left text-base font-semibold text-slate-600",
+                    "sticky border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-600",
                     ATTENDANCE_WIDTHS.doj,
                   )}
                   style={stickyCell(ATTENDANCE_STICKY_LEFT.doj, 43)}
@@ -246,7 +250,7 @@ function AttendanceSheet({
                 </th>
                 <th
                   className={cn(
-                    "sticky border border-slate-200 bg-slate-50 px-4 py-3 text-left text-base font-semibold text-slate-600",
+                    "sticky border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-600",
                     ATTENDANCE_WIDTHS.employee,
                   )}
                   style={stickyCell(ATTENDANCE_STICKY_LEFT.employee, 42)}
@@ -255,52 +259,67 @@ function AttendanceSheet({
                 </th>
                 <th
                   className={cn(
-                    "sticky border border-r-2 border-slate-300 bg-slate-50 px-4 py-3 text-left text-base font-semibold text-slate-600 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]",
+                    "sticky border border-r-2 border-slate-300 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-600 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]",
                     ATTENDANCE_WIDTHS.designation,
                   )}
                   style={stickyCell(ATTENDANCE_STICKY_LEFT.designation, 41)}
                 >
                   Designation
                 </th>
-                <th className="min-w-[150px] border border-slate-200 px-4 py-3 text-left text-base font-semibold text-slate-600">
+                <th className="min-w-[150px] border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-600">
                   Probation End
                 </th>
-                <th className="min-w-[110px] border border-slate-200 px-4 py-3 text-left text-base font-semibold text-slate-600">
+                <th className="min-w-[110px] border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-600">
                   Status
                 </th>
-                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Annual
                 </th>
-                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Casual
                 </th>
-                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Sick
                 </th>
-                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Absent
                 </th>
-                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[82px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Late
                 </th>
-                <th className="min-w-[100px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[100px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Total Offs
                 </th>
                 {(data?.days ?? []).map((day) => {
                   const header = dayHeaderLabel(day.date);
+                  const isToday = day.date === today;
                   return (
                     <th
                       key={day.date}
                       data-day-date={day.date}
                       className={cn(
                         "min-w-[110px] border border-slate-200 px-2 py-2.5 text-center align-top",
-                        day.isOffDay ? "bg-amber-50/50" : "bg-slate-50",
+                        isToday
+                          ? "bg-blue-100 ring-2 ring-inset ring-blue-400"
+                          : day.isOffDay
+                            ? "bg-amber-50/50"
+                            : "bg-slate-50",
                       )}
                     >
-                      <div className="text-[15px] font-semibold leading-none text-slate-700">
+                      <div
+                        className={cn(
+                          "text-sm font-semibold leading-none text-slate-700",
+                          isToday && "text-blue-800",
+                        )}
+                      >
                         {header.shortDay}
                       </div>
-                      <div className="mt-2 text-[13px] leading-snug text-slate-500">
+                      <div
+                        className={cn(
+                          "mt-2 text-xs leading-snug text-slate-500",
+                          isToday && "font-semibold text-blue-700",
+                        )}
+                      >
                         {header.shortDate}
                       </div>
                     </th>
@@ -377,22 +396,22 @@ function AttendanceSheet({
                         {row.employmentStatus === "left" ? "Left" : "Active"}
                       </Badge>
                     </td>
-                    <td className="border border-slate-200 px-2 py-2.5 text-center text-lg text-slate-800">
+                    <td className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800">
                       {row.annualLeaves}
                     </td>
-                    <td className="border border-slate-200 px-2 py-2.5 text-center text-lg text-slate-800">
+                    <td className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800">
                       {row.casualLeaves}
                     </td>
-                    <td className="border border-slate-200 px-2 py-2.5 text-center text-lg text-slate-800">
+                    <td className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800">
                       {row.sickLeaves}
                     </td>
-                    <td className="border border-slate-200 px-2 py-2.5 text-center text-lg text-slate-800">
+                    <td className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800">
                       {row.absentDays}
                     </td>
-                    <td className="border border-slate-200 px-2 py-2.5 text-center text-lg text-slate-800">
+                    <td className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800">
                       {row.lateDays}
                     </td>
-                    <td className="border border-slate-200 px-2 py-2.5 text-center text-lg text-slate-800">
+                    <td className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800">
                       {row.totalOffDays}
                     </td>
                     {row.dayCells.map((cell) => (
@@ -400,6 +419,7 @@ function AttendanceSheet({
                         key={cell.date}
                         className={cn(
                           "border border-slate-200 px-2 py-2 text-center",
+                          cell.date === today && "bg-blue-50",
                           cell.isOffDay && cell.status !== "future" && "bg-amber-50/30",
                         )}
                         title={[
@@ -453,7 +473,7 @@ function SalarySheet({
               <tr className="bg-slate-50">
                 <th
                   className={cn(
-                    "sticky border border-slate-200 bg-slate-50 px-4 py-3 text-left text-base font-semibold text-slate-600",
+                    "sticky border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-600",
                     SALARY_WIDTHS.doj,
                   )}
                   style={stickyCell(SALARY_STICKY_LEFT.doj, 43)}
@@ -462,7 +482,7 @@ function SalarySheet({
                 </th>
                 <th
                   className={cn(
-                    "sticky border border-slate-200 bg-slate-50 px-4 py-3 text-left text-base font-semibold text-slate-600",
+                    "sticky border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-600",
                     SALARY_WIDTHS.employee,
                   )}
                   style={stickyCell(SALARY_STICKY_LEFT.employee, 42)}
@@ -471,62 +491,62 @@ function SalarySheet({
                 </th>
                 <th
                   className={cn(
-                    "sticky border border-r-2 border-slate-300 bg-slate-50 px-4 py-3 text-left text-base font-semibold text-slate-600 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]",
+                    "sticky border border-r-2 border-slate-300 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-600 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]",
                     SALARY_WIDTHS.designation,
                   )}
                   style={stickyCell(SALARY_STICKY_LEFT.designation, 41)}
                 >
                   Designation
                 </th>
-                <th className="min-w-[140px] border border-slate-200 px-4 py-3 text-left text-base font-semibold text-slate-600">
+                <th className="min-w-[140px] border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-600">
                   Department
                 </th>
-                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-left text-base font-semibold text-slate-600">
+                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-600">
                   Payroll
                 </th>
-                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-right text-base font-semibold text-slate-600">
+                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-right text-sm font-semibold text-slate-600">
                   Basic
                 </th>
-                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-right text-base font-semibold text-slate-600">
+                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-right text-sm font-semibold text-slate-600">
                   Allowances
                 </th>
-                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-right text-base font-semibold text-slate-600">
+                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-right text-sm font-semibold text-slate-600">
                   Gross
                 </th>
-                <th className="min-w-[95px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[95px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Working
                 </th>
-                <th className="min-w-[90px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[90px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Present
                 </th>
-                <th className="min-w-[90px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[90px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Paid Leave
                 </th>
-                <th className="min-w-[90px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[90px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Absent
                 </th>
-                <th className="min-w-[80px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[80px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Late
                 </th>
-                <th className="min-w-[120px] border border-slate-200 px-3 py-3 text-center text-base font-semibold text-slate-600">
+                <th className="min-w-[120px] border border-slate-200 px-3 py-3 text-center text-sm font-semibold text-slate-600">
                   Late Penalty
                 </th>
-                <th className="min-w-[110px] border border-slate-200 px-4 py-3 text-right text-base font-semibold text-slate-600">
+                <th className="min-w-[110px] border border-slate-200 px-4 py-3 text-right text-sm font-semibold text-slate-600">
                   Bonus
                 </th>
-                <th className="min-w-[130px] border border-slate-200 px-4 py-3 text-right text-base font-semibold text-slate-600">
+                <th className="min-w-[130px] border border-slate-200 px-4 py-3 text-right text-sm font-semibold text-slate-600">
                   Loan Deduction
                 </th>
-                <th className="min-w-[140px] border border-slate-200 px-4 py-3 text-right text-base font-semibold text-slate-600">
+                <th className="min-w-[140px] border border-slate-200 px-4 py-3 text-right text-sm font-semibold text-slate-600">
                   Other Deductions
                 </th>
-                <th className="min-w-[100px] border border-slate-200 px-4 py-3 text-right text-base font-semibold text-slate-600">
+                <th className="min-w-[100px] border border-slate-200 px-4 py-3 text-right text-sm font-semibold text-slate-600">
                   Tax
                 </th>
-                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-right text-base font-semibold text-slate-600">
+                <th className="min-w-[120px] border border-slate-200 px-4 py-3 text-right text-sm font-semibold text-slate-600">
                   Net Salary
                 </th>
-                <th className="min-w-[150px] border border-slate-200 px-4 py-3 text-left text-base font-semibold text-slate-600">
+                <th className="min-w-[150px] border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-600">
                   Generated
                 </th>
               </tr>

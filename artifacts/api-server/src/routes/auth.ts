@@ -3,14 +3,17 @@ import {
   LoginBody,
   ChangePasswordBody,
 } from "@workspace/api-zod";
-import { db, usersTable, pool } from "@workspace/db";
+import { db, pool, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   getSessionUser,
+  getUserByEmail,
   hashPassword,
   requireAuth,
+  toBooleanFlag,
   verifyPassword,
 } from "../lib/auth";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -21,14 +24,13 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
   const { email, password } = parsed.data;
-  const rows = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, email.toLowerCase()))
-    .limit(1);
-  const user = rows[0];
+  const user = await getUserByEmail(email);
   if (!user) {
     res.status(401).json({ message: "Invalid email or password" });
+    return;
+  }
+  if (!user.isActive) {
+    res.status(403).json({ message: "This account is deactivated" });
     return;
   }
   const ok = await verifyPassword(password, user.passwordHash);
@@ -78,7 +80,7 @@ router.post("/auth/change-password", requireAuth(), async (req, res): Promise<vo
     return;
   }
 
-  if (!user.mustChangePassword) {
+  if (!toBooleanFlag(user.mustChangePassword)) {
     if (!parsed.data.currentPassword) {
       res
         .status(400)
@@ -105,12 +107,19 @@ router.post("/auth/change-password", requireAuth(), async (req, res): Promise<vo
   // / browser they were logged in on is signed out. Keep the current session
   // (where the password change happened) so the user stays signed in here.
   const currentSid = req.sessionID;
-  await pool.execute(
-    `DELETE FROM user_sessions
-     WHERE JSON_UNQUOTE(JSON_EXTRACT(CAST(sess AS JSON), '$.userId')) = ?
-       AND sid <> ?`,
-    [String(userId), currentSid],
-  );
+  try {
+    await pool.execute(
+      `DELETE FROM user_sessions
+       WHERE JSON_UNQUOTE(JSON_EXTRACT(CAST(sess AS JSON), '$.userId')) = ?
+         AND sid <> ?`,
+      [String(userId), currentSid],
+    );
+  } catch (error) {
+    logger.warn(
+      { err: error, userId },
+      "Could not clear other sessions after password change",
+    );
+  }
 
   res.json({ success: true });
 });

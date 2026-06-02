@@ -9,6 +9,8 @@ export type ProvidentFundLedgerEntry = {
   amount: number;
   effectiveAmount: number;
   balance: number;
+  employeeAmount?: number;
+  employerAmount?: number;
   detail?: string;
 };
 
@@ -59,6 +61,10 @@ function getPfAmountFromPayslip(payslip: Payslip) {
       .filter((line) => /provident fund/i.test(line.label))
       .reduce((sum, line) => sum + Number(line.amount ?? 0), 0),
   );
+}
+
+function getMatchedContributionAmount(employeeProvidentFundAmount: number) {
+  return round2(employeeProvidentFundAmount * 2);
 }
 
 function isContributionEligibleForBalance(
@@ -118,10 +124,12 @@ export function buildProvidentFundSummary(
       label: `PF contribution · ${payslip.month}/${payslip.year}`,
       kind: "contribution" as const,
       status: "approved" as const,
-      amount,
-      effectiveAmount: amount,
+      amount: getMatchedContributionAmount(amount),
+      effectiveAmount: getMatchedContributionAmount(amount),
       balance: 0,
-      detail: `Generated with payslip for ${payslip.month}/${payslip.year}`,
+      employeeAmount: amount,
+      employerAmount: amount,
+      detail: `Employee ${round2(amount)} + company ${round2(amount)} for ${payslip.month}/${payslip.year}`,
     }));
 
   const withdrawals = requests

@@ -1,0 +1,20 @@
+apps:
+- name: life.hiqain.com
+  log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+  cwd: /home/hiqain/life.hiqain.com/hrm-app/
+  script: "npm"
+  args: "run start"
+  interpreter: "/usr/bin/node"
+  env:
+    NODE_ENV: "production"
+    PORT: "3084"
+    MYSQL_HOST: "localhost"
+    MYSQL_PORT: "3306"
+    MYSQL_DATABASE: "hiqain_hrm_db"
+    MYSQL_USER: "hiqain_hrm_db_user"
+    MYSQL_PASSWORD: "GUwm18a8C9pjT"
+    DATABASE_URL: "mysql://hiqain_hrm_db_user:GUwm18a8C9pjT@localhost:3306/hiqain_hrm_db"
+    SESSION_SECRET: "hrm_super_secret_2026_live_key"
+    HRM_SEED_SAMPLE_DATA: "false"
+    HRM_BOOTSTRAP_ADMIN_EMAIL: "admin@hiqain.com"
+    HRM_BOOTSTRAP_ADMIN_PASSWORD: "password"

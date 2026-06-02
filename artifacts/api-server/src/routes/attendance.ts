@@ -10,6 +10,8 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { ymd } from "../lib/dates";
 import {
+  attendanceCandidateShiftDates,
+  attendanceTodayYmd,
   clearManualAttendanceOverride,
   markManualAttendanceOverride,
   normalizeAttendanceStatus,
@@ -17,9 +19,13 @@ import {
   officeEndForShiftDate,
   officeStartForShiftDate,
   resolveAttendanceShiftDate,
+  selectActiveAttendanceRecord,
+  shiftDateByDays,
+  isOvernightShift,
 } from "../lib/attendance";
 import { isPayrollOffDay, toHolidaySet } from "../lib/payroll";
 import { getSettings } from "./settings";
+import { inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -107,7 +113,7 @@ function serializeRecord(
 
 router.post(
   "/attendance/check-in",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -122,6 +128,7 @@ router.post(
     const emp = empRows[0]!;
     const now = new Date();
     const shiftDate = resolveAttendanceShiftDate(emp, now);
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
 
     const existing = await db
       .select()
@@ -129,12 +136,21 @@ router.post(
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, shiftDate),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
+      .orderBy(attendanceTable.date);
 
-    if (existing.length && existing[0]!.checkInTime) {
+    const activeRecord = selectActiveAttendanceRecord(existing, emp, now);
+    const existingForShiftDate =
+      existing.find((record) => record.date === shiftDate) ?? null;
+
+    if (activeRecord?.checkInTime && !activeRecord.checkOutTime) {
+      res.status(400).json({ message: "Already checked in for the active shift" });
+      return;
+    }
+
+    if (existingForShiftDate?.checkInTime) {
       res.status(400).json({ message: "Already checked in today" });
       return;
     }
@@ -188,22 +204,22 @@ router.post(
         : "present";
 
     let record;
-    if (existing.length) {
+    if (existingForShiftDate) {
       await db
         .update(attendanceTable)
         .set({
           checkInTime: now,
           isLate,
           status,
-          notes: clearManualAttendanceOverride(existing[0]!.notes),
+          notes: clearManualAttendanceOverride(existingForShiftDate.notes),
           pausedAt: null,
           pausedMinutes: 0,
         })
-        .where(eq(attendanceTable.id, existing[0]!.id));
+        .where(eq(attendanceTable.id, existingForShiftDate.id));
       const updatedRows = await db
         .select()
         .from(attendanceTable)
-        .where(eq(attendanceTable.id, existing[0]!.id))
+        .where(eq(attendanceTable.id, existingForShiftDate.id))
         .limit(1);
       record = updatedRows[0]!;
     } else {
@@ -236,7 +252,7 @@ router.post(
 
 router.post(
   "/attendance/check-out",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -250,7 +266,7 @@ router.post(
       .limit(1);
     const emp = empRows[0]!;
     const now = new Date();
-    const shiftDate = resolveAttendanceShiftDate(emp, now);
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
 
     const settings = await getSettings();
     const holidaySet = toHolidaySet(settings);
@@ -260,16 +276,17 @@ router.post(
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, shiftDate),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
+      .orderBy(attendanceTable.date);
 
-    if (!rows.length || !rows[0]!.checkInTime) {
+    const rec = selectActiveAttendanceRecord(rows, emp, now);
+
+    if (!rec?.checkInTime) {
       res.status(400).json({ message: "You haven't checked in for this shift" });
       return;
     }
-    const rec = rows[0]!;
     const activePauseMinutes = rec.pausedAt
       ? Math.max(0, Math.floor((now.getTime() - rec.pausedAt.getTime()) / 60000))
       : 0;
@@ -318,7 +335,7 @@ router.post(
 
 router.get(
   "/attendance/today",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -336,18 +353,20 @@ router.get(
       .where(eq(employeesTable.id, user.employeeId))
       .limit(1);
     const emp = empRows[0]!;
-    const today = resolveAttendanceShiftDate(emp, new Date());
+    const now = new Date();
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
     const rows = await db
       .select()
       .from(attendanceTable)
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, today),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
-    if (!rows.length) {
+      .orderBy(attendanceTable.date);
+    const activeRecord = selectActiveAttendanceRecord(rows, emp, now);
+    if (!activeRecord) {
       res.json({
         hasCheckedIn: false,
         hasCheckedOut: false,
@@ -356,7 +375,7 @@ router.get(
       });
       return;
     }
-    const r = rows[0]!;
+    const r = activeRecord;
     res.json({
       hasCheckedIn: !!r.checkInTime,
       hasCheckedOut: !!r.checkOutTime,
@@ -389,9 +408,16 @@ function monthRange(month?: string): {
   return { start, end, year: y, month: m };
 }
 
+function summaryQueryDates(targetDate: string, operationalToday: string): string[] {
+  if (targetDate !== operationalToday) {
+    return [targetDate];
+  }
+  return [targetDate, shiftDateByDays(targetDate, -1)];
+}
+
 router.post(
   "/attendance/pause",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -404,24 +430,25 @@ router.post(
       .where(eq(employeesTable.id, user.employeeId))
       .limit(1);
     const emp = empRows[0]!;
-    const shiftDate = resolveAttendanceShiftDate(emp, new Date());
+    const now = new Date();
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
     const rows = await db
       .select()
       .from(attendanceTable)
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, shiftDate),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
+      .orderBy(attendanceTable.date);
 
-    if (!rows.length || !rows[0]!.checkInTime) {
+    const rec = selectActiveAttendanceRecord(rows, emp, now);
+
+    if (!rec?.checkInTime) {
       res.status(400).json({ message: "You need to check in first" });
       return;
     }
-
-    const rec = rows[0]!;
     if (rec.checkOutTime) {
       res.status(400).json({ message: "You have already checked out" });
       return;
@@ -431,7 +458,6 @@ router.post(
       return;
     }
 
-    const now = new Date();
     await db
       .update(attendanceTable)
       .set({ pausedAt: now })
@@ -447,7 +473,7 @@ router.post(
 
 router.post(
   "/attendance/resume",
-  requireAuth(["employee"]),
+  requireAuth(["employee", "hr"]),
   async (req, res): Promise<void> => {
     const user = getUser(req);
     if (!user.employeeId) {
@@ -461,24 +487,24 @@ router.post(
       .limit(1);
     const emp = empRows[0]!;
     const now = new Date();
-    const shiftDate = resolveAttendanceShiftDate(emp, now);
+    const candidateDates = attendanceCandidateShiftDates(emp, now);
     const rows = await db
       .select()
       .from(attendanceTable)
       .where(
         and(
           eq(attendanceTable.employeeId, user.employeeId),
-          eq(attendanceTable.date, shiftDate),
+          inArray(attendanceTable.date, candidateDates),
         ),
       )
-      .limit(1);
+      .orderBy(attendanceTable.date);
 
-    if (!rows.length || !rows[0]!.checkInTime) {
+    const rec = selectActiveAttendanceRecord(rows, emp, now);
+
+    if (!rec?.checkInTime) {
       res.status(400).json({ message: "You need to check in first" });
       return;
     }
-
-    const rec = rows[0]!;
     if (rec.checkOutTime) {
       res.status(400).json({ message: "You have already checked out" });
       return;
@@ -508,7 +534,7 @@ router.post(
   },
 );
 
-router.get("/attendance/me", requireAuth(["employee"]), async (req, res): Promise<void> => {
+router.get("/attendance/me", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
   const user = getUser(req);
   if (!user.employeeId) {
     res.json([]);
@@ -570,11 +596,13 @@ router.get(
   "/attendance/today-summary",
   requireAuth(["admin", "hr"]),
   async (req, res): Promise<void> => {
+    const now = new Date();
     const dateParam = typeof req.query.date === "string" ? req.query.date : "";
     const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(dateParam);
-    const targetDate = isValidDate ? dateParam : ymd(new Date());
-    const today = ymd(new Date());
     const allEmps = await db.select().from(employeesTable);
+    const today = attendanceTodayYmd(now);
+    const targetDate = isValidDate ? dateParam : today;
+    const queryDates = summaryQueryDates(targetDate, today);
     const settings = await getSettings();
     const holidaySet = toHolidaySet(settings);
     const targetDow = new Date(`${targetDate}T00:00:00Z`).getUTCDay();
@@ -584,8 +612,13 @@ router.get(
     const records = await db
       .select()
       .from(attendanceTable)
-      .where(eq(attendanceTable.date, targetDate));
-    const recMap = new Map(records.map((r) => [r.employeeId, r]));
+      .where(inArray(attendanceTable.date, queryDates));
+    const recMap = new Map<number, Array<typeof attendanceTable.$inferSelect>>();
+    for (const record of records) {
+      const employeeRecords = recMap.get(record.employeeId) ?? [];
+      employeeRecords.push(record);
+      recMap.set(record.employeeId, employeeRecords);
+    }
 
     // Approved leaves overlapping the target date
     const leaveRows = await db
@@ -610,7 +643,11 @@ router.get(
     let halfDay = 0;
     let remoteWork = 0;
     for (const emp of allEmps) {
-      const r = recMap.get(emp.id);
+      const employeeRecords = recMap.get(emp.id) ?? [];
+      const r =
+        targetDate === today
+          ? selectActiveAttendanceRecord(employeeRecords, emp, now)
+          : employeeRecords.find((record) => record.date === targetDate);
       if (targetDate < emp.joiningDate) {
         out.push({
           id: -emp.id,
@@ -811,7 +848,7 @@ router.get(
       }
     }
 
-    const todayStr = ymd(new Date());
+    const todayStr = attendanceTodayYmd();
     const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
     const days: Array<{
       date: string;

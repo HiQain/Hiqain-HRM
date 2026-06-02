@@ -140,6 +140,43 @@ function computePayrollTaxFromPayslip(
   );
 }
 
+function computeProjectedPayrollTax(
+  basicSalary: number,
+  defaultAllowances: number,
+  month: number,
+  year: number,
+  components: Array<typeof salaryComponentsTable.$inferSelect>,
+) {
+  const grossSalaryBase = basicSalary + defaultAllowances;
+  let taxableCommissionTotal = 0;
+  let taxableRecurringComponentTotal = 0;
+
+  for (const component of components) {
+    const amount = roundAmount(
+      resolveComponentValue(component, basicSalary, grossSalaryBase),
+    );
+    if (amount <= 0) continue;
+    if (component.isDeduction === 1) continue;
+    if (component.kind === "designation") continue;
+    if (component.kind === "commission") {
+      if (isComponentTaxable(component)) taxableCommissionTotal += amount;
+      continue;
+    }
+    if (isComponentTaxable(component)) taxableRecurringComponentTotal += amount;
+  }
+
+  return roundAmount(
+    computePakistanMonthlySalaryTax(
+      basicSalary +
+        defaultAllowances +
+        taxableRecurringComponentTotal +
+        taxableCommissionTotal,
+      month,
+      year,
+    ),
+  );
+}
+
 router.get(
   "/views/monthly",
   requireAuth(["admin", "hr"]),
@@ -368,8 +405,12 @@ router.get(
       const grossSalary = roundAmount(basicSalary + allowances + Number(payslip?.bonus ?? 0));
       const payrollTax = payslip
         ? computePayrollTaxFromPayslip(payslip, employeeComponents)
-        : roundAmount(
-            computePakistanMonthlySalaryTax(basicSalary + allowances, month, year),
+        : computeProjectedPayrollTax(
+            basicSalary,
+            allowances,
+            month,
+            year,
+            employeeComponents,
           );
 
       return {

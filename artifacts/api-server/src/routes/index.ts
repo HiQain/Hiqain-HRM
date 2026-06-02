@@ -15,6 +15,8 @@ import newsRouter from "./news";
 import loansRouter from "./loans";
 import inventoryRouter from "./inventory";
 import monthlyViewRouter from "./monthly-view";
+import medicalRouter from "./medical";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -34,5 +36,7 @@ router.use(newsRouter);
 router.use(loansRouter);
 router.use(inventoryRouter);
 router.use(monthlyViewRouter);
+router.use(medicalRouter);
+router.use(notificationsRouter);
 
 export default router;

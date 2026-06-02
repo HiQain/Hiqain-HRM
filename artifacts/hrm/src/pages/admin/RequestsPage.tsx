@@ -481,7 +481,7 @@ function ApprovePfWithdrawalDialog({
             <div className="rounded-md border border-dashed border-border bg-muted/40 px-3 py-3 text-sm">
               <p className="font-medium text-foreground">{request.reason}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Eligible after {formatDate(summary.eligibleAfterDate)}. PF starts counting after probation.
+                Eligible after {formatDate(summary.eligibleAfterDate)}. PF starts counting after probation and the company matches the employee contribution.
               </p>
             </div>
             {exceedsAvailable && (

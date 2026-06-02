@@ -14,6 +14,7 @@ export const usersTable = mysqlTable("users", {
   role: mysqlEnum("role", ["admin", "hr", "employee"])
     .notNull()
     .default("employee"),
+  isActive: boolean("is_active").notNull().default(true),
   mustChangePassword: boolean("must_change_password").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

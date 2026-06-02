@@ -1,4 +1,4 @@
-import { memo, type ReactNode, useCallback, useState } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -25,13 +25,24 @@ import {
   PiggyBank,
   Package,
   Settings as SettingsIcon,
+  Bell,
+  HeartPulse,
 } from "lucide-react";
-import { useLogout, getGetMeQueryKey } from "@workspace/api-client-react";
+import {
+  useLogout,
+  useGetEmployee,
+  getGetEmployeeQueryKey,
+  getGetMeQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { EmployeeAvatar } from "./EmployeeAvatar";
 import { useTheme } from "@/hooks/use-theme";
+import {
+  useMarkNotificationRead,
+  useNotifications,
+} from "@/lib/notifications";
 
 type NavItem = { label: string; href: string; icon: typeof LayoutDashboard };
 
@@ -46,6 +57,7 @@ const ADMIN_NAV: NavItem[] = [
   },
   { label: "Leave Requests", href: "/admin/leaves", icon: CalendarRange },
   { label: "Requests", href: "/admin/requests", icon: Inbox },
+  { label: "Medical", href: "/admin/medical", icon: HeartPulse },
   { label: "Salary", href: "/admin/salary", icon: Wallet },
   { label: "View", href: "/admin/view", icon: LayoutGrid },
   { label: "Inventory", href: "/admin/inventory", icon: Package },
@@ -61,6 +73,7 @@ const EMP_NAV: NavItem[] = [
   { label: "Leaves", href: "/employee/leaves", icon: ClipboardList },
   { label: "Inventory", href: "/employee/inventory", icon: Package },
   { label: "Requests", href: "/employee/requests", icon: FilePlus2 },
+  { label: "Medical", href: "/employee/medical", icon: HeartPulse },
   { label: "Salary", href: "/employee/salary", icon: Wallet },
   { label: "Provident Fund", href: "/employee/provident-fund", icon: PiggyBank },
   { label: "Payslips", href: "/employee/payslips", icon: Receipt },
@@ -68,14 +81,41 @@ const EMP_NAV: NavItem[] = [
   { label: "Settings", href: "/employee/settings", icon: SettingsIcon },
 ];
 
+const HR_NAV: NavItem[] = [
+  { label: "My Dashboard", href: "/employee", icon: LayoutDashboard },
+  { label: "Profile", href: "/employee/profile", icon: UserCircle },
+  { label: "Attendance", href: "/employee/attendance", icon: CalendarCheck },
+  { label: "Leaves", href: "/employee/leaves", icon: ClipboardList },
+  { label: "Inventory", href: "/employee/inventory", icon: Package },
+  { label: "Requests", href: "/employee/requests", icon: FilePlus2 },
+  { label: "Medical", href: "/employee/medical", icon: HeartPulse },
+  { label: "Salary", href: "/employee/salary", icon: Wallet },
+  { label: "Provident Fund", href: "/employee/provident-fund", icon: PiggyBank },
+  { label: "Payslips", href: "/employee/payslips", icon: Receipt },
+  { label: "Feed", href: "/employee/feed", icon: PartyPopper },
+  { label: "Team", href: "/admin/employees", icon: Users },
+  { label: "Team Attendance", href: "/admin/attendance", icon: CalendarDays },
+  { label: "Team Requests", href: "/admin/requests", icon: Inbox },
+  { label: "Team Inventory", href: "/admin/inventory", icon: Package },
+  { label: "Team View", href: "/admin/view", icon: LayoutGrid },
+  { label: "Settings", href: "/admin/settings", icon: SettingsIcon },
+];
+
 export function AppShell({
   user,
   children,
 }: {
-  user: { name: string; email: string; role: "admin" | "hr" | "employee" };
+  user: {
+    name: string;
+    email: string;
+    role: "admin" | "hr" | "employee";
+    employeeId?: number | null;
+    avatarUrl?: string | null;
+  };
   children: ReactNode;
 }) {
-  const nav = user.role !== "employee" ? ADMIN_NAV : EMP_NAV;
+  const nav =
+    user.role === "admin" ? ADMIN_NAV : user.role === "hr" ? HR_NAV : EMP_NAV;
   const [open, setOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -97,6 +137,18 @@ export function AppShell({
   const qc = useQueryClient();
   const logout = useLogout();
   const { theme, toggle } = useTheme();
+  const employeeId = user.employeeId ?? 0;
+  const { data: employee } = useGetEmployee(employeeId, {
+    query: {
+      enabled: employeeId > 0,
+      queryKey: getGetEmployeeQueryKey(employeeId),
+    },
+  });
+  const displayUser = {
+    ...user,
+    name: employee?.name ?? user.name,
+    avatarUrl: employee?.avatarUrl ?? user.avatarUrl ?? null,
+  };
 
   const handleLogout = useCallback(() => {
     logout.mutate(undefined, {
@@ -129,6 +181,7 @@ export function AppShell({
       <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card px-4 lg:hidden">
         <BrandMark />
         <div className="flex items-center gap-2">
+          <NotificationButton userRole={user.role} mobile />
           <button
             className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border"
             onClick={toggle}
@@ -151,12 +204,12 @@ export function AppShell({
         <aside
           className={cn(
             "hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:flex-col lg:border-r lg:border-border lg:bg-sidebar lg:transition-[width] lg:duration-200",
-            desktopOpen ? "lg:w-64" : "lg:w-16",
+            desktopOpen ? "lg:w-60" : "lg:w-16",
           )}
         >
           {desktopOpen ? (
             <SidebarInner
-              user={user}
+              user={displayUser}
               nav={nav}
               isActive={isActive}
               onNavigate={() => {}}
@@ -200,7 +253,7 @@ export function AppShell({
                 </button>
               </div>
               <SidebarInner
-                user={user}
+                user={displayUser}
                 nav={nav}
                 isActive={isActive}
                 onNavigate={closeMobileMenu}
@@ -214,8 +267,14 @@ export function AppShell({
         )}
 
         {/* Main */}
-        <main className={cn("min-w-0 flex-1 overflow-x-hidden", desktopOpen && "lg:pl-64")}>
+        <main className={cn("min-w-0 flex-1 overflow-x-hidden", desktopOpen && "lg:pl-60")}>
+          <div className="sticky top-0 z-20 hidden border-b border-border bg-card/95 px-6 py-3 backdrop-blur lg:block">
+            <div className="mx-auto flex w-full max-w-7xl items-center justify-end gap-2">
+              <NotificationButton userRole={user.role} />
+            </div>
+          </div>
           <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
+            <NotificationSync userRole={user.role} />
             {children}
           </div>
         </main>
@@ -233,7 +292,12 @@ const SidebarRail = memo(function SidebarRail({
   onToggleTheme,
   onExpand,
 }: {
-  user: { name: string; email: string; role: "admin" | "hr" | "employee" };
+  user: {
+    name: string;
+    email: string;
+    role: "admin" | "hr" | "employee";
+    avatarUrl?: string | null;
+  };
   nav: NavItem[];
   isActive: (href: string) => boolean;
   onLogout: () => void;
@@ -254,7 +318,7 @@ const SidebarRail = memo(function SidebarRail({
         <PanelLeftOpen className="h-3 w-3" />
       </button>
 
-      <div className="flex w-full items-center justify-center py-4">
+      <div className="flex w-full items-center justify-center py-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-border overflow-hidden">
           <img
             src={`${import.meta.env.BASE_URL}logo.png`}
@@ -264,7 +328,7 @@ const SidebarRail = memo(function SidebarRail({
         </div>
       </div>
 
-      <nav className="flex-1 w-full flex flex-col items-center gap-1 px-2 pb-4">
+      <nav className="flex-1 w-full flex flex-col items-center gap-0.5 px-2 pb-3">
         {nav.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
@@ -285,7 +349,7 @@ const SidebarRail = memo(function SidebarRail({
             </Link>
           );
         })}
-        <div className="mt-1 w-full flex justify-center">
+        <div className="mt-0.5 w-full flex justify-center">
           <Link
             href="/change-password"
             title="Change Password"
@@ -302,7 +366,7 @@ const SidebarRail = memo(function SidebarRail({
         </div>
       </nav>
 
-      <div className="w-full border-t border-border p-2 flex flex-col items-center gap-1">
+      <div className="w-full border-t border-border p-1.5 flex flex-col items-center gap-0.5">
         <button
           onClick={onToggleTheme}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
@@ -320,12 +384,116 @@ const SidebarRail = memo(function SidebarRail({
           <LogOut className="h-4 w-4" />
         </button>
         <div className="pt-1" title={`${user.name} (${user.email})`}>
-          <EmployeeAvatar name={user.name} size="sm" />
+          <EmployeeAvatar name={user.name} url={user.avatarUrl ?? null} size="sm" />
         </div>
       </div>
     </div>
   );
 });
+
+function NotificationButton({
+  userRole,
+  mobile = false,
+}: {
+  userRole: "admin" | "hr" | "employee";
+  mobile?: boolean;
+}) {
+  const [location, setLocation] = useLocation();
+  const { data } = useNotifications(true);
+  const unreadCount = data?.length ?? 0;
+  const href =
+    userRole === "admin" ? "/admin/notifications" : "/employee/notifications";
+  const active = location === href;
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        if (typeof Notification !== "undefined" && Notification.permission === "default") {
+          try {
+            await Notification.requestPermission();
+          } catch {
+            // ignore permission errors
+          }
+        }
+        setLocation(href);
+      }}
+      className={cn(
+        "relative inline-flex items-center justify-center rounded-md border border-border bg-background text-foreground transition hover:bg-muted",
+        mobile ? "h-9 w-9" : "h-10 w-10",
+        active && "bg-primary text-primary-foreground",
+      )}
+      aria-label="Notifications"
+      title="Notifications"
+    >
+      <Bell className="h-4 w-4" />
+      {unreadCount > 0 ? (
+        <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function NotificationSync({
+  userRole,
+}: {
+  userRole: "admin" | "hr" | "employee";
+}) {
+  const { data } = useNotifications(false);
+  const markRead = useMarkNotificationRead();
+  const [, setLocation] = useLocation();
+  const initializedRef = useRef(false);
+  const seenIdsRef = useRef<Set<number>>(new Set());
+  const fallbackHref =
+    userRole === "admin" ? "/admin/notifications" : "/employee/notifications";
+
+  useEffect(() => {
+    if (!data) return;
+
+    if (!initializedRef.current) {
+      seenIdsRef.current = new Set(data.map((item) => item.id));
+      initializedRef.current = true;
+      return;
+    }
+
+    for (const item of data) {
+      if (seenIdsRef.current.has(item.id)) continue;
+      seenIdsRef.current.add(item.id);
+      if (item.isRead) continue;
+
+      toast(item.title, {
+        description: item.message,
+        action: item.href
+          ? {
+              label: "Open",
+              onClick: () => {
+                if (!item.isRead) markRead.mutate(item.id);
+                setLocation(item.href || fallbackHref);
+              },
+            }
+          : undefined,
+      });
+
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        const browserNotification = new Notification(item.title, {
+          body: item.message,
+        });
+        browserNotification.onclick = () => {
+          window.focus();
+          if (!item.isRead) markRead.mutate(item.id);
+          if (item.href) {
+            setLocation(item.href);
+          }
+          browserNotification.close();
+        };
+      }
+    }
+  }, [data, fallbackHref, markRead, setLocation]);
+
+  return null;
+}
 
 const BrandMark = memo(function BrandMark() {
   return (
@@ -358,7 +526,12 @@ const SidebarInner = memo(function SidebarInner({
   onToggleTheme,
   onCollapseDesktop,
 }: {
-  user: { name: string; email: string; role: "admin" | "hr" | "employee" };
+  user: {
+    name: string;
+    email: string;
+    role: "admin" | "hr" | "employee";
+    avatarUrl?: string | null;
+  };
   nav: NavItem[];
   isActive: (href: string) => boolean;
   onNavigate: () => void;
@@ -371,7 +544,7 @@ const SidebarInner = memo(function SidebarInner({
   return (
     <div className="flex h-full flex-col">
       {!hideHeader && (
-        <div className="flex items-center justify-between px-5 py-5">
+        <div className="flex items-center justify-between px-4 py-4">
           <BrandMark />
           {onCollapseDesktop && (
             <button
@@ -386,8 +559,8 @@ const SidebarInner = memo(function SidebarInner({
           )}
         </div>
       )}
-      <nav className="flex-1 space-y-1 px-3 pb-4">
-        <p className="px-3 pb-2 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <nav className="flex-1 space-y-0.5 px-2.5 pb-3">
+        <p className="px-2.5 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {user.role === "admin" ? "HR Console" : "Workspace"}
         </p>
         {nav.map((item) => {
@@ -399,7 +572,7 @@ const SidebarInner = memo(function SidebarInner({
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
+                "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition",
                 active
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-foreground/80 hover:bg-muted hover:text-foreground",
@@ -410,12 +583,12 @@ const SidebarInner = memo(function SidebarInner({
             </Link>
           );
         })}
-        <div className="mt-1">
+        <div className="mt-0.5">
           <Link
             href="/change-password"
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
+              "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition",
               isActive("/change-password")
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-foreground/80 hover:bg-muted hover:text-foreground",
@@ -426,9 +599,9 @@ const SidebarInner = memo(function SidebarInner({
           </Link>
         </div>
       </nav>
-      <div className="border-t border-border p-3">
-        <div className="flex items-center gap-3 rounded-md p-2">
-          <EmployeeAvatar name={user.name} size="sm" />
+      <div className="border-t border-border p-2.5">
+        <div className="flex items-center gap-2 rounded-md p-1.5">
+          <EmployeeAvatar name={user.name} url={user.avatarUrl ?? null} size="sm" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{user.name}</p>
             <p className="truncate text-xs text-muted-foreground">

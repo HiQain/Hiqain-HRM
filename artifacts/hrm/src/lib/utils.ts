@@ -11,6 +11,54 @@ export function formatCurrency(n: number | string | null | undefined): string {
   return `PKR ${Math.round(num).toLocaleString("en-US")}`;
 }
 
+export function formatNumberInput(
+  value: number | string | null | undefined,
+): string {
+  if (value === null || value === undefined || value === "") return "";
+  const normalized =
+    typeof value === "number"
+      ? String(value)
+      : String(value).replace(/,/g, "").trim();
+  if (!normalized) return "";
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return "";
+  return parsed.toLocaleString("en-US");
+}
+
+export function parseNumberInput(value: string): number {
+  const normalized = value.replace(/,/g, "").replace(/[^\d.-]/g, "").trim();
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function normalizePakistanPhoneInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "+92";
+  if (trimmed.startsWith("+") && !trimmed.startsWith("+92")) return trimmed;
+
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return "+92";
+  if (digits.startsWith("92")) return `+${digits}`;
+  if (digits.startsWith("0")) return `+92${digits.slice(1)}`;
+  return `+92${digits}`;
+}
+
+export function hasPhoneSubscriberNumber(
+  value: string | null | undefined,
+): boolean {
+  const normalized = normalizePakistanPhoneInput(value ?? "");
+  const digits = normalized.replace(/\D/g, "");
+  return digits.length > 2;
+}
+
+export function normalizeCnicInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 13);
+  if (digits.length <= 5) return digits;
+  if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+}
+
 // Canonical app date format: "Mon, May 13, 26"
 function _formatAppDate(s: string | Date | null | undefined): string {
   if (!s) return "—";

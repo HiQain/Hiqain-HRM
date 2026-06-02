@@ -15,6 +15,7 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 import { getUser, hashPassword, requireAuth } from "../lib/auth";
 import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
+import { notifyEmployeeUser } from "../lib/notifications";
 import {
   applyPermanentIncrementToCompensation,
   inferPercentageBaseAmount,
@@ -25,15 +26,64 @@ import { getSettings } from "./settings";
 const router: IRouter = Router();
 const PRIMARY_PAYROLL_BANK_NAME = "Bank Al Habib";
 
+function buildEmployeeCode(sequence: number): string {
+  return `EMP-${String(sequence).padStart(3, "0")}`;
+}
+
+function parseEmployeeCodeSequence(code: string | null | undefined): number {
+  if (!code) return 0;
+  const match = /^EMP-(\d+)$/i.exec(code.trim());
+  if (!match) return 0;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function getNextEmployeeCode(): Promise<string> {
+  const rows = await db
+    .select({ employeeCode: employeesTable.employeeCode })
+    .from(employeesTable);
+  const maxSequence = rows.reduce(
+    (max, row) => Math.max(max, parseEmployeeCodeSequence(row.employeeCode)),
+    0,
+  );
+  return buildEmployeeCode(Math.max(maxSequence, rows.length) + 1);
+}
+
 function subtractDay(d: Date): Date {
   const r = new Date(d.getTime());
   r.setUTCDate(r.getUTCDate() - 1);
   return r;
 }
 
+function parseKidsNames(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter(Boolean);
+  } catch {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+}
+
+function serializeKidsNames(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const names = value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+  return names.length ? JSON.stringify(names) : null;
+}
+
 function serializeEmployee(
   e: typeof employeesTable.$inferSelect,
   email: string,
+  isActive: boolean,
+  role: "admin" | "hr" | "employee" = "employee",
 ) {
   const joining = parseDate(e.joiningDate);
   const probationEnd = subtractDay(addMonths(joining, e.probationMonths));
@@ -51,6 +101,8 @@ function serializeEmployee(
     userId: e.userId,
     name: e.name,
     email,
+    role,
+    isActive,
     personalEmail: e.personalEmail,
     phone: e.phone,
     position: e.position,
@@ -74,6 +126,10 @@ function serializeEmployee(
     // New fields
     employeeCode: e.employeeCode,
     maritalStatus: e.maritalStatus,
+    wifeName: e.wifeName,
+    wifeDateOfBirth: e.wifeDateOfBirth,
+    kidsCount: e.kidsCount != null ? Number(e.kidsCount) : null,
+    kidsNames: parseKidsNames(e.kidsNames),
     leftDate: e.leftDate,
     emergencyContactName: e.emergencyContactName,
     emergencyContactNumber: e.emergencyContactNumber,
@@ -117,6 +173,11 @@ function serializeEmployee(
     secondaryBankName: e.secondaryBankName,
     secondaryBankIban: e.secondaryBankIban,
     secondaryBankBranchCode: e.secondaryBankBranchCode,
+    medicalEnabled: Boolean(e.medicalEnabled),
+    medicalDailyLimit: Number(e.medicalDailyLimit ?? 0),
+    medicalOverallLimit: Number(e.medicalOverallLimit ?? 0),
+    medicalOpdLimit: 0,
+    medicalIpdLimit: Number(e.medicalOverallLimit ?? 0),
     providentFundPercent:
       e.providentFundPercent != null ? Number(e.providentFundPercent) : null,
   };
@@ -174,11 +235,17 @@ router.get("/employees", requireAuth(["admin", "hr"]), async (_req, res) => {
     .select({
       employee: employeesTable,
       email: usersTable.email,
+      isActive: usersTable.isActive,
+      role: usersTable.role,
     })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .orderBy(desc(employeesTable.createdAt));
-  res.json(rows.map(({ employee, email }) => serializeEmployee(employee, email)));
+  res.json(
+    rows.map(({ employee, email, isActive, role }) =>
+      serializeEmployee(employee, email, Boolean(isActive), role),
+    ),
+  );
 });
 
 function proRatedQuota(quota: number, joiningDate: string): number {
@@ -233,6 +300,7 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
       email,
       passwordHash,
       role: resolvedRole,
+      isActive: (data as any).isActive ?? true,
       mustChangePassword: true,
     })
     .$returningId();
@@ -243,9 +311,7 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
   }
 
   // Auto-generate employee code if not provided
-  const allEmps = await db.select({ id: employeesTable.id }).from(employeesTable);
-  const nextNum = allEmps.length + 1;
-  const autoCode = `EMP-${String(nextNum).padStart(3, "0")}`;
+  const autoCode = await getNextEmployeeCode();
 
   const joiningDateStr = data.joiningDate as unknown as string;
   const baseCasual = data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
@@ -279,6 +345,10 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
         data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
       basicSalary: String(data.basicSalary),
       allowances: String(data.allowances ?? 0),
+      providentFundPercent:
+        Number(settings.defaultProvidentFundPercent) > 0
+          ? String(Number(settings.defaultProvidentFundPercent))
+          : null,
       casualLeaveQuota,
       sickLeaveQuota,
       annualLeaveQuota,
@@ -287,6 +357,12 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
       address: data.address ?? null,
       employeeCode: (data as any).employeeCode ?? autoCode,
       maritalStatus: (data as any).maritalStatus ?? null,
+      wifeName: (data as any).wifeName ?? null,
+      wifeDateOfBirth:
+        ((data as any).wifeDateOfBirth as unknown as string) ?? null,
+      kidsCount:
+        (data as any).kidsCount != null ? String((data as any).kidsCount) : null,
+      kidsNames: serializeKidsNames((data as any).kidsNames),
       emergencyContactName: (data as any).emergencyContactName ?? null,
       emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
       emergencyContactRelation:
@@ -316,6 +392,11 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
       lastPayslipTwoName: (data as any).lastPayslipTwoName ?? null,
       lastPayslipThreeUrl: (data as any).lastPayslipThreeUrl ?? null,
       lastPayslipThreeName: (data as any).lastPayslipThreeName ?? null,
+      medicalEnabled: Boolean(req.body?.medicalEnabled ?? false),
+      medicalDailyLimit: String(Number(req.body?.medicalDailyLimit ?? 0) || 0),
+      medicalOverallLimit: String(Number(req.body?.medicalOverallLimit ?? 0) || 0),
+      medicalOpdLimit: "0",
+      medicalIpdLimit: String(Number(req.body?.medicalOverallLimit ?? 0) || 0),
       ...bankValues,
     })
     .$returningId();
@@ -334,7 +415,20 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
     res.status(500).json({ message: "Created employee could not be loaded" });
     return;
   }
-  res.status(201).json(serializeEmployee(employee, email));
+  await notifyEmployeeUser(employeeId, {
+    type: "account_created",
+    title: "Welcome to HRM",
+    message: "Your employee account has been created. Sign in to view your profile and daily tools.",
+    href: "/employee",
+  });
+  res.status(201).json(
+    serializeEmployee(
+      employee,
+      email,
+      Boolean((data as any).isActive ?? true),
+      resolvedRole,
+    ),
+  );
 });
 
 router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
@@ -389,6 +483,7 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
           email,
           passwordHash,
           role: safeRole,
+          isActive: (data as any).isActive ?? true,
           mustChangePassword: true,
         })
         .$returningId();
@@ -396,8 +491,7 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
       if (!userId) {
         throw new Error("Failed to create user");
       }
-      const allEmps = await db.select({ id: employeesTable.id }).from(employeesTable);
-      const autoCode = `EMP-${String(allEmps.length + 1).padStart(3, "0")}`;
+      const autoCode = await getNextEmployeeCode();
       const joiningDateStr = data.joiningDate as unknown as string;
       const baseCasual =
         data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
@@ -422,6 +516,10 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
           data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
         basicSalary: String(data.basicSalary),
         allowances: String(data.allowances ?? 0),
+        providentFundPercent:
+          Number(settings.defaultProvidentFundPercent) > 0
+            ? String(Number(settings.defaultProvidentFundPercent))
+            : null,
         casualLeaveQuota: settings.proRatedQuotas
           ? proRatedQuota(baseCasual, joiningDateStr)
           : baseCasual,
@@ -436,6 +534,12 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
         address: data.address ?? null,
         employeeCode: autoCode,
         maritalStatus: (data as any).maritalStatus ?? null,
+        wifeName: (data as any).wifeName ?? null,
+        wifeDateOfBirth:
+          ((data as any).wifeDateOfBirth as unknown as string) ?? null,
+        kidsCount:
+          (data as any).kidsCount != null ? String((data as any).kidsCount) : null,
+        kidsNames: serializeKidsNames((data as any).kidsNames),
         emergencyContactName: (data as any).emergencyContactName ?? null,
         emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
         emergencyContactRelation:
@@ -504,7 +608,12 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
     return;
   }
   const rows = await db
-    .select({ employee: employeesTable, email: usersTable.email })
+    .select({
+      employee: employeesTable,
+      email: usersTable.email,
+      isActive: usersTable.isActive,
+      role: usersTable.role,
+    })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .where(eq(employeesTable.id, id))
@@ -521,7 +630,12 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
     .where(eq(salaryEventsTable.employeeId, id))
     .orderBy(desc(salaryEventsTable.date));
 
-  const base = serializeEmployee(row.employee, row.email);
+  const base = serializeEmployee(
+    row.employee,
+    row.email,
+    Boolean(row.isActive),
+    row.role,
+  );
   const joining = parseDate(row.employee.joiningDate);
   const now = new Date();
   const workDurationMonths = diffMonths(joining, now);
@@ -630,6 +744,14 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
   if (extraText.employeeCode !== undefined) updates.employeeCode = extraText.employeeCode;
   if (extraText.maritalStatus !== undefined)
     updates.maritalStatus = extraText.maritalStatus;
+  if (extraText.wifeName !== undefined) updates.wifeName = extraText.wifeName;
+  if (extra.wifeDateOfBirth !== undefined)
+    updates.wifeDateOfBirth = extra.wifeDateOfBirth as string | null;
+  if (extra.kidsCount !== undefined)
+    updates.kidsCount =
+      typeof extra.kidsCount === "number" ? String(extra.kidsCount) : null;
+  if (extra.kidsNames !== undefined)
+    updates.kidsNames = serializeKidsNames(extra.kidsNames);
   if (extraText.leftDate !== undefined) updates.leftDate = extraText.leftDate;
   if (extraText.emergencyContactName !== undefined)
     updates.emergencyContactName = extraText.emergencyContactName;
@@ -705,8 +827,58 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
   if (extra.providentFundPercent !== undefined)
     updates.providentFundPercent =
       extra.providentFundPercent != null ? String(extra.providentFundPercent) : null;
+  if (typeof req.body?.medicalEnabled === "boolean") {
+    updates.medicalEnabled = req.body.medicalEnabled;
+  }
+  if (req.body?.medicalDailyLimit !== undefined) {
+    updates.medicalDailyLimit = String(Number(req.body.medicalDailyLimit ?? 0) || 0);
+  }
+  if (req.body?.medicalOverallLimit !== undefined) {
+    const overallLimit = String(Number(req.body.medicalOverallLimit ?? 0) || 0);
+    updates.medicalOverallLimit = overallLimit;
+    updates.medicalOpdLimit = "0";
+    updates.medicalIpdLimit = overallLimit;
+  }
 
   await db.update(employeesTable).set(updates).where(eq(employeesTable.id, id));
+  if (typeof extra.isActive === "boolean" && previous?.userId) {
+    await db
+      .update(usersTable)
+      .set({ isActive: extra.isActive })
+      .where(eq(usersTable.id, previous.userId));
+  }
+  const requestedRole = req.body?.role;
+  if (
+    previous?.userId &&
+    (actor.role === "admin" ||
+      (actor.role === "hr" && requestedRole !== "admin")) &&
+    typeof requestedRole === "string" &&
+    ["admin", "hr", "employee"].includes(requestedRole)
+  ) {
+    await db
+      .update(usersTable)
+      .set({ role: requestedRole as "admin" | "hr" | "employee" })
+      .where(eq(usersTable.id, previous.userId));
+    await notifyEmployeeUser(id, {
+      type: "role_change",
+      title: "Account role updated",
+      message: `Your account role is now ${requestedRole.toUpperCase()}.`,
+      href: requestedRole === "employee" || requestedRole === "hr" ? "/employee" : `/admin/employees/${id}`,
+    });
+  }
+  const medicalChanged =
+    previous &&
+    (updates.medicalEnabled !== undefined ||
+      updates.medicalDailyLimit !== undefined ||
+      updates.medicalOverallLimit !== undefined);
+  if (medicalChanged) {
+    await notifyEmployeeUser(id, {
+      type: "medical_allowance",
+      title: "Medical allowance updated",
+      message: "Your yearly IPD medical allowance or daily medical limit has been updated.",
+      href: "/employee/medical",
+    });
+  }
 
   // Log designation change journey event
   if (
@@ -724,7 +896,12 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
   }
 
   const rows = await db
-    .select({ employee: employeesTable, email: usersTable.email })
+    .select({
+      employee: employeesTable,
+      email: usersTable.email,
+      isActive: usersTable.isActive,
+      role: usersTable.role,
+    })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .where(eq(employeesTable.id, id))
@@ -734,7 +911,9 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
     res.status(404).json({ message: "Employee not found" });
     return;
   }
-  res.json(serializeEmployee(row.employee, row.email));
+  res.json(
+    serializeEmployee(row.employee, row.email, Boolean(row.isActive), row.role),
+  );
 });
 
 router.delete("/employees/:id", requireAuth(["admin"]), async (req, res): Promise<void> => {
@@ -761,7 +940,12 @@ router.get("/employees/:id/journey", requireAuth(), async (req, res): Promise<vo
     return;
   }
   const rows = await db
-    .select({ employee: employeesTable, email: usersTable.email })
+    .select({
+      employee: employeesTable,
+      email: usersTable.email,
+      isActive: usersTable.isActive,
+      role: usersTable.role,
+    })
     .from(employeesTable)
     .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
     .where(eq(employeesTable.id, id))
@@ -772,7 +956,12 @@ router.get("/employees/:id/journey", requireAuth(), async (req, res): Promise<vo
     return;
   }
 
-  const employee = serializeEmployee(row.employee, row.email);
+  const employee = serializeEmployee(
+    row.employee,
+    row.email,
+    Boolean(row.isActive),
+    row.role,
+  );
   const joining = parseDate(row.employee.joiningDate);
   const probationEnd = subtractDay(addMonths(joining, row.employee.probationMonths));
   const nowYear = new Date().getUTCFullYear();

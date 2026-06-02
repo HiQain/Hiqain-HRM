@@ -10,6 +10,7 @@ import { Link } from "wouter";
 import {
   useListEmployees,
   useCreateEmployee,
+  useUpdateEmployee,
   useDeleteEmployee,
   useBulkCreateEmployees,
   useGetMe,
@@ -67,9 +68,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  formatCurrency,
+  formatDate,
+  formatNumberInput,
+  hasPhoneSubscriberNumber,
+  normalizeCnicInput,
+  normalizePakistanPhoneInput,
+  parseNumberInput,
+} from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PasswordField } from "@/components/PasswordField";
+import { resolveAssetUrl } from "@/lib/api";
 import { createEmployeeCsvTemplateHref } from "@/lib/onboarding";
 
 function computeProRatedQuota(quota: number, joiningDate: string, enabled?: boolean) {
@@ -99,6 +109,41 @@ function splitAllowanceBreakdown(allowances: number) {
   return { homeRent, utilityBills };
 }
 
+function buildEmployeeCode(sequence: number) {
+  return `EMP-${String(sequence).padStart(3, "0")}`;
+}
+
+function parseEmployeeCodeSequence(code: string | null | undefined) {
+  if (!code) return 0;
+  const match = /^EMP-(\d+)$/i.exec(code.trim());
+  if (!match) return 0;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getNextEmployeeCode(
+  employees: Array<{ employeeCode?: string | null }> | null | undefined,
+) {
+  const rows = employees ?? [];
+  const maxSequence = rows.reduce(
+    (max, employee) =>
+      Math.max(max, parseEmployeeCodeSequence(employee.employeeCode)),
+    0,
+  );
+  return buildEmployeeCode(Math.max(maxSequence, rows.length) + 1);
+}
+
+function normalizeKidsNames(
+  value: unknown,
+  count: number,
+): string[] {
+  const source = Array.isArray(value) ? value : [];
+  return Array.from({ length: Math.max(0, count) }, (_, index) => {
+    const item = source[index];
+    return typeof item === "string" ? item : "";
+  });
+}
+
 export function EmployeesPage() {
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "admin";
@@ -106,6 +151,7 @@ export function EmployeesPage() {
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState<string>("all");
   const [open, setOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{
     id: number;
@@ -134,6 +180,23 @@ export function EmployeesPage() {
     }
     return rows;
   }, [data, search, department]);
+
+  useEffect(() => {
+    if (!data?.length) return;
+    if (open) return;
+    const pendingId = window.localStorage.getItem("hrm-edit-employee-id");
+    if (!pendingId) return;
+    const employeeId = Number(pendingId);
+    if (!Number.isFinite(employeeId)) {
+      window.localStorage.removeItem("hrm-edit-employee-id");
+      return;
+    }
+    const employee = data.find((item) => item.id === employeeId);
+    if (!employee) return;
+    window.localStorage.removeItem("hrm-edit-employee-id");
+    setEditingEmployee(employee);
+    setOpen(true);
+  }, [data, open]);
 
   const qc = useQueryClient();
   const del = useDeleteEmployee();
@@ -168,7 +231,13 @@ export function EmployeesPage() {
               <Upload className="h-4 w-4" />
               Bulk upload
             </Button>
-            <Button onClick={() => setOpen(true)} className="gap-2">
+            <Button
+              onClick={() => {
+                setEditingEmployee(null);
+                setOpen(true);
+              }}
+              className="gap-2"
+            >
               <Plus className="h-4 w-4" />
               Add employee
             </Button>
@@ -223,7 +292,7 @@ export function EmployeesPage() {
             >
               <div className="flex items-start gap-3">
                 <Link href={`/admin/employees/${e.id}`}>
-                  <EmployeeAvatar name={e.name} size="lg" />
+                  <EmployeeAvatar name={e.name} url={e.avatarUrl ?? null} size="lg" />
                 </Link>
                 <div className="min-w-0 flex-1">
                   <Link
@@ -250,16 +319,18 @@ export function EmployeesPage() {
                       <Eye className="h-4 w-4" />
                     </Button>
                   </Link>
-                  <Link href={`/admin/employees/${e.id}?edit=1`}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      title="Edit profile"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    title="Edit profile"
+                    onClick={() => {
+                      setEditingEmployee(e);
+                      setOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -277,11 +348,14 @@ export function EmployeesPage() {
                           View profile
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href={`/admin/employees/${e.id}?edit=1`}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit profile
-                        </Link>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setEditingEmployee(e);
+                          setOpen(true);
+                        }}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit profile
                       </DropdownMenuItem>
                       {isAdmin && (
                         <DropdownMenuItem
@@ -309,7 +383,11 @@ export function EmployeesPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Salary</p>
-                  <p className="font-medium">{formatCurrency(e.basicSalary)}</p>
+                  <p className="font-medium">
+                    {formatCurrency(
+                      Number(e.basicSalary ?? 0) + Number(e.allowances ?? 0),
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
@@ -319,8 +397,13 @@ export function EmployeesPage() {
 
       <NewEmployeeSheet
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={(value) => {
+          setOpen(value);
+          if (!value) setEditingEmployee(null);
+        }}
         departments={departments}
+        existingEmployees={data ?? []}
+        editingEmployee={editingEmployee}
       />
       <BulkUploadSheet open={bulkOpen} onOpenChange={setBulkOpen} />
 
@@ -356,10 +439,14 @@ function NewEmployeeSheet({
   open,
   onOpenChange,
   departments,
+  existingEmployees,
+  editingEmployee,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   departments: string[];
+  existingEmployees: Array<{ employeeCode?: string | null }>;
+  editingEmployee: any | null;
 }) {
   const { data: me } = useGetMe();
   const { data: settings } = useGetSettings({
@@ -368,16 +455,137 @@ function NewEmployeeSheet({
   const isAdmin = me?.role === "admin";
   const qc = useQueryClient();
   const create = useCreateEmployee();
+  const update = useUpdateEmployee();
+  const isEditing = Boolean(editingEmployee?.id);
+  const generatedEmployeeCode = useMemo(
+    () => getNextEmployeeCode(existingEmployees),
+    [existingEmployees],
+  );
   const defaultForm = useMemo(
     () => {
+      if (editingEmployee) {
+        const totalSalary =
+          Number(editingEmployee.basicSalary ?? 0) +
+          Number(editingEmployee.allowances ?? 0);
+        return {
+          name: editingEmployee.name ?? "",
+          email: editingEmployee.email ?? "",
+          password: "",
+          role: editingEmployee.role === "admin" ? "admin" : "employee",
+          isActive: editingEmployee.isActive !== false,
+          phone: normalizePakistanPhoneInput(editingEmployee.phone ?? ""),
+          position: editingEmployee.position ?? "",
+          department: editingEmployee.department ?? "",
+          positionType:
+            (editingEmployee.positionType ?? "onsite") as "onsite" | "remote",
+          joiningDate:
+            editingEmployee.joiningDate ?? new Date().toISOString().slice(0, 10),
+          probationMonths:
+            editingEmployee.probationMonths ??
+            settings?.defaultProbationMonths ??
+            3,
+          officeStartTime:
+            editingEmployee.officeStartTime ??
+            settings?.defaultOfficeStartTime ??
+            "09:00",
+          officeEndTime:
+            editingEmployee.officeEndTime ??
+            settings?.defaultOfficeEndTime ??
+            "18:00",
+          gracePeriodMinutes:
+            editingEmployee.gracePeriodMinutes ??
+            settings?.defaultGracePeriodMinutes ??
+            15,
+          totalSalary,
+          basicSalary: Number(editingEmployee.basicSalary ?? 0),
+          allowances: Number(editingEmployee.allowances ?? 0),
+          casualLeaveQuota: editingEmployee.casualLeaveQuota ?? 0,
+          sickLeaveQuota: editingEmployee.sickLeaveQuota ?? 0,
+          annualLeaveQuota: editingEmployee.annualLeaveQuota ?? 0,
+          dateOfBirth: editingEmployee.dateOfBirth ?? "",
+          employeeCode: editingEmployee.employeeCode ?? generatedEmployeeCode,
+          maritalStatus: editingEmployee.maritalStatus ?? "",
+          wifeName: editingEmployee.wifeName ?? "",
+          wifeDateOfBirth: editingEmployee.wifeDateOfBirth ?? "",
+          kidsCount:
+            editingEmployee.kidsCount != null
+              ? String(editingEmployee.kidsCount)
+              : "",
+          kidsNames: normalizeKidsNames(
+            editingEmployee.kidsNames,
+            Number(editingEmployee.kidsCount ?? 0),
+          ),
+          personalEmail: editingEmployee.personalEmail ?? "",
+          lastQualification: editingEmployee.lastQualification ?? "",
+          address: editingEmployee.address ?? "",
+          cnic: normalizeCnicInput(editingEmployee.cnic ?? ""),
+          emergencyContactName: editingEmployee.emergencyContactName ?? "",
+          emergencyContactNumber:
+            normalizePakistanPhoneInput(
+              editingEmployee.emergencyContactNumber ?? "",
+            ),
+          emergencyContactRelation:
+            editingEmployee.emergencyContactRelation ?? "",
+          emergencyContact: editingEmployee.emergencyContact ?? "",
+          previousCompany: editingEmployee.previousCompany ?? "",
+          lastPay:
+            editingEmployee.lastPay != null
+              ? String(editingEmployee.lastPay)
+              : "",
+          immediateFamily: editingEmployee.immediateFamily ?? "",
+          notes: editingEmployee.notes ?? "",
+          employmentContractUrl:
+            editingEmployee.employmentContractUrl ?? "",
+          employmentContractName:
+            editingEmployee.employmentContractName ?? "",
+          cnicDocumentUrl: editingEmployee.cnicDocumentUrl ?? "",
+          cnicDocumentName: editingEmployee.cnicDocumentName ?? "",
+          cnicFrontDocumentUrl: editingEmployee.cnicFrontDocumentUrl ?? "",
+          cnicFrontDocumentName: editingEmployee.cnicFrontDocumentName ?? "",
+          cnicBackDocumentUrl: editingEmployee.cnicBackDocumentUrl ?? "",
+          cnicBackDocumentName: editingEmployee.cnicBackDocumentName ?? "",
+          qualificationDocumentUrl:
+            editingEmployee.qualificationDocumentUrl ?? "",
+          qualificationDocumentName:
+            editingEmployee.qualificationDocumentName ?? "",
+          lastPayslipOneUrl: editingEmployee.lastPayslipOneUrl ?? "",
+          lastPayslipOneName: editingEmployee.lastPayslipOneName ?? "",
+          lastPayslipTwoUrl: editingEmployee.lastPayslipTwoUrl ?? "",
+          lastPayslipTwoName: editingEmployee.lastPayslipTwoName ?? "",
+          lastPayslipThreeUrl: editingEmployee.lastPayslipThreeUrl ?? "",
+          lastPayslipThreeName: editingEmployee.lastPayslipThreeName ?? "",
+          primaryBankAccountTitle:
+            editingEmployee.primaryBankAccountTitle ?? "",
+          primaryBankAccountNumber:
+            editingEmployee.primaryBankAccountNumber ?? "",
+          primaryBankName: PRIMARY_PAYROLL_BANK,
+          primaryBankIban: editingEmployee.primaryBankIban ?? "",
+          primaryBankBranchCode:
+            editingEmployee.primaryBankBranchCode ?? "",
+          secondaryBankAccountTitle:
+            editingEmployee.secondaryBankAccountTitle ?? "",
+          secondaryBankAccountNumber:
+            editingEmployee.secondaryBankAccountNumber ?? "",
+          secondaryBankName: editingEmployee.secondaryBankName ?? "",
+          secondaryBankIban: editingEmployee.secondaryBankIban ?? "",
+          secondaryBankBranchCode:
+            editingEmployee.secondaryBankBranchCode ?? "",
+          medicalEnabled: Boolean(editingEmployee.medicalEnabled ?? false),
+          medicalDailyLimit: String(editingEmployee.medicalDailyLimit ?? 0),
+          medicalOverallLimit: String(editingEmployee.medicalOverallLimit ?? 0),
+          medicalOpdLimit: String(editingEmployee.medicalOpdLimit ?? 0),
+          medicalIpdLimit: String(editingEmployee.medicalIpdLimit ?? 0),
+        };
+      }
       const defaultTotalSalary = 100000;
       const { basicSalary, allowances } = splitTotalSalary(defaultTotalSalary);
       return {
       name: "",
       email: "",
       password: DEFAULT_EMPLOYEE_PASSWORD,
-      role: "employee" as "admin" | "hr" | "employee",
-      phone: "",
+      role: "employee" as "admin" | "employee",
+      isActive: true,
+      phone: "+92",
       position: "",
       department: "",
       positionType: "onsite" as "onsite" | "remote",
@@ -405,19 +613,26 @@ function NewEmployeeSheet({
         settings?.proRatedQuotas,
       ),
       dateOfBirth: "",
-      employeeCode: "",
+      employeeCode: generatedEmployeeCode,
       maritalStatus: "",
+      wifeName: "",
+      wifeDateOfBirth: "",
+      kidsCount: "",
+      kidsNames: [] as string[],
       personalEmail: "",
       lastQualification: "",
       address: "",
       cnic: "",
       emergencyContactName: "",
-      emergencyContactNumber: "",
+      emergencyContactNumber: "+92",
       emergencyContactRelation: "",
       emergencyContact: "",
       previousCompany: "",
       lastPay: "",
+      immediateFamily: "",
       notes: "",
+      employmentContractUrl: "",
+      employmentContractName: "",
       cnicDocumentUrl: "",
       cnicDocumentName: "",
       cnicFrontDocumentUrl: "",
@@ -442,15 +657,26 @@ function NewEmployeeSheet({
       secondaryBankName: "",
       secondaryBankIban: "",
       secondaryBankBranchCode: "",
+      medicalEnabled: false,
+      medicalDailyLimit: "",
+      medicalOverallLimit: "",
+      medicalOpdLimit: "",
+      medicalIpdLimit: "",
     };
     },
-    [settings],
+    [editingEmployee, generatedEmployeeCode, settings],
   );
   const [form, setForm] = useState(defaultForm);
+  const [quotaTouched, setQuotaTouched] = useState({
+    casual: false,
+    sick: false,
+    annual: false,
+  });
 
   useEffect(() => {
     if (open) {
       setForm(defaultForm);
+      setQuotaTouched({ casual: false, sick: false, annual: false });
     }
   }, [defaultForm, open]);
 
@@ -468,25 +694,34 @@ function NewEmployeeSheet({
     if (!open) return;
     setForm((current) => ({
       ...current,
-      casualLeaveQuota: computeProRatedQuota(
-        settings?.defaultCasualLeaveQuota ?? 6,
-        current.joiningDate,
-        settings?.proRatedQuotas,
-      ),
-      sickLeaveQuota: computeProRatedQuota(
-        settings?.defaultSickLeaveQuota ?? 6,
-        current.joiningDate,
-        settings?.proRatedQuotas,
-      ),
-      annualLeaveQuota: computeProRatedQuota(
-        settings?.defaultAnnualLeaveQuota ?? 12,
-        current.joiningDate,
-        settings?.proRatedQuotas,
-      ),
+      casualLeaveQuota: quotaTouched.casual
+        ? current.casualLeaveQuota
+        : computeProRatedQuota(
+            settings?.defaultCasualLeaveQuota ?? 6,
+            current.joiningDate,
+            settings?.proRatedQuotas,
+          ),
+      sickLeaveQuota: quotaTouched.sick
+        ? current.sickLeaveQuota
+        : computeProRatedQuota(
+            settings?.defaultSickLeaveQuota ?? 6,
+            current.joiningDate,
+            settings?.proRatedQuotas,
+          ),
+      annualLeaveQuota: quotaTouched.annual
+        ? current.annualLeaveQuota
+        : computeProRatedQuota(
+            settings?.defaultAnnualLeaveQuota ?? 12,
+            current.joiningDate,
+            settings?.proRatedQuotas,
+          ),
     }));
   }, [
     open,
     form.joiningDate,
+    quotaTouched.annual,
+    quotaTouched.casual,
+    quotaTouched.sick,
     settings?.defaultCasualLeaveQuota,
     settings?.defaultSickLeaveQuota,
     settings?.defaultAnnualLeaveQuota,
@@ -495,76 +730,123 @@ function NewEmployeeSheet({
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
+    const payload = {
+      name: form.name.trim(),
+      personalEmail: form.personalEmail.trim() || undefined,
+      phone: hasPhoneSubscriberNumber(form.phone) ? form.phone : undefined,
+      position: form.position || undefined,
+      department: form.department || undefined,
+      positionType: form.positionType,
+      joiningDate: form.joiningDate as unknown as string,
+      probationMonths: Number(form.probationMonths),
+      officeStartTime: form.officeStartTime,
+      officeEndTime: form.officeEndTime,
+      gracePeriodMinutes: Number(form.gracePeriodMinutes),
+      basicSalary: Number(form.basicSalary),
+      allowances: Number(form.allowances) || 0,
+      casualLeaveQuota: Number(form.casualLeaveQuota),
+      sickLeaveQuota: Number(form.sickLeaveQuota),
+      annualLeaveQuota: Number(form.annualLeaveQuota),
+      dateOfBirth: form.dateOfBirth
+        ? (form.dateOfBirth as unknown as string)
+        : undefined,
+      employeeCode: form.employeeCode || undefined,
+      maritalStatus: form.maritalStatus || undefined,
+      wifeName:
+        form.maritalStatus === "Married" ? form.wifeName || undefined : null,
+      wifeDateOfBirth:
+        form.maritalStatus === "Married" && form.wifeDateOfBirth
+          ? (form.wifeDateOfBirth as unknown as string)
+          : null,
+      kidsCount:
+        form.maritalStatus === "Married" && form.kidsCount !== ""
+          ? Number(form.kidsCount)
+          : null,
+      kidsNames:
+        form.maritalStatus === "Married"
+          ? form.kidsNames.map((name) => name.trim()).filter(Boolean)
+          : null,
+      lastQualification: form.lastQualification || undefined,
+      address: form.address || undefined,
+      cnic: form.cnic || undefined,
+      emergencyContactName: form.emergencyContactName || undefined,
+      emergencyContactNumber: hasPhoneSubscriberNumber(
+        form.emergencyContactNumber,
+      )
+        ? form.emergencyContactNumber
+        : undefined,
+      emergencyContactRelation: form.emergencyContactRelation || undefined,
+      emergencyContact:
+        (hasPhoneSubscriberNumber(form.emergencyContactNumber)
+          ? form.emergencyContactNumber
+          : form.emergencyContact) || undefined,
+      previousCompany: form.previousCompany || undefined,
+      lastPay: form.lastPay ? Number(form.lastPay) : undefined,
+      immediateFamily: form.immediateFamily || undefined,
+      notes: form.notes || undefined,
+      employmentContractUrl: form.employmentContractUrl || undefined,
+      employmentContractName: form.employmentContractName || undefined,
+      cnicDocumentUrl: form.cnicDocumentUrl || undefined,
+      cnicDocumentName: form.cnicDocumentName || undefined,
+      cnicFrontDocumentUrl: form.cnicFrontDocumentUrl || undefined,
+      cnicFrontDocumentName: form.cnicFrontDocumentName || undefined,
+      cnicBackDocumentUrl: form.cnicBackDocumentUrl || undefined,
+      cnicBackDocumentName: form.cnicBackDocumentName || undefined,
+      qualificationDocumentUrl: form.qualificationDocumentUrl || undefined,
+      qualificationDocumentName: form.qualificationDocumentName || undefined,
+      lastPayslipOneUrl: form.lastPayslipOneUrl || undefined,
+      lastPayslipOneName: form.lastPayslipOneName || undefined,
+      lastPayslipTwoUrl: form.lastPayslipTwoUrl || undefined,
+      lastPayslipTwoName: form.lastPayslipTwoName || undefined,
+      lastPayslipThreeUrl: form.lastPayslipThreeUrl || undefined,
+      lastPayslipThreeName: form.lastPayslipThreeName || undefined,
+      primaryBankAccountTitle: form.primaryBankAccountTitle || undefined,
+      primaryBankAccountNumber: form.primaryBankAccountNumber || undefined,
+      primaryBankName: PRIMARY_PAYROLL_BANK,
+      primaryBankIban: form.primaryBankIban || undefined,
+      primaryBankBranchCode: form.primaryBankBranchCode || undefined,
+      secondaryBankAccountTitle: form.secondaryBankAccountTitle || undefined,
+      secondaryBankAccountNumber: form.secondaryBankAccountNumber || undefined,
+      secondaryBankName: form.secondaryBankName || undefined,
+      secondaryBankIban: form.secondaryBankIban || undefined,
+      secondaryBankBranchCode: form.secondaryBankBranchCode || undefined,
+      medicalEnabled: form.medicalEnabled,
+      medicalDailyLimit: Number(form.medicalDailyLimit) || 0,
+      medicalOverallLimit: Number(form.medicalOverallLimit) || 0,
+      medicalOpdLimit: 0,
+      medicalIpdLimit: Number(form.medicalOverallLimit) || 0,
+      isActive: form.isActive,
+    } as any;
+
+    if (isEditing) {
+      update.mutate(
+        { id: editingEmployee.id, data: { ...payload, role: form.role } as any },
+        {
+          onSuccess: () => {
+            toast.success(`${form.name} updated`);
+            qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
+            qc.invalidateQueries({ queryKey: getGetAdminDashboardQueryKey() });
+            onOpenChange(false);
+            setForm(defaultForm);
+          },
+          onError: (err: unknown) =>
+            toast.error(
+              (err as { message?: string }).message ??
+                "Could not update employee",
+            ),
+        },
+      );
+      return;
+    }
+
     create.mutate(
       {
         data: {
-          name: form.name.trim(),
+          ...payload,
           email: form.email.trim(),
           password: form.password,
           role: form.role,
-          personalEmail: form.personalEmail.trim() || undefined,
-          phone: form.phone || undefined,
-          position: form.position || undefined,
-          department: form.department || undefined,
-          positionType: form.positionType,
-          joiningDate: form.joiningDate as unknown as string,
-          probationMonths: Number(form.probationMonths),
-          officeStartTime: form.officeStartTime,
-          officeEndTime: form.officeEndTime,
-          gracePeriodMinutes: Number(form.gracePeriodMinutes),
-          basicSalary: Number(form.basicSalary),
-          allowances: Number(form.allowances) || 0,
-          casualLeaveQuota: Number(form.casualLeaveQuota),
-          sickLeaveQuota: Number(form.sickLeaveQuota),
-          annualLeaveQuota: Number(form.annualLeaveQuota),
-          dateOfBirth: form.dateOfBirth
-            ? (form.dateOfBirth as unknown as string)
-            : undefined,
-          employeeCode: form.employeeCode || undefined,
-          maritalStatus: form.maritalStatus || undefined,
-          lastQualification: form.lastQualification || undefined,
-          address: form.address || undefined,
-          cnic: form.cnic || undefined,
-          emergencyContactName: form.emergencyContactName || undefined,
-          emergencyContactNumber: form.emergencyContactNumber || undefined,
-          emergencyContactRelation:
-            form.emergencyContactRelation || undefined,
-          emergencyContact:
-            form.emergencyContactNumber || form.emergencyContact || undefined,
-          previousCompany: form.previousCompany || undefined,
-          lastPay: form.lastPay ? Number(form.lastPay) : undefined,
-          notes: form.notes || undefined,
-          cnicDocumentUrl: form.cnicDocumentUrl || undefined,
-          cnicDocumentName: form.cnicDocumentName || undefined,
-          cnicFrontDocumentUrl: form.cnicFrontDocumentUrl || undefined,
-          cnicFrontDocumentName: form.cnicFrontDocumentName || undefined,
-          cnicBackDocumentUrl: form.cnicBackDocumentUrl || undefined,
-          cnicBackDocumentName: form.cnicBackDocumentName || undefined,
-          qualificationDocumentUrl:
-            form.qualificationDocumentUrl || undefined,
-          qualificationDocumentName:
-            form.qualificationDocumentName || undefined,
-          lastPayslipOneUrl: form.lastPayslipOneUrl || undefined,
-          lastPayslipOneName: form.lastPayslipOneName || undefined,
-          lastPayslipTwoUrl: form.lastPayslipTwoUrl || undefined,
-          lastPayslipTwoName: form.lastPayslipTwoName || undefined,
-          lastPayslipThreeUrl: form.lastPayslipThreeUrl || undefined,
-          lastPayslipThreeName: form.lastPayslipThreeName || undefined,
-          primaryBankAccountTitle: form.primaryBankAccountTitle || undefined,
-          primaryBankAccountNumber:
-            form.primaryBankAccountNumber || undefined,
-          primaryBankName: PRIMARY_PAYROLL_BANK,
-          primaryBankIban: form.primaryBankIban || undefined,
-          primaryBankBranchCode: form.primaryBankBranchCode || undefined,
-          secondaryBankAccountTitle:
-            form.secondaryBankAccountTitle || undefined,
-          secondaryBankAccountNumber:
-            form.secondaryBankAccountNumber || undefined,
-          secondaryBankName: form.secondaryBankName || undefined,
-          secondaryBankIban: form.secondaryBankIban || undefined,
-          secondaryBankBranchCode:
-            form.secondaryBankBranchCode || undefined,
-        } as any,
+        },
       },
       {
         onSuccess: () => {
@@ -584,12 +866,13 @@ function NewEmployeeSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-5xl">
+      <SheetContent className="w-full sm:max-w-5xl">
         <SheetHeader>
-          <SheetTitle>Add employee</SheetTitle>
+          <SheetTitle>{isEditing ? "Edit employee" : "Add employee"}</SheetTitle>
           <SheetDescription>
-            A temporary password will be assigned and the employee will be
-            prompted to change it at first sign-in.
+            {isEditing
+              ? "Update the employee profile in the same quick drawer without leaving the list."
+              : "A temporary password will be assigned and the employee will be prompted to change it at first sign-in."}
           </SheetDescription>
         </SheetHeader>
         <form onSubmit={onSubmit} className="mt-6 space-y-6 px-1">
@@ -647,8 +930,10 @@ function NewEmployeeSheet({
                   onChange={(e) =>
                     setForm({ ...form, employeeCode: e.target.value })
                   }
-                  placeholder="e.g. EMP-001"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Auto-generated by default, but you can edit it before saving.
+                </p>
               </Field>
               <Field label="Full name" required>
                 <Input
@@ -657,29 +942,38 @@ function NewEmployeeSheet({
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
               </Field>
-              <Field label="Work email" required>
-                <Input
-                  required
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                />
-              </Field>
-              <Field label="Password" required>
-                <PasswordField
-                  required
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
-                  }
-                  minLength={6}
-                />
-              </Field>
+              {!isEditing && (
+                <>
+                  <Field label="Work email" required>
+                    <Input
+                      required
+                      type="email"
+                      value={form.email}
+                      onChange={(e) =>
+                        setForm({ ...form, email: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Password" required>
+                    <PasswordField
+                      required
+                      value={form.password}
+                      onChange={(e) =>
+                        setForm({ ...form, password: e.target.value })
+                      }
+                      minLength={6}
+                    />
+                  </Field>
+                </>
+              )}
               <Field label="Account role" required>
                 <Select
                   value={form.role}
                   onValueChange={(v) =>
-                    setForm({ ...form, role: v as "admin" | "hr" | "employee" })
+                    setForm({
+                      ...form,
+                      role: v as "admin" | "employee",
+                    })
                   }
                 >
                   <SelectTrigger>
@@ -687,17 +981,19 @@ function NewEmployeeSheet({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="employee">Employee</SelectItem>
-                    <SelectItem value="hr">HR</SelectItem>
-                    {isAdmin && (
-                      <SelectItem value="admin">Admin</SelectItem>
-                    )}
+                    {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
                   </SelectContent>
                 </Select>
               </Field>
               <Field label="Phone number">
                 <Input
                   value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      phone: normalizePakistanPhoneInput(e.target.value),
+                    })
+                  }
                   placeholder="+923XXXXXXXXX"
                 />
               </Field>
@@ -717,6 +1013,30 @@ function NewEmployeeSheet({
                   onChange={(v) => setForm({ ...form, dateOfBirth: v })}
                 />
               </Field>
+              {isEditing && (
+                <Field label="Account status">
+                  <div className="space-y-2">
+                    <Select
+                      value={form.isActive ? "active" : "inactive"}
+                      onValueChange={(value) =>
+                        setForm({ ...form, isActive: value === "active" })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Set this to inactive when the employee is on long leave
+                      or bed rest and should not access the system.
+                    </p>
+                  </div>
+                </Field>
+              )}
               <Field label="Marital status">
                 <Select
                   value={form.maritalStatus || "unset"}
@@ -724,6 +1044,15 @@ function NewEmployeeSheet({
                     setForm({
                       ...form,
                       maritalStatus: v === "unset" ? "" : v,
+                      wifeName: v === "Married" ? form.wifeName : "",
+                      kidsCount: v === "Married" ? form.kidsCount : "",
+                      kidsNames:
+                        v === "Married"
+                          ? normalizeKidsNames(
+                              form.kidsNames,
+                              Number(form.kidsCount || 0),
+                            )
+                          : [],
                     })
                   }
                 >
@@ -739,6 +1068,69 @@ function NewEmployeeSheet({
                   </SelectContent>
                 </Select>
               </Field>
+              {form.maritalStatus === "Married" && (
+                <>
+                  <Field label="Wife name">
+                    <Input
+                      value={form.wifeName}
+                      onChange={(e) =>
+                        setForm({ ...form, wifeName: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Kids">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.kidsCount}
+                      onChange={(e) => {
+                        const nextCount = Math.max(
+                          0,
+                          Number(e.target.value || 0),
+                        );
+                        setForm({
+                          ...form,
+                          kidsCount: e.target.value,
+                          kidsNames: normalizeKidsNames(
+                            form.kidsNames,
+                            nextCount,
+                          ),
+                        });
+                      }}
+                    />
+                  </Field>
+                  {Number(form.kidsCount || 0) > 0 && (
+                    <div className="sm:col-span-2 grid gap-3">
+                      {normalizeKidsNames(
+                        form.kidsNames,
+                        Number(form.kidsCount || 0),
+                      ).map((kidName, index) => (
+                        <Field
+                          key={`kid-${index}`}
+                          label={`Kid ${index + 1} name`}
+                        >
+                          <Input
+                            value={kidName}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                kidsNames: normalizeKidsNames(
+                                  form.kidsNames,
+                                  Number(form.kidsCount || 0),
+                                ).map((value, valueIndex) =>
+                                  valueIndex === index
+                                    ? e.target.value
+                                    : value,
+                                ),
+                              })
+                            }
+                          />
+                        </Field>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </Section>
 
@@ -809,7 +1201,12 @@ function NewEmployeeSheet({
               <Field label="CNIC">
                 <Input
                   value={form.cnic}
-                  onChange={(e) => setForm({ ...form, cnic: e.target.value })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      cnic: normalizeCnicInput(e.target.value),
+                    })
+                  }
                   placeholder="XXXXX-XXXXXXX-X"
                 />
               </Field>
@@ -912,11 +1309,11 @@ function NewEmployeeSheet({
               <Field label="Total salary (PKR)" required>
                 <Input
                   required
-                  type="number"
-                  min={0}
-                  value={form.totalSalary}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatNumberInput(form.totalSalary)}
                   onChange={(e) => {
-                    const totalSalary = Number(e.target.value);
+                    const totalSalary = parseNumberInput(e.target.value);
                     const split = splitTotalSalary(totalSalary);
                     setForm({
                       ...form,
@@ -930,22 +1327,22 @@ function NewEmployeeSheet({
               <Field label="Basic salary (PKR)" required>
                 <Input
                   required
-                  type="number"
-                  value={form.basicSalary}
+                  type="text"
+                  value={formatNumberInput(form.basicSalary)}
                   readOnly
                 />
               </Field>
               <Field label="Home rent (PKR)">
                 <Input
-                  type="number"
-                  value={allowanceBreakdown.homeRent}
+                  type="text"
+                  value={formatNumberInput(allowanceBreakdown.homeRent)}
                   readOnly
                 />
               </Field>
               <Field label="Utility bills (PKR)">
                 <Input
-                  type="number"
-                  value={allowanceBreakdown.utilityBills}
+                  type="text"
+                  value={formatNumberInput(allowanceBreakdown.utilityBills)}
                   readOnly
                 />
               </Field>
@@ -962,10 +1359,16 @@ function NewEmployeeSheet({
                   min={0}
                   value={form.casualLeaveQuota}
                   onChange={(e) =>
-                    setForm({
-                      ...form,
-                      casualLeaveQuota: Number(e.target.value),
-                    })
+                    {
+                      setQuotaTouched((current) => ({
+                        ...current,
+                        casual: true,
+                      }));
+                      setForm({
+                        ...form,
+                        casualLeaveQuota: Number(e.target.value),
+                      });
+                    }
                   }
                 />
               </Field>
@@ -976,10 +1379,16 @@ function NewEmployeeSheet({
                   min={0}
                   value={form.sickLeaveQuota}
                   onChange={(e) =>
-                    setForm({
-                      ...form,
-                      sickLeaveQuota: Number(e.target.value),
-                    })
+                    {
+                      setQuotaTouched((current) => ({
+                        ...current,
+                        sick: true,
+                      }));
+                      setForm({
+                        ...form,
+                        sickLeaveQuota: Number(e.target.value),
+                      });
+                    }
                   }
                 />
               </Field>
@@ -990,9 +1399,66 @@ function NewEmployeeSheet({
                   min={0}
                   value={form.annualLeaveQuota}
                   onChange={(e) =>
+                    {
+                      setQuotaTouched((current) => ({
+                        ...current,
+                        annual: true,
+                      }));
+                      setForm({
+                        ...form,
+                        annualLeaveQuota: Number(e.target.value),
+                      });
+                    }
+                  }
+                />
+              </Field>
+            </div>
+          </Section>
+
+          <Section title="Medical allowance">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Medical enabled">
+                <Select
+                  value={form.medicalEnabled ? "enabled" : "disabled"}
+                  onValueChange={(value) =>
+                    setForm({ ...form, medicalEnabled: value === "enabled" })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="enabled">Enabled</SelectItem>
+                    <SelectItem value="disabled">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Yearly IPD allowance (PKR)">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatNumberInput(form.medicalOverallLimit)}
+                  onChange={(e) =>
                     setForm({
                       ...form,
-                      annualLeaveQuota: Number(e.target.value),
+                      medicalOverallLimit: e.target.value
+                        ? String(parseNumberInput(e.target.value))
+                        : "",
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Per day limit (PKR)">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatNumberInput(form.medicalDailyLimit)}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      medicalDailyLimit: e.target.value
+                        ? String(parseNumberInput(e.target.value))
+                        : "",
                     })
                   }
                 />
@@ -1135,7 +1601,9 @@ function NewEmployeeSheet({
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      emergencyContactNumber: e.target.value,
+                      emergencyContactNumber: normalizePakistanPhoneInput(
+                        e.target.value,
+                      ),
                     })
                   }
                   placeholder="+923XXXXXXXXX"
@@ -1182,6 +1650,26 @@ function NewEmployeeSheet({
                   }
                 />
               </Field>
+              <Field label="Employment contract">
+                <SimpleUploadField
+                  fileUrl={form.employmentContractUrl}
+                  fileName={form.employmentContractName}
+                  onUploaded={(file) =>
+                    setForm((current) => ({
+                      ...current,
+                      employmentContractUrl: file.url,
+                      employmentContractName: file.name,
+                    }))
+                  }
+                  onClear={() =>
+                    setForm((current) => ({
+                      ...current,
+                      employmentContractUrl: "",
+                      employmentContractName: "",
+                    }))
+                  }
+                />
+              </Field>
               <Field label="Previous company">
                 <Input
                   value={form.previousCompany}
@@ -1192,14 +1680,30 @@ function NewEmployeeSheet({
               </Field>
               <Field label="Last pay (PKR)">
                 <Input
-                  type="number"
-                  min={0}
-                  value={form.lastPay}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatNumberInput(form.lastPay)}
                   onChange={(e) =>
-                    setForm({ ...form, lastPay: e.target.value })
+                    setForm({
+                      ...form,
+                      lastPay: e.target.value
+                        ? String(parseNumberInput(e.target.value))
+                        : "",
+                    })
                   }
                 />
               </Field>
+              <div className="sm:col-span-2">
+                <Field label="Family members">
+                  <Input
+                    value={form.immediateFamily}
+                    onChange={(e) =>
+                      setForm({ ...form, immediateFamily: e.target.value })
+                    }
+                    placeholder="Optional family member details"
+                  />
+                </Field>
+              </div>
               <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3">
                 <Field label="Last 3 months payslip 1">
                   <SimpleUploadField
@@ -1285,8 +1789,17 @@ function NewEmployeeSheet({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "Adding..." : "Add employee"}
+            <Button
+              type="submit"
+              disabled={create.isPending || update.isPending}
+            >
+              {isEditing
+                ? update.isPending
+                  ? "Saving..."
+                  : "Save changes"
+                : create.isPending
+                  ? "Adding..."
+                  : "Add employee"}
             </Button>
           </SheetFooter>
         </form>
@@ -1736,20 +2249,20 @@ function SimpleUploadField({
     <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3 text-sm">
       {isImageAsset ? (
         <a
-          href={fileUrl}
+          href={resolveAssetUrl(fileUrl)}
           target="_blank"
           rel="noreferrer"
           className="block overflow-hidden rounded-lg border border-border bg-card"
         >
           <img
-            src={fileUrl}
+            src={resolveAssetUrl(fileUrl)}
             alt={normalizedLabel}
-            className="h-48 w-full object-contain bg-muted/30"
+            className="h-56 w-full object-cover bg-muted/30"
           />
         </a>
       ) : (
         <a
-          href={fileUrl}
+          href={resolveAssetUrl(fileUrl)}
           target="_blank"
           rel="noreferrer"
           className="block truncate rounded-lg border border-border bg-card px-3 py-3 font-medium text-primary hover:underline"
@@ -1759,14 +2272,24 @@ function SimpleUploadField({
       )}
 
       <div className="space-y-2">
-        <a
-          href={fileUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="block truncate text-sm font-medium text-primary hover:underline"
-        >
-          {normalizedLabel}
-        </a>
+        <div className="flex items-center justify-between gap-3">
+          <a
+            href={resolveAssetUrl(fileUrl)}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate text-sm font-medium text-primary hover:underline"
+          >
+            {normalizedLabel}
+          </a>
+          <a
+            href={resolveAssetUrl(fileUrl)}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 text-xs font-medium text-primary hover:underline"
+          >
+            Open
+          </a>
+        </div>
         <div className="flex items-center gap-2">
           <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">
             {uploading ? "Uploading..." : "Replace"}

@@ -2,10 +2,13 @@ import express, { type Express } from "express";
 import cors from "cors";
 import session from "express-session";
 import pinoHttp from "pino-http";
+import path from "node:path";
+import { existsSync } from "node:fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { ensureSeed } from "./lib/seed";
 import { ensureSessionTable, MySqlSessionStore } from "./lib/mysqlSessionStore";
+import { ensureLegacySchemaCompatibility } from "./lib/schemaCompatibility";
 
 const app: Express = express();
 
@@ -39,6 +42,7 @@ if (!sessionSecret) {
 
 app.set("trust proxy", 1);
 
+await ensureLegacySchemaCompatibility();
 await ensureSessionTable();
 
 app.use(
@@ -57,6 +61,26 @@ app.use(
 );
 
 app.use("/api", router);
+
+const frontendDistDir = path.resolve(__dirname, "../../hrm/dist/public");
+const frontendIndexPath = path.join(frontendDistDir, "index.html");
+const hasFrontendBuild = existsSync(frontendIndexPath);
+
+if (hasFrontendBuild) {
+  app.use(express.static(frontendDistDir));
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api")) {
+      next();
+      return;
+    }
+    res.sendFile(frontendIndexPath);
+  });
+} else {
+  logger.warn(
+    { frontendDistDir },
+    "Frontend build not found; serving API routes only",
+  );
+}
 
 // Best-effort seed; do not block startup if it fails
 ensureSeed().catch((err) => {

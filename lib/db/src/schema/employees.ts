@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   decimal,
   int,
@@ -44,6 +45,10 @@ export const employeesTable = mysqlTable("employees", {
   avatarUrl: varchar("avatar_url", { length: 1024 }),
   employeeCode: varchar("employee_code", { length: 64 }),
   maritalStatus: text("marital_status"),
+  wifeName: text("wife_name"),
+  wifeDateOfBirth: text("wife_date_of_birth"),
+  kidsCount: text("kids_count"),
+  kidsNames: text("kids_names"),
   leftDate: date("left_date", { mode: "string" }),
   emergencyContactName: varchar("emergency_contact_name", { length: 255 }),
   emergencyContactNumber: varchar("emergency_contact_number", { length: 64 }),
@@ -101,6 +106,23 @@ export const employeesTable = mysqlTable("employees", {
   secondaryBankBranchCode: varchar("secondary_bank_branch_code", {
     length: 64,
   }),
+  medicalEnabled: boolean("medical_enabled").notNull().default(false),
+  medicalDailyLimit: decimal("medical_daily_limit", {
+    precision: 12,
+    scale: 2,
+  }).notNull().default("0"),
+  medicalOverallLimit: decimal("medical_overall_limit", {
+    precision: 12,
+    scale: 2,
+  }).notNull().default("0"),
+  medicalOpdLimit: decimal("medical_opd_limit", {
+    precision: 12,
+    scale: 2,
+  }).notNull().default("0"),
+  medicalIpdLimit: decimal("medical_ipd_limit", {
+    precision: 12,
+    scale: 2,
+  }).notNull().default("0"),
   providentFundPercent: decimal("provident_fund_percent", {
     precision: 5,
     scale: 2,

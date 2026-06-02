@@ -35,7 +35,7 @@ export function AdminLeavesPage() {
   const [tab, setTab] = useState<FilterStatus>("pending");
   const params = tab === "all" ? undefined : { status: tab };
   const queryKey = getListLeavesQueryKey(params);
-  const { data, isLoading } = useListLeaves(params, { query: { queryKey } });
+  const { data, isLoading, isError } = useListLeaves(params, { query: { queryKey } });
 
   const qc = useQueryClient();
   const approve = useApproveLeave();
@@ -92,6 +92,12 @@ export function AdminLeavesPage() {
               <TableRow>
                 <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   Loading requests...
+                </TableCell>
+              </TableRow>
+            ) : isError ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  Leave requests load nahin ho sakin. Page refresh karke dobara try karein.
                 </TableCell>
               </TableRow>
             ) : (data ?? []).length === 0 ? (
