@@ -344,6 +344,7 @@ function ProfileTab({ employee }: { employee: any }) {
       <ReadonlySection title="Schedule">
         <ReadonlyGrid columns="three">
           <ReadonlyField label="Grace period (min)" value={String(employee.gracePeriodMinutes ?? "—")} />
+          <ReadonlyField label="Break (min)" value={String(employee.breakMinutes ?? "—")} />
           <ReadonlyField label="Office start" value={employee.officeStartTime} />
           <ReadonlyField label="Office end" value={employee.officeEndTime} />
         </ReadonlyGrid>
@@ -1495,6 +1496,7 @@ function AttendanceTab({
     officeStartTime?: string | null;
     officeEndTime?: string | null;
     gracePeriodMinutes?: number | null;
+    breakMinutes?: number | null;
   };
 }) {
   const resolveWorkedMinutes = (record: {
@@ -1561,9 +1563,15 @@ function AttendanceTab({
             workedMinutes: day.record ? resolveWorkedMinutes(day.record) : null,
             officeStartTime: employee.officeStartTime,
             officeEndTime: employee.officeEndTime,
+            breakMinutes: employee.breakMinutes,
           }),
         })),
-    [calendar, employee.officeEndTime, employee.officeStartTime],
+    [
+      calendar,
+      employee.breakMinutes,
+      employee.officeEndTime,
+      employee.officeStartTime,
+    ],
   );
 
   const summary = useMemo(() => {
@@ -1600,6 +1608,7 @@ function AttendanceTab({
       buildScheduledHoursTargets({
         officeStartTime: employee.officeStartTime,
         officeEndTime: employee.officeEndTime,
+        breakMinutes: employee.breakMinutes,
         offDays: settings?.weeklyOffDays ?? [0, 6],
         holidayDates: new Set(
           (settings?.publicHolidays ?? []).map((holiday) => holiday.date as unknown as string),
@@ -1609,6 +1618,7 @@ function AttendanceTab({
     [
       employee.officeEndTime,
       employee.officeStartTime,
+      employee.breakMinutes,
       month,
       settings?.publicHolidays,
       settings?.weeklyOffDays,

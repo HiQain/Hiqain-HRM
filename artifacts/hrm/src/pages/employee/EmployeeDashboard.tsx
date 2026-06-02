@@ -27,8 +27,21 @@ import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
+import {
+  attendanceExtensionStatusQueryKey,
+  useAttendanceExtensionStatus,
+} from "@/lib/attendanceExtension";
+import { computeScheduledShiftMinutes } from "@/lib/attendanceHours";
 import {
   formatDate,
   formatDateLong,
@@ -44,17 +57,36 @@ export function EmployeeDashboard() {
   const pauseAttendance = usePauseAttendance();
   const resumeAttendance = useResumeAttendance();
   const checkOut = useCheckOut();
+  const { data: extensionStatus } = useAttendanceExtensionStatus();
   const [now, setNow] = useState(() => Date.now());
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [dismissedWarningAt, setDismissedWarningAt] = useState<string | null>(null);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: getGetEmployeeDashboardQueryKey() });
     qc.invalidateQueries({ queryKey: getGetTodayAttendanceQueryKey() });
+    qc.invalidateQueries({ queryKey: attendanceExtensionStatusQueryKey });
   };
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const warningAt = extensionStatus?.link?.lastWarningAt ?? null;
+    if (
+      extensionStatus?.link?.warningActive &&
+      warningAt &&
+      dismissedWarningAt !== warningAt
+    ) {
+      setWarningOpen(true);
+    }
+  }, [
+    dismissedWarningAt,
+    extensionStatus?.link?.lastWarningAt,
+    extensionStatus?.link?.warningActive,
+  ]);
 
   if (isLoading || !data) {
     return (
@@ -72,6 +104,19 @@ export function EmployeeDashboard() {
 
   const { employee, todayAttendance, monthAttendance, leaveBalance, recentLeaves } = data;
   const activeRecord = todayAttendance.record;
+  const requiredShiftMinutes = computeScheduledShiftMinutes(
+    employee.officeStartTime,
+    employee.officeEndTime,
+    employee.breakMinutes,
+  );
+  const activePauseMinutes =
+    activeRecord?.pausedAt && !activeRecord?.checkOutTime
+      ? Math.max(
+          0,
+          Math.floor((now - new Date(activeRecord.pausedAt).getTime()) / 60000),
+        )
+      : 0;
+  const totalPausedMinutes = (activeRecord?.pausedMinutes ?? 0) + activePauseMinutes;
   const liveWorkedMinutes =
     activeRecord?.checkInTime && !activeRecord?.checkOutTime
       ? Math.max(
@@ -79,17 +124,16 @@ export function EmployeeDashboard() {
           Math.floor(
             (now - new Date(activeRecord.checkInTime).getTime()) / 60000,
           ) -
-            (activeRecord.pausedMinutes ?? 0) -
-            (activeRecord.pausedAt
-              ? Math.max(
-                  0,
-                  Math.floor(
-                    (now - new Date(activeRecord.pausedAt).getTime()) / 60000,
-                  ),
-                )
-              : 0),
+            totalPausedMinutes,
         )
       : activeRecord?.workedMinutes ?? 0;
+  const remainingShiftMinutes = Math.max(
+    0,
+    requiredShiftMinutes - liveWorkedMinutes,
+  );
+  const workedProgress = requiredShiftMinutes
+    ? Math.min(100, Math.round((liveWorkedMinutes / requiredShiftMinutes) * 100))
+    : 0;
   const liveStatus = (() => {
     if (!activeRecord?.status) return null;
     if (activeRecord.checkOutTime) return activeRecord.status;
@@ -144,6 +188,12 @@ export function EmployeeDashboard() {
         toast.error(e?.message ?? "Could not check out"),
     });
 
+  const extensionLink = extensionStatus?.link ?? null;
+  const showExtensionSetupCard =
+    !!activeRecord?.checkInTime &&
+    !activeRecord?.checkOutTime &&
+    !extensionLink?.connected;
+
   return (
     <div className="space-y-7">
       <PageHeader
@@ -172,6 +222,10 @@ export function EmployeeDashboard() {
             </div>
             <p className="mt-1 text-sm opacity-90">
               Office hours {formatHMRange12(employee.officeStartTime, employee.officeEndTime)}, with a {employee.gracePeriodMinutes}-min grace.
+            </p>
+            <p className="mt-1 text-sm opacity-90">
+              Required working time for this shift: {formatDuration(requiredShiftMinutes)}.
+              Pausing attendance stops the timer until you resume.
             </p>
             <AttendanceRuleHint
               officeStartTime={employee.officeStartTime}
@@ -254,6 +308,100 @@ export function EmployeeDashboard() {
         </div>
       </div>
 
+      {todayAttendance.hasCheckedIn ? (
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Today&apos;s working progress
+              </p>
+              <h3 className="mt-1 text-xl font-semibold text-foreground">
+                {todayAttendance.isPaused
+                  ? "Break timer is paused"
+                  : todayAttendance.hasCheckedOut
+                    ? "Shift progress recorded"
+                    : "Timer is counting active working time"}
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Worked time only grows while attendance is active. Break minutes stay excluded, so employees still need to complete the full scheduled shift.
+              </p>
+            </div>
+            <div className="min-w-52 rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm">
+              <p className="text-muted-foreground">Shift target</p>
+              <p className="mt-1 text-2xl font-semibold text-foreground">
+                {formatDuration(requiredShiftMinutes)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {formatHMRange12(employee.officeStartTime, employee.officeEndTime)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-4">
+            <StatCard
+              label="Worked"
+              value={formatDuration(liveWorkedMinutes)}
+              icon={Clock}
+              tone="success"
+            />
+            <StatCard
+              label="Break"
+              value={formatDuration(totalPausedMinutes)}
+              icon={Pause}
+              tone="warning"
+            />
+            <StatCard
+              label="Remaining"
+              value={formatDuration(remainingShiftMinutes)}
+              icon={ArrowRight}
+              tone="info"
+            />
+            <StatCard
+              label="Required"
+              value={formatDuration(requiredShiftMinutes)}
+              icon={CheckCircle2}
+              tone="default"
+            />
+          </div>
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="font-medium text-foreground">Shift completion</span>
+              <span className="text-muted-foreground">{workedProgress}%</span>
+            </div>
+            <Progress value={workedProgress} className="h-2.5" />
+          </div>
+        </div>
+      ) : null}
+
+      {showExtensionSetupCard ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
+                Browser Extension
+              </p>
+              <h3 className="mt-1 text-xl font-semibold">
+                Connect this browser to keep idle attendance automation on
+              </h3>
+              <p className="mt-1 text-sm text-amber-900/80">
+                HRM can auto-pause after 10 minutes idle, warn after 20, and auto
+                check out after 30 once this browser is linked.
+              </p>
+              <p className="mt-3 text-sm text-amber-900/70">
+                Open the extension popup and sign in with the same HRM email and password you already use here.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+              <Link href="/employee/settings">
+                <Button className="w-full sm:w-auto lg:w-full">
+                  Open settings
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Present" value={monthAttendance.present} icon={CheckCircle2} tone="success" />
         <StatCard label="Late" value={monthAttendance.late} icon={Clock} tone="warning" sub={`Of ${monthAttendance.present}`} />
@@ -308,6 +456,51 @@ export function EmployeeDashboard() {
           )}
         </div>
       </div>
+
+      <Dialog
+        open={warningOpen}
+        onOpenChange={(open) => {
+          setWarningOpen(open);
+          if (!open && extensionLink?.lastWarningAt) {
+            setDismissedWarningAt(extensionLink.lastWarningAt);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Low activity detected</DialogTitle>
+            <DialogDescription>
+              HRM has not seen activity in this browser for {extensionLink?.idleForMinutes ?? 0} minutes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              If inactivity continues, HRM will auto check you out in about{" "}
+              {extensionLink?.warningCountdownMinutes ?? 0} minute(s).
+            </p>
+            <p>
+              Move the mouse, type, or focus back on your work browser. If needed,
+              open the extension and press <span className="font-medium text-foreground">Sync</span>.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (extensionLink?.lastWarningAt) {
+                  setDismissedWarningAt(extensionLink.lastWarningAt);
+                }
+                setWarningOpen(false);
+              }}
+            >
+              Dismiss
+            </Button>
+            <Link href="/employee/settings">
+              <Button onClick={() => setWarningOpen(false)}>Open extension help</Button>
+            </Link>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

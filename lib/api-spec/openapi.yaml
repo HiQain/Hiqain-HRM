@@ -1580,6 +1580,7 @@ components:
         - officeStartTime
         - officeEndTime
         - gracePeriodMinutes
+        - breakMinutes
         - basicSalary
         - positionType
         - casualLeaveQuota
@@ -1601,6 +1602,7 @@ components:
         officeStartTime: { type: string, description: "HH:mm" }
         officeEndTime: { type: string, description: "HH:mm" }
         gracePeriodMinutes: { type: integer }
+        breakMinutes: { type: integer, minimum: 0 }
         basicSalary: { type: number }
         allowances: { type: number }
         casualLeaveQuota: { type: integer }
@@ -1681,6 +1683,7 @@ components:
         - officeStartTime
         - officeEndTime
         - gracePeriodMinutes
+        - breakMinutes
         - basicSalary
       properties:
         name: { type: string }
@@ -1697,6 +1700,7 @@ components:
         officeStartTime: { type: string }
         officeEndTime: { type: string }
         gracePeriodMinutes: { type: integer, minimum: 0 }
+        breakMinutes: { type: integer, minimum: 0 }
         basicSalary: { type: number, minimum: 0 }
         allowances: { type: number, nullable: true }
         casualLeaveQuota: { type: integer, minimum: 0, nullable: true }
@@ -1763,6 +1767,7 @@ components:
         officeStartTime: { type: string }
         officeEndTime: { type: string }
         gracePeriodMinutes: { type: integer, minimum: 0 }
+        breakMinutes: { type: integer, minimum: 0 }
         basicSalary: { type: number, minimum: 0 }
         allowances: { type: number, nullable: true }
         casualLeaveQuota: { type: integer, minimum: 0 }

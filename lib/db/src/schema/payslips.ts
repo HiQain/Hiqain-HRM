@@ -25,6 +25,10 @@ export const payslipsTable = mysqlTable(
     lateAbsenceDays: decimal("late_absence_days", { precision: 5, scale: 2 })
       .notNull()
       .default("0"),
+    scheduledMinutes: int("scheduled_minutes").notNull().default(0),
+    completedMinutes: int("completed_minutes").notNull().default(0),
+    extraMinutes: int("extra_minutes").notNull().default(0),
+    shortMinutes: int("short_minutes").notNull().default(0),
     basicSalary: decimal("basic_salary", { precision: 12, scale: 2 }).notNull(),
     allowances: decimal("allowances", { precision: 12, scale: 2 }).notNull(),
     bonus: decimal("bonus", { precision: 12, scale: 2 }).notNull().default("0"),

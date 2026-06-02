@@ -151,6 +151,10 @@ export function EmployeeProfilePage() {
               <span className="text-muted-foreground">Grace period</span>
               <span className="font-medium">{employee.gracePeriodMinutes} min</span>
             </li>
+            <li className="flex justify-between">
+              <span className="text-muted-foreground">Break time</span>
+              <span className="font-medium">{employee.breakMinutes ?? 0} min</span>
+            </li>
           </ul>
         </div>
       </div>

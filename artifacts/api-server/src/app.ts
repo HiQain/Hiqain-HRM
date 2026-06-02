@@ -8,6 +8,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { ensureSeed } from "./lib/seed";
 import { ensureSessionTable, MySqlSessionStore } from "./lib/mysqlSessionStore";
+import { startAttendanceExtensionMonitor } from "./lib/attendanceExtension";
 import { ensureLegacySchemaCompatibility } from "./lib/schemaCompatibility";
 
 const app: Express = express();
@@ -44,6 +45,7 @@ app.set("trust proxy", 1);
 
 await ensureLegacySchemaCompatibility();
 await ensureSessionTable();
+startAttendanceExtensionMonitor();
 
 app.use(
   session({

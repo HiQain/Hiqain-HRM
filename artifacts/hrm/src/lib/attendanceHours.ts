@@ -13,11 +13,34 @@ export function computeShiftMinutes(
   return end <= start ? 24 * 60 - start + end : end - start;
 }
 
+export function computeScheduledShiftMinutes(
+  officeStartTime?: string | null,
+  officeEndTime?: string | null,
+  breakMinutes?: number | null,
+): number {
+  return Math.max(
+    0,
+    computeShiftMinutes(officeStartTime, officeEndTime) -
+      Math.max(0, breakMinutes ?? 0),
+  );
+}
+
 export function computeDailyHours(
   officeStartTime?: string | null,
   officeEndTime?: string | null,
+  breakMinutes?: number | null,
 ): number {
-  return Math.round((computeShiftMinutes(officeStartTime, officeEndTime) / 60) * 100) / 100;
+  return (
+    Math.round(
+      (computeScheduledShiftMinutes(
+        officeStartTime,
+        officeEndTime,
+        breakMinutes,
+      ) /
+        60) *
+        100,
+    ) / 100
+  );
 }
 
 export function computeWorkingDaysInRange(
@@ -75,6 +98,7 @@ export function computeWorkingDaysInWeek(
 export function buildScheduledHoursTargets({
   officeStartTime,
   officeEndTime,
+  breakMinutes,
   offDays,
   holidayDates,
   month,
@@ -82,12 +106,13 @@ export function buildScheduledHoursTargets({
 }: {
   officeStartTime?: string | null;
   officeEndTime?: string | null;
+  breakMinutes?: number | null;
   offDays: number[];
   holidayDates: Set<string>;
   month?: string;
   weekAnchorDate?: Date;
 }) {
-  const daily = computeDailyHours(officeStartTime, officeEndTime);
+  const daily = computeDailyHours(officeStartTime, officeEndTime, breakMinutes);
   const weeklyWorkingDays = computeWorkingDaysInWeek(weekAnchorDate, offDays, holidayDates);
   const weekly = Math.round(daily * weeklyWorkingDays * 100) / 100;
 
@@ -110,14 +135,20 @@ export function normalizeAttendanceWorkedMinutes({
   workedMinutes,
   officeStartTime,
   officeEndTime,
+  breakMinutes,
 }: {
   status: string;
   workedMinutes: number | null | undefined;
   officeStartTime?: string | null;
   officeEndTime?: string | null;
+  breakMinutes?: number | null;
 }) {
   if ((workedMinutes ?? 0) > 0) return workedMinutes ?? 0;
-  const fullShiftMinutes = computeShiftMinutes(officeStartTime, officeEndTime);
+  const fullShiftMinutes = computeScheduledShiftMinutes(
+    officeStartTime,
+    officeEndTime,
+    breakMinutes,
+  );
   if (
     status === "present" ||
     status === "late" ||

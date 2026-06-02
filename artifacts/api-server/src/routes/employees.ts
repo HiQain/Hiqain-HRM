@@ -26,6 +26,30 @@ import { getSettings } from "./settings";
 const router: IRouter = Router();
 const PRIMARY_PAYROLL_BANK_NAME = "Bank Al Habib";
 
+function parseTimeToMinutes(value: string | null | undefined): number {
+  if (!value) return 0;
+  const [hours, minutes] = value.split(":").map(Number);
+  return (hours || 0) * 60 + (minutes || 0);
+}
+
+function computeShiftSpanMinutes(
+  officeStartTime: string | null | undefined,
+  officeEndTime: string | null | undefined,
+) {
+  const start = parseTimeToMinutes(officeStartTime);
+  const end = parseTimeToMinutes(officeEndTime);
+  return end <= start ? 24 * 60 - start + end : end - start;
+}
+
+function inferBreakMinutes(
+  officeStartTime: string | null | undefined,
+  officeEndTime: string | null | undefined,
+) {
+  return computeShiftSpanMinutes(officeStartTime, officeEndTime) <= 6 * 60
+    ? 30
+    : 60;
+}
+
 function buildEmployeeCode(sequence: number): string {
   return `EMP-${String(sequence).padStart(3, "0")}`;
 }
@@ -114,6 +138,7 @@ function serializeEmployee(
     officeStartTime: e.officeStartTime,
     officeEndTime: e.officeEndTime,
     gracePeriodMinutes: e.gracePeriodMinutes,
+    breakMinutes: e.breakMinutes,
     basicSalary: Number(e.basicSalary),
     allowances: Number(e.allowances),
     casualLeaveQuota: e.casualLeaveQuota,
@@ -248,17 +273,22 @@ router.get("/employees", requireAuth(["admin", "hr"]), async (_req, res) => {
   );
 });
 
-function proRatedQuota(quota: number, joiningDate: string): number {
-  const j = parseDate(joiningDate);
+function proRatedQuota(
+  quota: number,
+  joiningDate: string,
+  probationMonths: number,
+): number {
+  const effectiveDate = addMonths(parseDate(joiningDate), probationMonths);
   const today = new Date();
-  if (
-    j.getUTCFullYear() < today.getUTCFullYear() ||
-    j.getUTCMonth() === 0
-  ) {
+  if (effectiveDate.getUTCFullYear() !== today.getUTCFullYear()) {
     return quota;
   }
-  const monthsRemaining = 12 - j.getUTCMonth();
-  return Math.round((quota * monthsRemaining) / 12);
+  const effectiveMonthIndex =
+    effectiveDate.getUTCDate() >= 16
+      ? effectiveDate.getUTCMonth() + 1
+      : effectiveDate.getUTCMonth();
+  const monthsRemaining = Math.max(0, 12 - effectiveMonthIndex);
+  return Math.max(0, Math.round((quota * monthsRemaining) / 12));
 }
 
 router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
@@ -314,17 +344,24 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
   const autoCode = await getNextEmployeeCode();
 
   const joiningDateStr = data.joiningDate as unknown as string;
+  const probationMonths =
+    data.probationMonths ?? settings.defaultProbationMonths;
+  const officeStartTime =
+    data.officeStartTime ?? settings.defaultOfficeStartTime;
+  const officeEndTime = data.officeEndTime ?? settings.defaultOfficeEndTime;
+  const breakMinutes =
+    data.breakMinutes ?? inferBreakMinutes(officeStartTime, officeEndTime);
   const baseCasual = data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
   const baseSick = data.sickLeaveQuota ?? settings.defaultSickLeaveQuota;
   const baseAnnual = data.annualLeaveQuota ?? settings.defaultAnnualLeaveQuota;
   const casualLeaveQuota = settings.proRatedQuotas
-    ? proRatedQuota(baseCasual, joiningDateStr)
+    ? proRatedQuota(baseCasual, joiningDateStr, probationMonths)
     : baseCasual;
   const sickLeaveQuota = settings.proRatedQuotas
-    ? proRatedQuota(baseSick, joiningDateStr)
+    ? proRatedQuota(baseSick, joiningDateStr, probationMonths)
     : baseSick;
   const annualLeaveQuota = settings.proRatedQuotas
-    ? proRatedQuota(baseAnnual, joiningDateStr)
+    ? proRatedQuota(baseAnnual, joiningDateStr, probationMonths)
     : baseAnnual;
 
   const insertedEmp = await db
@@ -338,11 +375,12 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
       department: data.department ?? null,
       positionType: data.positionType ?? "onsite",
       joiningDate: joiningDateStr,
-      probationMonths: data.probationMonths ?? settings.defaultProbationMonths,
-      officeStartTime: data.officeStartTime ?? settings.defaultOfficeStartTime,
-      officeEndTime: data.officeEndTime ?? settings.defaultOfficeEndTime,
+      probationMonths,
+      officeStartTime,
+      officeEndTime,
       gracePeriodMinutes:
         data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
+      breakMinutes,
       basicSalary: String(data.basicSalary),
       allowances: String(data.allowances ?? 0),
       providentFundPercent:
@@ -493,6 +531,13 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
       }
       const autoCode = await getNextEmployeeCode();
       const joiningDateStr = data.joiningDate as unknown as string;
+      const probationMonths =
+        data.probationMonths ?? settings.defaultProbationMonths;
+      const officeStartTime =
+        data.officeStartTime ?? settings.defaultOfficeStartTime;
+      const officeEndTime = data.officeEndTime ?? settings.defaultOfficeEndTime;
+      const breakMinutes =
+        data.breakMinutes ?? inferBreakMinutes(officeStartTime, officeEndTime);
       const baseCasual =
         data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
       const baseSick = data.sickLeaveQuota ?? settings.defaultSickLeaveQuota;
@@ -507,13 +552,12 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
         department: data.department ?? null,
         positionType: data.positionType ?? "onsite",
         joiningDate: joiningDateStr,
-        probationMonths:
-          data.probationMonths ?? settings.defaultProbationMonths,
-        officeStartTime:
-          data.officeStartTime ?? settings.defaultOfficeStartTime,
-        officeEndTime: data.officeEndTime ?? settings.defaultOfficeEndTime,
+        probationMonths,
+        officeStartTime,
+        officeEndTime,
         gracePeriodMinutes:
           data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
+        breakMinutes,
         basicSalary: String(data.basicSalary),
         allowances: String(data.allowances ?? 0),
         providentFundPercent:
@@ -521,13 +565,13 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
             ? String(Number(settings.defaultProvidentFundPercent))
             : null,
         casualLeaveQuota: settings.proRatedQuotas
-          ? proRatedQuota(baseCasual, joiningDateStr)
+          ? proRatedQuota(baseCasual, joiningDateStr, probationMonths)
           : baseCasual,
         sickLeaveQuota: settings.proRatedQuotas
-          ? proRatedQuota(baseSick, joiningDateStr)
+          ? proRatedQuota(baseSick, joiningDateStr, probationMonths)
           : baseSick,
         annualLeaveQuota: settings.proRatedQuotas
-          ? proRatedQuota(baseAnnual, joiningDateStr)
+          ? proRatedQuota(baseAnnual, joiningDateStr, probationMonths)
           : baseAnnual,
         dateOfBirth: (data.dateOfBirth as unknown as string) ?? null,
         education: data.education ?? null,
@@ -730,6 +774,8 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
     updates.officeEndTime = data.officeEndTime;
   if (data.gracePeriodMinutes !== undefined)
     updates.gracePeriodMinutes = data.gracePeriodMinutes;
+  if (data.breakMinutes !== undefined)
+    updates.breakMinutes = data.breakMinutes;
   if (data.basicSalary !== undefined)
     updates.basicSalary = String(data.basicSalary);
   if (data.allowances !== undefined)

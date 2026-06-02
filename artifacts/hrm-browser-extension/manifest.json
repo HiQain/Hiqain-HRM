@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "HRM Attendance Bridge",
+  "version": "0.1.0",
+  "description": "Connects the browser to HRM attendance automation.",
+  "minimum_chrome_version": "116",
+  "permissions": ["idle", "alarms", "storage", "notifications"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "logo.png",
+    "32": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
+  "action": {
+    "default_title": "HRM Attendance Bridge",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "logo.png",
+      "32": "logo.png",
+      "48": "logo.png",
+      "128": "logo.png"
+    }
+  }
+}

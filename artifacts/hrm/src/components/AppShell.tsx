@@ -27,6 +27,7 @@ import {
   Settings as SettingsIcon,
   Bell,
   HeartPulse,
+  Activity,
 } from "lucide-react";
 import {
   useLogout,
@@ -55,6 +56,7 @@ const ADMIN_NAV: NavItem[] = [
     href: "/admin/attendance-calendar",
     icon: CalendarDays,
   },
+  { label: "Extension Activity", href: "/admin/extension-activity", icon: Activity },
   { label: "Leave Requests", href: "/admin/leaves", icon: CalendarRange },
   { label: "Requests", href: "/admin/requests", icon: Inbox },
   { label: "Medical", href: "/admin/medical", icon: HeartPulse },
@@ -95,6 +97,7 @@ const HR_NAV: NavItem[] = [
   { label: "Feed", href: "/employee/feed", icon: PartyPopper },
   { label: "Team", href: "/admin/employees", icon: Users },
   { label: "Team Attendance", href: "/admin/attendance", icon: CalendarDays },
+  { label: "Extension Activity", href: "/admin/extension-activity", icon: Activity },
   { label: "Team Requests", href: "/admin/requests", icon: Inbox },
   { label: "Team Inventory", href: "/admin/inventory", icon: Package },
   { label: "Team View", href: "/admin/view", icon: LayoutGrid },

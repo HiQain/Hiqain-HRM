@@ -13,6 +13,7 @@ import {
   attendanceCandidateShiftDates,
   attendanceTodayYmd,
   clearManualAttendanceOverride,
+  deriveAttendanceNotes,
   markManualAttendanceOverride,
   normalizeAttendanceStatus,
   officeMinutes,
@@ -32,7 +33,7 @@ const router: IRouter = Router();
 function resolveOverrideAttendanceFields(
   employee: Pick<
     typeof employeesTable.$inferSelect,
-    "officeStartTime" | "officeEndTime" | "gracePeriodMinutes"
+    "officeStartTime" | "officeEndTime" | "gracePeriodMinutes" | "breakMinutes"
   >,
   date: string,
   status: string,
@@ -89,7 +90,11 @@ function serializeRecord(
   employeeName: string,
   employee?: Pick<
     typeof employeesTable.$inferSelect,
-    "officeStartTime" | "officeEndTime" | "gracePeriodMinutes"
+    | "officeStartTime"
+    | "officeEndTime"
+    | "gracePeriodMinutes"
+    | "breakMinutes"
+    | "positionType"
   >,
 ) {
   const normalized = employee ? normalizeAttendanceStatus(r, employee) : null;
@@ -107,7 +112,7 @@ function serializeRecord(
     status: normalized?.status ?? r.status,
     isLate: normalized?.isLate ?? r.isLate,
     excused: r.excused,
-    notes: r.notes,
+    notes: employee ? deriveAttendanceNotes(r, employee) : r.notes,
   };
 }
 

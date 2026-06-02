@@ -13,6 +13,8 @@ type AttendanceLike = {
 };
 const ATTENDANCE_TIMEZONE_OFFSET_MINUTES = 5 * 60;
 const MANUAL_OVERRIDE_NOTE_PREFIX = "[manual_attendance_override]";
+const MISSING_CHECKOUT_ABSENT_NOTE =
+  "Absent auto-marked because check-out was not recorded before shift end.";
 
 function minutesFromHHMM(value: string): number {
   const { h, m } = parseHHMM(value);
@@ -68,13 +70,24 @@ export function isOvernightShift(emp: Pick<EmployeeRow, "officeStartTime" | "off
   return minutesFromHHMM(emp.officeEndTime) <= minutesFromHHMM(emp.officeStartTime);
 }
 
-export function officeMinutes(emp: Pick<EmployeeRow, "officeStartTime" | "officeEndTime">): number {
+export function shiftSpanMinutes(
+  emp: Pick<EmployeeRow, "officeStartTime" | "officeEndTime">,
+): number {
   const startMinutes = minutesFromHHMM(emp.officeStartTime);
   const endMinutes = minutesFromHHMM(emp.officeEndTime);
   if (endMinutes <= startMinutes) {
     return 24 * 60 - startMinutes + endMinutes;
   }
   return endMinutes - startMinutes;
+}
+
+export function officeMinutes(
+  emp: Pick<
+    EmployeeRow,
+    "officeStartTime" | "officeEndTime" | "breakMinutes"
+  >,
+): number {
+  return Math.max(0, shiftSpanMinutes(emp) - Math.max(0, emp.breakMinutes ?? 0));
 }
 
 export function resolveAttendanceShiftDate(
@@ -110,7 +123,10 @@ export function selectActiveAttendanceRecord<
   T extends { date: string; checkInTime: Date | null; checkOutTime: Date | null },
 >(
   records: T[],
-  emp: Pick<EmployeeRow, "officeStartTime" | "officeEndTime">,
+  emp: Pick<
+    EmployeeRow,
+    "officeStartTime" | "officeEndTime" | "positionType"
+  >,
   now: Date,
 ): T | undefined {
   if (records.length === 0) {
@@ -118,7 +134,10 @@ export function selectActiveAttendanceRecord<
   }
 
   const openRecord = records.find(
-    (record) => !!record.checkInTime && !record.checkOutTime,
+    (record) =>
+      !!record.checkInTime &&
+      !record.checkOutTime &&
+      !isMissingCheckoutAbsent(record, emp, now),
   );
   if (openRecord) {
     return openRecord;
@@ -157,6 +176,39 @@ export function officeEndForShiftDate(
   return end;
 }
 
+export function isMissingCheckoutAbsent(
+  record: Pick<AttendanceLike, "date" | "checkInTime" | "checkOutTime" | "notes">,
+  emp: Pick<
+    EmployeeRow,
+    "officeStartTime" | "officeEndTime" | "positionType"
+  >,
+  now: Date = new Date(),
+) {
+  if (emp.positionType !== "onsite") return false;
+  if (!record.checkInTime || record.checkOutTime) return false;
+  if (hasManualAttendanceOverride(record.notes)) return false;
+  return now.getTime() > officeEndForShiftDate(emp, record.date).getTime();
+}
+
+export function deriveAttendanceNotes(
+  record: Pick<AttendanceLike, "date" | "checkInTime" | "checkOutTime" | "notes">,
+  emp: Pick<
+    EmployeeRow,
+    "officeStartTime" | "officeEndTime" | "positionType"
+  >,
+  now: Date = new Date(),
+) {
+  if (!isMissingCheckoutAbsent(record, emp, now)) {
+    return record.notes ?? null;
+  }
+  if (record.notes?.includes(MISSING_CHECKOUT_ABSENT_NOTE)) {
+    return record.notes;
+  }
+  return record.notes?.trim()
+    ? `${record.notes}\n${MISSING_CHECKOUT_ABSENT_NOTE}`
+    : MISSING_CHECKOUT_ABSENT_NOTE;
+}
+
 export function hasManualAttendanceOverride(notes?: string | null) {
   return typeof notes === "string" && notes.startsWith(MANUAL_OVERRIDE_NOTE_PREFIX);
 }
@@ -181,7 +233,11 @@ export function normalizeAttendanceStatus(
   record: AttendanceLike,
   emp: Pick<
     EmployeeRow,
-    "officeStartTime" | "officeEndTime" | "gracePeriodMinutes"
+    | "officeStartTime"
+    | "officeEndTime"
+    | "gracePeriodMinutes"
+    | "breakMinutes"
+    | "positionType"
   >,
 ) {
   if (record.status === "remote_work" || record.status === "on_leave") {
@@ -209,6 +265,13 @@ export function normalizeAttendanceStatus(
   if (!record.checkInTime) {
     return {
       status: record.status,
+      isLate: false,
+    };
+  }
+
+  if (isMissingCheckoutAbsent(record, emp)) {
+    return {
+      status: "absent",
       isLate: false,
     };
   }

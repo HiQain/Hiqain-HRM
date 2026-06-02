@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency, formatMonth } from "@/lib/utils";
+import { formatCurrency, formatDuration, formatMonth } from "@/lib/utils";
 import {
   computeSalaryStructurePreview,
   getDefaultAllowanceBreakdown,
@@ -42,6 +42,25 @@ function getDisplayedPayrollTax(
 
   const genericTax = deductions?.find((line) => /\btax\b/i.test(line.label));
   return genericTax?.amount ?? fallbackTax;
+}
+
+function getPayslipHourMetrics(
+  payslip:
+    | {
+        scheduledMinutes?: number | null;
+        completedMinutes?: number | null;
+        extraMinutes?: number | null;
+        shortMinutes?: number | null;
+      }
+    | null
+    | undefined,
+) {
+  return {
+    scheduledMinutes: Math.max(0, Number(payslip?.scheduledMinutes ?? 0)),
+    completedMinutes: Math.max(0, Number(payslip?.completedMinutes ?? 0)),
+    extraMinutes: Math.max(0, Number(payslip?.extraMinutes ?? 0)),
+    shortMinutes: Math.max(0, Number(payslip?.shortMinutes ?? 0)),
+  };
 }
 
 export function MySalaryPage() {
@@ -127,6 +146,7 @@ export function MySalaryPage() {
       ? ((latestPayslip.basicSalary / latestPayslip.totalWorkingDays) *
           (latestPayslip.lateAbsenceDays ?? 0))
       : 0;
+  const latestPayslipHours = getPayslipHourMetrics(latestPayslip as any);
 
   const sumComponents = (rows: typeof earnings) => {
     let fixed = 0;
@@ -256,30 +276,54 @@ export function MySalaryPage() {
             No payslip generated yet.
           </div>
         ) : (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              icon={<Landmark className="h-4 w-4" />}
-              label="Period"
-              value={formatMonth(latestPayslip.month, latestPayslip.year)}
-            />
-            <StatCard
-              icon={<Receipt className="h-4 w-4" />}
-              label="Tax"
-              value={formatCurrency(latestPayrollTax)}
-            />
-            <StatCard
-              icon={<Wallet className="h-4 w-4" />}
-              label="Total deductions"
-              value={formatCurrency(
-                latestPayslip.otherDeductions + latestPayslip.loanDeduction,
-              )}
-            />
-            <StatCard
-              icon={<Wallet className="h-4 w-4" />}
-              label="Net salary"
-              value={formatCurrency(latestPayslip.netSalary)}
-            />
-          </div>
+          <>
+            <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                icon={<Landmark className="h-4 w-4" />}
+                label="Period"
+                value={formatMonth(latestPayslip.month, latestPayslip.year)}
+              />
+              <StatCard
+                icon={<Receipt className="h-4 w-4" />}
+                label="Tax"
+                value={formatCurrency(latestPayrollTax)}
+              />
+              <StatCard
+                icon={<Wallet className="h-4 w-4" />}
+                label="Total deductions"
+                value={formatCurrency(
+                  latestPayslip.otherDeductions + latestPayslip.loanDeduction,
+                )}
+              />
+              <StatCard
+                icon={<Wallet className="h-4 w-4" />}
+                label="Net salary"
+                value={formatCurrency(latestPayslip.netSalary)}
+              />
+            </div>
+            <div className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                icon={<Landmark className="h-4 w-4" />}
+                label="Hours required"
+                value={formatDuration(latestPayslipHours.scheduledMinutes)}
+              />
+              <StatCard
+                icon={<Landmark className="h-4 w-4" />}
+                label="Hours completed"
+                value={formatDuration(latestPayslipHours.completedMinutes)}
+              />
+              <StatCard
+                icon={<Coins className="h-4 w-4" />}
+                label="Extra hours"
+                value={formatDuration(latestPayslipHours.extraMinutes)}
+              />
+              <StatCard
+                icon={<AlertCircle className="h-4 w-4" />}
+                label="Less hours"
+                value={formatDuration(latestPayslipHours.shortMinutes)}
+              />
+            </div>
+          </>
         )}
       </section>
 

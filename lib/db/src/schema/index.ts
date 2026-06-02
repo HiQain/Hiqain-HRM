@@ -2,6 +2,7 @@ export * from "./users";
 export * from "./employees";
 export * from "./salaryEvents";
 export * from "./attendance";
+export * from "./attendanceExtensionLinks";
 export * from "./leaves";
 export * from "./payslips";
 export * from "./remoteWorkRequests";

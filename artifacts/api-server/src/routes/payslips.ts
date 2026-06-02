@@ -15,7 +15,7 @@ import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { notifyEmployeeUser } from "../lib/notifications";
 import { addMonths, parseDate } from "../lib/dates";
-import { normalizeAttendanceStatus } from "../lib/attendance";
+import { normalizeAttendanceStatus, officeMinutes } from "../lib/attendance";
 import { ymd } from "../lib/dates";
 import {
   computePakistanMonthlySalaryTax,
@@ -237,6 +237,10 @@ function serialize(
     lateCount: p.lateCount,
     latePenaltyDays: Number(p.lateAbsenceDays),
     lateAbsenceDays: Number(p.lateAbsenceDays),
+    scheduledMinutes: p.scheduledMinutes,
+    completedMinutes: p.completedMinutes,
+    extraMinutes: p.extraMinutes,
+    shortMinutes: p.shortMinutes,
     basicSalary: Number(p.basicSalary),
     allowances: Number(p.allowances),
     bonus: Number(p.bonus),
@@ -246,6 +250,36 @@ function serialize(
     salaryBreakdown: breakdown,
     generatedAt: p.generatedAt.toISOString(),
   };
+}
+
+function resolveCreditedAttendanceMinutes(
+  record: typeof attendanceTable.$inferSelect,
+  employee: typeof employeesTable.$inferSelect,
+) {
+  if ((record.workedMinutes ?? 0) > 0) {
+    if (employee.positionType === "onsite") {
+      const remainingBreakDeduction = Math.max(
+        0,
+        (employee.breakMinutes ?? 0) - (record.pausedMinutes ?? 0),
+      );
+      return Math.max(0, (record.workedMinutes ?? 0) - remainingBreakDeduction);
+    }
+    return record.workedMinutes ?? 0;
+  }
+  const fullShiftMinutes = officeMinutes(employee);
+  const normalized = normalizeAttendanceStatus(record, employee);
+  if (
+    normalized.status === "present" ||
+    normalized.status === "late" ||
+    normalized.status === "remote_work" ||
+    normalized.status === "on_leave"
+  ) {
+    return fullShiftMinutes;
+  }
+  if (normalized.status === "half_day") {
+    return fullShiftMinutes > 0 ? Math.round(fullShiftMinutes / 2) : 0;
+  }
+  return 0;
 }
 
 router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
@@ -290,9 +324,11 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
   let present = 0;
   let late = 0;
   let onLeave = 0;
+  let completedMinutes = 0;
   for (const r of attRows) {
     if (isPayrollOffDay(r.date, settings, holidaySet)) continue;
     const normalized = normalizeAttendanceStatus(r, emp);
+    completedMinutes += resolveCreditedAttendanceMinutes(r, emp);
     // Approved late/half-day requests get marked excused: they don't count
     // as late, and half-day excused gets paid as a full present day.
     if (r.excused) {
@@ -315,6 +351,9 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
     0,
     totalWorkingDays - presentDays - paidLeaveDays,
   );
+  const scheduledMinutes = totalWorkingDays * officeMinutes(emp);
+  const extraMinutes = Math.max(0, completedMinutes - scheduledMinutes);
+  const shortMinutes = Math.max(0, scheduledMinutes - completedMinutes);
 
   // Salary events in this month (bonus + increment only — loans now live in loans table)
   const events = await db
@@ -559,6 +598,10 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
         unpaidLeaveDays,
         lateCount: late,
         lateAbsenceDays: String(Math.round(effectivePenaltyDays * 100) / 100),
+        scheduledMinutes,
+        completedMinutes,
+        extraMinutes,
+        shortMinutes,
         basicSalary: String(basicSalary),
         allowances: String(allowances),
         bonus: String(bonus),
@@ -588,6 +631,10 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
         unpaidLeaveDays,
         lateCount: late,
         lateAbsenceDays: String(Math.round(effectivePenaltyDays * 100) / 100),
+        scheduledMinutes,
+        completedMinutes,
+        extraMinutes,
+        shortMinutes,
         basicSalary: String(basicSalary),
         allowances: String(allowances),
         bonus: String(bonus),

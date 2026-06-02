@@ -179,6 +179,7 @@ export function MyAttendancePage() {
         calendarDays={calendar?.days ?? []}
         officeStartTime={dashboard?.employee.officeStartTime}
         officeEndTime={dashboard?.employee.officeEndTime}
+        breakMinutes={dashboard?.employee.breakMinutes}
         weeklyOffDays={settings?.weeklyOffDays ?? [0, 6]}
         publicHolidays={
           (settings?.publicHolidays ?? []).map((holiday) => holiday.date as unknown as string)
@@ -193,6 +194,7 @@ export function MyAttendancePage() {
           calendarDays={calendar?.days}
           officeStartTime={dashboard?.employee.officeStartTime}
           officeEndTime={dashboard?.employee.officeEndTime}
+          breakMinutes={dashboard?.employee.breakMinutes}
           isLoading={isLoading}
         />
       ) : (
@@ -207,6 +209,7 @@ export function AttendanceStats({
   calendarDays,
   officeStartTime,
   officeEndTime,
+  breakMinutes,
   weeklyOffDays,
   publicHolidays,
   month,
@@ -215,6 +218,7 @@ export function AttendanceStats({
   calendarDays?: AttendanceCalendarDay[];
   officeStartTime?: string | null;
   officeEndTime?: string | null;
+  breakMinutes?: number | null;
   weeklyOffDays: number[];
   publicHolidays: string[];
   month: string;
@@ -251,6 +255,7 @@ export function AttendanceStats({
                       workedMinutes: resolveWorkedMinutes(day.record),
                       officeStartTime,
                       officeEndTime,
+                      breakMinutes,
                     }),
                   }
                 : {
@@ -261,6 +266,7 @@ export function AttendanceStats({
                       workedMinutes: 0,
                       officeStartTime,
                       officeEndTime,
+                      breakMinutes,
                     }),
                   },
             )
@@ -278,18 +284,26 @@ export function AttendanceStats({
       if (d >= startOfWeek && d <= now) s.weekMinutes += minutes;
     }
     return s;
-  }, [calendarDays, officeEndTime, officeStartTime, records]);
+  }, [breakMinutes, calendarDays, officeEndTime, officeStartTime, records]);
 
   const targets = useMemo(
     () =>
       buildScheduledHoursTargets({
         officeStartTime,
         officeEndTime,
+        breakMinutes,
         offDays: weeklyOffDays,
         holidayDates: new Set(publicHolidays),
         month,
       }),
-    [month, officeEndTime, officeStartTime, publicHolidays, weeklyOffDays],
+    [
+      breakMinutes,
+      month,
+      officeEndTime,
+      officeStartTime,
+      publicHolidays,
+      weeklyOffDays,
+    ],
   );
 
   const weekHours = (summary.weekMinutes / 60).toFixed(1);
@@ -359,12 +373,14 @@ function ListView({
   calendarDays,
   officeStartTime,
   officeEndTime,
+  breakMinutes,
   isLoading,
 }: {
   data: AttendanceRecord[] | undefined;
   calendarDays: AttendanceCalendarDay[] | undefined;
   officeStartTime?: string | null;
   officeEndTime?: string | null;
+  breakMinutes?: number | null;
   isLoading: boolean;
 }) {
   const rows = useMemo(() => {
@@ -386,6 +402,7 @@ function ListView({
             workedMinutes: day.record ? resolveWorkedMinutes(day.record) : null,
             officeStartTime,
             officeEndTime,
+            breakMinutes,
           }),
         }));
     }
@@ -396,9 +413,10 @@ function ListView({
         workedMinutes: resolveWorkedMinutes(record),
         officeStartTime,
         officeEndTime,
+        breakMinutes,
       }),
     }));
-  }, [calendarDays, data, officeEndTime, officeStartTime]);
+  }, [breakMinutes, calendarDays, data, officeEndTime, officeStartTime]);
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm">

@@ -78,6 +78,7 @@ export interface Employee {
   /** HH:mm */
   officeEndTime: string;
   gracePeriodMinutes: number;
+  breakMinutes: number;
   basicSalary: number;
   allowances?: number;
   casualLeaveQuota: number;
@@ -221,6 +222,8 @@ export interface CreateEmployeeRequest {
   /** @minimum 0 */
   gracePeriodMinutes: number;
   /** @minimum 0 */
+  breakMinutes: number;
+  /** @minimum 0 */
   basicSalary: number;
   allowances?: number | null;
   /** @minimum 0 */
@@ -308,6 +311,8 @@ export interface UpdateEmployeeRequest {
   officeEndTime?: string;
   /** @minimum 0 */
   gracePeriodMinutes?: number;
+  /** @minimum 0 */
+  breakMinutes?: number;
   /** @minimum 0 */
   basicSalary?: number;
   allowances?: number | null;

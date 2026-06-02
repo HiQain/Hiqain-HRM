@@ -30,6 +30,7 @@ export const employeesTable = mysqlTable("employees", {
   officeStartTime: varchar("office_start_time", { length: 16 }).notNull().default("09:00"),
   officeEndTime: varchar("office_end_time", { length: 16 }).notNull().default("18:00"),
   gracePeriodMinutes: int("grace_period_minutes").notNull().default(15),
+  breakMinutes: int("break_minutes").notNull().default(60),
   basicSalary: decimal("basic_salary", { precision: 12, scale: 2 })
     .notNull()
     .default("0"),

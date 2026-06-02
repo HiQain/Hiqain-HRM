@@ -64,7 +64,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
-import { formatCurrency, formatDate, formatMonth } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDuration, formatMonth } from "@/lib/utils";
 import {
   computeSalaryStructurePreview,
   getDefaultAllowanceBreakdown,
@@ -81,6 +81,25 @@ function getDisplayedPayrollTax(
 
   const genericTax = deductions?.find((line) => /\btax\b/i.test(line.label));
   return genericTax?.amount ?? fallbackTax;
+}
+
+function getPayslipHourMetrics(
+  payslip:
+    | {
+        scheduledMinutes?: number | null;
+        completedMinutes?: number | null;
+        extraMinutes?: number | null;
+        shortMinutes?: number | null;
+      }
+    | null
+    | undefined,
+) {
+  return {
+    scheduledMinutes: Math.max(0, Number(payslip?.scheduledMinutes ?? 0)),
+    completedMinutes: Math.max(0, Number(payslip?.completedMinutes ?? 0)),
+    extraMinutes: Math.max(0, Number(payslip?.extraMinutes ?? 0)),
+    shortMinutes: Math.max(0, Number(payslip?.shortMinutes ?? 0)),
+  };
 }
 
 export function AdminSalaryPage() {
@@ -239,6 +258,7 @@ export function AdminSalaryPage() {
   const generatedPerDaySalary = monthPayslip
     ? (monthPayslip.basicSalary + monthPayslip.allowances) / 30
     : currentPerDaySalary;
+  const monthPayslipHours = getPayslipHourMetrics(monthPayslip as any);
   const isFutureOrCurrent =
     year > now.getFullYear() ||
     (year === now.getFullYear() && month >= now.getMonth() + 1);
@@ -583,6 +603,7 @@ export function AdminSalaryPage() {
                 )}
               </div>
             ) : (
+              <>
               <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
                 <PayrollStat
                   label="Working days"
@@ -622,6 +643,27 @@ export function AdminSalaryPage() {
                   tone="up"
                 />
               </div>
+              <div className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-4">
+                <PayrollStat
+                  label="Hours required"
+                  value={formatDuration(monthPayslipHours.scheduledMinutes)}
+                />
+                <PayrollStat
+                  label="Hours completed"
+                  value={formatDuration(monthPayslipHours.completedMinutes)}
+                />
+                <PayrollStat
+                  label="Extra hours"
+                  value={formatDuration(monthPayslipHours.extraMinutes)}
+                  tone={monthPayslipHours.extraMinutes > 0 ? "up" : undefined}
+                />
+                <PayrollStat
+                  label="Less hours"
+                  value={formatDuration(monthPayslipHours.shortMinutes)}
+                  tone={monthPayslipHours.shortMinutes > 0 ? "down" : undefined}
+                />
+              </div>
+              </>
             )}
           </section>
 
@@ -648,39 +690,55 @@ export function AdminSalaryPage() {
                     <TableHead>Period</TableHead>
                     <TableHead>Present / Late</TableHead>
                     <TableHead>Late penalty</TableHead>
+                    <TableHead>Hours</TableHead>
+                    <TableHead>Extra / Less</TableHead>
                     <TableHead className="text-right">Loan</TableHead>
                     <TableHead className="text-right">Other ded.</TableHead>
                     <TableHead className="text-right">Net salary</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(payslips ?? []).map((p) => (
-                    <TableRow
-                      key={p.id}
-                      className={
-                        p.month === month && p.year === year
-                          ? "bg-muted/40"
-                          : undefined
-                      }
-                    >
-                      <TableCell className="font-medium">
-                        {formatMonth(p.month, p.year)}
-                      </TableCell>
-                      <TableCell>
-                        {p.presentDays} / {p.lateCount}
-                      </TableCell>
-                      <TableCell>{p.lateAbsenceDays} days</TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(p.loanDeduction)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(p.otherDeductions)}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {formatCurrency(p.netSalary)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {(payslips ?? []).map((p) => {
+                    const hourMetrics = getPayslipHourMetrics(p as any);
+                    return (
+                      <TableRow
+                        key={p.id}
+                        className={
+                          p.month === month && p.year === year
+                            ? "bg-muted/40"
+                            : undefined
+                        }
+                      >
+                        <TableCell className="font-medium">
+                          {formatMonth(p.month, p.year)}
+                        </TableCell>
+                        <TableCell>
+                          {p.presentDays} / {p.lateCount}
+                        </TableCell>
+                        <TableCell>{p.lateAbsenceDays} days</TableCell>
+                        <TableCell>
+                          {formatDuration(hourMetrics.completedMinutes)} /{" "}
+                          {formatDuration(hourMetrics.scheduledMinutes)}
+                        </TableCell>
+                        <TableCell>
+                          {hourMetrics.extraMinutes > 0
+                            ? `+${formatDuration(hourMetrics.extraMinutes)}`
+                            : hourMetrics.shortMinutes > 0
+                              ? `-${formatDuration(hourMetrics.shortMinutes)}`
+                              : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(p.loanDeduction)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(p.otherDeductions)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {formatCurrency(p.netSalary)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

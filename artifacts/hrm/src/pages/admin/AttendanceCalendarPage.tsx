@@ -101,13 +101,15 @@ function monthLabel(month: string): string {
 function officeMinutes(
   officeStartTime?: string | null,
   officeEndTime?: string | null,
+  breakMinutes?: number | null,
 ) {
   if (!officeStartTime || !officeEndTime) return 0;
   const [startHour, startMinute] = officeStartTime.split(":").map(Number);
   const [endHour, endMinute] = officeEndTime.split(":").map(Number);
   const start = (startHour ?? 0) * 60 + (startMinute ?? 0);
   const end = (endHour ?? 0) * 60 + (endMinute ?? 0);
-  return end <= start ? 24 * 60 - start + end : end - start;
+  const span = end <= start ? 24 * 60 - start + end : end - start;
+  return Math.max(0, span - Math.max(0, breakMinutes ?? 0));
 }
 
 function resolveAttendanceDisplay(
@@ -119,8 +121,13 @@ function resolveAttendanceDisplay(
   },
   officeStartTime?: string | null,
   officeEndTime?: string | null,
+  breakMinutes?: number | null,
 ) {
-  const fullShiftMinutes = officeMinutes(officeStartTime, officeEndTime);
+  const fullShiftMinutes = officeMinutes(
+    officeStartTime,
+    officeEndTime,
+    breakMinutes,
+  );
   const shouldBackfill =
     ["present", "on_leave", "remote_work"].includes(row.status) &&
     !row.checkInTime &&
@@ -258,6 +265,7 @@ export function AdminAttendanceCalendarPage() {
           month={month}
           officeStartTime={selectedEmployee?.officeStartTime}
           officeEndTime={selectedEmployee?.officeEndTime}
+          breakMinutes={selectedEmployee?.breakMinutes}
         />
       )}
     </div>
@@ -269,11 +277,13 @@ function ListView({
   month,
   officeStartTime,
   officeEndTime,
+  breakMinutes,
 }: {
   employeeId: number | null;
   month: string;
   officeStartTime?: string | null;
   officeEndTime?: string | null;
+  breakMinutes?: number | null;
 }) {
   const qc = useQueryClient();
   const override = useOverrideAttendance();
@@ -421,6 +431,7 @@ function ListView({
                     r,
                     officeStartTime,
                     officeEndTime,
+                    breakMinutes,
                   );
                   const isLockedStatus = isLockedAttendanceStatus(r.status);
                   return (

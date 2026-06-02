@@ -82,13 +82,30 @@ import { PasswordField } from "@/components/PasswordField";
 import { resolveAssetUrl } from "@/lib/api";
 import { createEmployeeCsvTemplateHref } from "@/lib/onboarding";
 
-function computeProRatedQuota(quota: number, joiningDate: string, enabled?: boolean) {
-  if (!enabled || !joiningDate) return quota;
+function computePermanentDate(joiningDate: string, probationMonths: number) {
   const joining = new Date(`${joiningDate}T00:00:00`);
-  if (Number.isNaN(joining.getTime())) return quota;
+  if (Number.isNaN(joining.getTime())) return null;
+  const permanentDate = new Date(joining);
+  permanentDate.setMonth(permanentDate.getMonth() + probationMonths);
+  return permanentDate;
+}
+
+function computeProRatedQuota(
+  quota: number,
+  joiningDate: string,
+  probationMonths: number,
+  enabled?: boolean,
+) {
+  if (!enabled || !joiningDate) return quota;
+  const permanentDate = computePermanentDate(joiningDate, probationMonths);
+  if (!permanentDate) return quota;
   const today = new Date();
-  if (joining.getFullYear() !== today.getFullYear()) return quota;
-  const monthsRemaining = 12 - joining.getMonth();
+  if (permanentDate.getFullYear() !== today.getFullYear()) return quota;
+  const effectiveMonthIndex =
+    permanentDate.getDate() >= 16
+      ? permanentDate.getMonth() + 1
+      : permanentDate.getMonth();
+  const monthsRemaining = Math.max(0, 12 - effectiveMonthIndex);
   return Math.max(0, Math.round((quota * monthsRemaining) / 12));
 }
 
@@ -107,6 +124,30 @@ function splitAllowanceBreakdown(allowances: number) {
   const homeRent = Math.round(safeAllowances / 2);
   const utilityBills = safeAllowances - homeRent;
   return { homeRent, utilityBills };
+}
+
+function parseTimeToMinutes(value: string | null | undefined) {
+  if (!value) return 0;
+  const [hours, minutes] = value.split(":").map(Number);
+  return (hours || 0) * 60 + (minutes || 0);
+}
+
+function computeShiftSpanMinutes(
+  officeStartTime: string | null | undefined,
+  officeEndTime: string | null | undefined,
+) {
+  const start = parseTimeToMinutes(officeStartTime);
+  const end = parseTimeToMinutes(officeEndTime);
+  return end <= start ? 24 * 60 - start + end : end - start;
+}
+
+function inferBreakMinutes(
+  officeStartTime: string | null | undefined,
+  officeEndTime: string | null | undefined,
+) {
+  return computeShiftSpanMinutes(officeStartTime, officeEndTime) <= 6 * 60
+    ? 30
+    : 60;
 }
 
 function buildEmployeeCode(sequence: number) {
@@ -496,6 +537,16 @@ function NewEmployeeSheet({
             editingEmployee.gracePeriodMinutes ??
             settings?.defaultGracePeriodMinutes ??
             15,
+          breakMinutes:
+            editingEmployee.breakMinutes ??
+            inferBreakMinutes(
+              editingEmployee.officeStartTime ??
+                settings?.defaultOfficeStartTime ??
+                "09:00",
+              editingEmployee.officeEndTime ??
+                settings?.defaultOfficeEndTime ??
+                "18:00",
+            ),
           totalSalary,
           basicSalary: Number(editingEmployee.basicSalary ?? 0),
           allowances: Number(editingEmployee.allowances ?? 0),
@@ -594,22 +645,29 @@ function NewEmployeeSheet({
       officeStartTime: settings?.defaultOfficeStartTime ?? "09:00",
       officeEndTime: settings?.defaultOfficeEndTime ?? "18:00",
       gracePeriodMinutes: settings?.defaultGracePeriodMinutes ?? 15,
+      breakMinutes: inferBreakMinutes(
+        settings?.defaultOfficeStartTime ?? "09:00",
+        settings?.defaultOfficeEndTime ?? "18:00",
+      ),
       totalSalary: defaultTotalSalary,
       basicSalary,
       allowances,
       casualLeaveQuota: computeProRatedQuota(
         settings?.defaultCasualLeaveQuota ?? 6,
         new Date().toISOString().slice(0, 10),
+        settings?.defaultProbationMonths ?? 3,
         settings?.proRatedQuotas,
       ),
       sickLeaveQuota: computeProRatedQuota(
         settings?.defaultSickLeaveQuota ?? 6,
         new Date().toISOString().slice(0, 10),
+        settings?.defaultProbationMonths ?? 3,
         settings?.proRatedQuotas,
       ),
       annualLeaveQuota: computeProRatedQuota(
         settings?.defaultAnnualLeaveQuota ?? 12,
         new Date().toISOString().slice(0, 10),
+        settings?.defaultProbationMonths ?? 3,
         settings?.proRatedQuotas,
       ),
       dateOfBirth: "",
@@ -672,13 +730,17 @@ function NewEmployeeSheet({
     sick: false,
     annual: false,
   });
+  const [breakMinutesTouched, setBreakMinutesTouched] = useState(
+    Boolean(editingEmployee?.breakMinutes != null),
+  );
 
   useEffect(() => {
     if (open) {
       setForm(defaultForm);
       setQuotaTouched({ casual: false, sick: false, annual: false });
+      setBreakMinutesTouched(Boolean(editingEmployee?.breakMinutes != null));
     }
-  }, [defaultForm, open]);
+  }, [defaultForm, editingEmployee?.breakMinutes, open]);
 
   const joiningYear = useMemo(
     () => Number(form.joiningDate.slice(0, 4)) || new Date().getFullYear(),
@@ -699,6 +761,7 @@ function NewEmployeeSheet({
         : computeProRatedQuota(
             settings?.defaultCasualLeaveQuota ?? 6,
             current.joiningDate,
+            Number(current.probationMonths) || 0,
             settings?.proRatedQuotas,
           ),
       sickLeaveQuota: quotaTouched.sick
@@ -706,6 +769,7 @@ function NewEmployeeSheet({
         : computeProRatedQuota(
             settings?.defaultSickLeaveQuota ?? 6,
             current.joiningDate,
+            Number(current.probationMonths) || 0,
             settings?.proRatedQuotas,
           ),
       annualLeaveQuota: quotaTouched.annual
@@ -713,19 +777,40 @@ function NewEmployeeSheet({
         : computeProRatedQuota(
             settings?.defaultAnnualLeaveQuota ?? 12,
             current.joiningDate,
+            Number(current.probationMonths) || 0,
             settings?.proRatedQuotas,
           ),
     }));
   }, [
     open,
     form.joiningDate,
+    form.probationMonths,
     quotaTouched.annual,
     quotaTouched.casual,
     quotaTouched.sick,
     settings?.defaultCasualLeaveQuota,
     settings?.defaultSickLeaveQuota,
     settings?.defaultAnnualLeaveQuota,
+    settings?.defaultProbationMonths,
     settings?.proRatedQuotas,
+  ]);
+
+  useEffect(() => {
+    if (!open || breakMinutesTouched) return;
+    const suggestedBreakMinutes = inferBreakMinutes(
+      form.officeStartTime,
+      form.officeEndTime,
+    );
+    setForm((current) =>
+      current.breakMinutes === suggestedBreakMinutes
+        ? current
+        : { ...current, breakMinutes: suggestedBreakMinutes },
+    );
+  }, [
+    breakMinutesTouched,
+    form.officeEndTime,
+    form.officeStartTime,
+    open,
   ]);
 
   const onSubmit = (e: FormEvent) => {
@@ -742,6 +827,7 @@ function NewEmployeeSheet({
       officeStartTime: form.officeStartTime,
       officeEndTime: form.officeEndTime,
       gracePeriodMinutes: Number(form.gracePeriodMinutes),
+      breakMinutes: Number(form.breakMinutes),
       basicSalary: Number(form.basicSalary),
       allowances: Number(form.allowances) || 0,
       casualLeaveQuota: Number(form.casualLeaveQuota),
@@ -1266,7 +1352,7 @@ function NewEmployeeSheet({
           </Section>
 
           <Section title="Schedule">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-4">
               <Field label="Start time" required>
                 <Input
                   required
@@ -1300,6 +1386,25 @@ function NewEmployeeSheet({
                     })
                   }
                 />
+              </Field>
+              <Field label="Break (min)" required>
+                <Input
+                  required
+                  type="number"
+                  min={0}
+                  step={5}
+                  value={form.breakMinutes}
+                  onChange={(e) => {
+                    setBreakMinutesTouched(true);
+                    setForm({
+                      ...form,
+                      breakMinutes: Number(e.target.value),
+                    });
+                  }}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Suggested: 30 min for 6-hour shifts, 60 min for longer shifts.
+                </p>
               </Field>
             </div>
           </Section>
@@ -1974,24 +2079,50 @@ function BulkUploadSheet({
           r["gracePeriodMinutes"],
           settings?.defaultGracePeriodMinutes ?? 15,
         ) ?? (settings?.defaultGracePeriodMinutes ?? 15),
+      breakMinutes:
+        num(
+          r["breakMinutes"],
+          inferBreakMinutes(
+            str(r["officeStartTime"]) ??
+              settings?.defaultOfficeStartTime ??
+              "09:00",
+            str(r["officeEndTime"]) ??
+              settings?.defaultOfficeEndTime ??
+              "18:00",
+          ),
+        ) ??
+        inferBreakMinutes(
+          str(r["officeStartTime"]) ??
+            settings?.defaultOfficeStartTime ??
+            "09:00",
+          str(r["officeEndTime"]) ??
+            settings?.defaultOfficeEndTime ??
+            "18:00",
+        ),
       basicSalary: num(r["basicSalary"], 0) ?? 0,
       allowances: num(r["allowances"], 0) ?? 0,
       casualLeaveQuota: computeProRatedQuota(
         num(r["casualLeaveQuota"], settings?.defaultCasualLeaveQuota ?? 6) ??
           (settings?.defaultCasualLeaveQuota ?? 6),
         (str(r["joiningDate"]) ?? new Date().toISOString().slice(0, 10)),
+        num(r["probationMonths"], settings?.defaultProbationMonths ?? 3) ??
+          (settings?.defaultProbationMonths ?? 3),
         settings?.proRatedQuotas,
       ),
       sickLeaveQuota: computeProRatedQuota(
         num(r["sickLeaveQuota"], settings?.defaultSickLeaveQuota ?? 6) ??
           (settings?.defaultSickLeaveQuota ?? 6),
         (str(r["joiningDate"]) ?? new Date().toISOString().slice(0, 10)),
+        num(r["probationMonths"], settings?.defaultProbationMonths ?? 3) ??
+          (settings?.defaultProbationMonths ?? 3),
         settings?.proRatedQuotas,
       ),
       annualLeaveQuota: computeProRatedQuota(
         num(r["annualLeaveQuota"], settings?.defaultAnnualLeaveQuota ?? 12) ??
           (settings?.defaultAnnualLeaveQuota ?? 12),
         (str(r["joiningDate"]) ?? new Date().toISOString().slice(0, 10)),
+        num(r["probationMonths"], settings?.defaultProbationMonths ?? 3) ??
+          (settings?.defaultProbationMonths ?? 3),
         settings?.proRatedQuotas,
       ),
       dateOfBirth: str(r["dateOfBirth"]) as unknown as string | undefined,

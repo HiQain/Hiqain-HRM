@@ -1,7 +1,7 @@
 import { Download } from "lucide-react";
 import jsPDF from "jspdf";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatMonth } from "@/lib/utils";
+import { formatCurrency, formatDuration, formatMonth } from "@/lib/utils";
 
 type Payslip = {
   id: number;
@@ -19,6 +19,10 @@ type Payslip = {
   unpaidLeaveDays: number;
   lateCount: number;
   lateAbsenceDays?: number;
+  scheduledMinutes?: number;
+  completedMinutes?: number;
+  extraMinutes?: number;
+  shortMinutes?: number;
   basicSalary: number;
   allowances: number;
   bonus: number;
@@ -244,6 +248,10 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
 export function PayslipView({ payslip }: { payslip: Payslip }) {
   const totalAddition = payslip.basicSalary + payslip.allowances + payslip.bonus;
   const totalDeduction = payslip.otherDeductions + payslip.loanDeduction;
+  const scheduledMinutes = Math.max(0, Number(payslip.scheduledMinutes ?? 0));
+  const completedMinutes = Math.max(0, Number(payslip.completedMinutes ?? 0));
+  const extraMinutes = Math.max(0, Number(payslip.extraMinutes ?? 0));
+  const shortMinutes = Math.max(0, Number(payslip.shortMinutes ?? 0));
   const breakdown = getBreakdownRows(payslip);
   const rowCount = Math.max(breakdown.earnings.length, breakdown.deductions.length, 1);
   const earningsRows = Array.from({ length: rowCount }, (_, index) =>
@@ -317,6 +325,13 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
             label="LATE → ABSENCE"
             value={`${payslip.lateCount} late · ${payslip.lateAbsenceDays ?? 0} day${(payslip.lateAbsenceDays ?? 0) === 1 ? "" : "s"} applied`}
           />
+        </div>
+
+        <div className="grid grid-cols-4 border-b border-border divide-x divide-border bg-muted/5">
+          <InfoCell label="HOURS REQUIRED" value={formatDuration(scheduledMinutes)} />
+          <InfoCell label="HOURS COMPLETED" value={formatDuration(completedMinutes)} />
+          <InfoCell label="EXTRA HOURS" value={formatDuration(extraMinutes)} />
+          <InfoCell label="LESS HOURS" value={formatDuration(shortMinutes)} />
         </div>
 
         {/* Columns header */}

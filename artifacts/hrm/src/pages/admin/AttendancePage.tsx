@@ -64,13 +64,15 @@ function shiftDate(ymd: string, days: number): string {
 function officeMinutes(
   officeStartTime?: string | null,
   officeEndTime?: string | null,
+  breakMinutes?: number | null,
 ) {
   if (!officeStartTime || !officeEndTime) return 0;
   const [startHour, startMinute] = officeStartTime.split(":").map(Number);
   const [endHour, endMinute] = officeEndTime.split(":").map(Number);
   const start = (startHour ?? 0) * 60 + (startMinute ?? 0);
   const end = (endHour ?? 0) * 60 + (endMinute ?? 0);
-  return end <= start ? 24 * 60 - start + end : end - start;
+  const span = end <= start ? 24 * 60 - start + end : end - start;
+  return Math.max(0, span - Math.max(0, breakMinutes ?? 0));
 }
 
 function resolveAttendanceDisplay(
@@ -79,11 +81,17 @@ function resolveAttendanceDisplay(
     checkInTime?: string | null;
     checkOutTime?: string | null;
     workedMinutes?: number | null;
+    notes?: string | null;
   },
   officeStartTime?: string | null,
   officeEndTime?: string | null,
+  breakMinutes?: number | null,
 ) {
-  const fullShiftMinutes = officeMinutes(officeStartTime, officeEndTime);
+  const fullShiftMinutes = officeMinutes(
+    officeStartTime,
+    officeEndTime,
+    breakMinutes,
+  );
   const shouldBackfill =
     ["present", "on_leave", "remote_work"].includes(row.status) &&
     !row.checkInTime &&
@@ -180,6 +188,7 @@ export function AdminAttendancePage() {
             employeeCode: employee.employeeCode ?? "",
             officeStartTime: employee.officeStartTime ?? null,
             officeEndTime: employee.officeEndTime ?? null,
+            breakMinutes: employee.breakMinutes ?? 0,
           },
         ]),
       ),
@@ -398,19 +407,20 @@ export function AdminAttendancePage() {
               <TableHead className="w-[180px]">Change status</TableHead>
               <TableHead>Check-in</TableHead>
               <TableHead>Check-out</TableHead>
+              <TableHead>Reason</TableHead>
               <TableHead className="text-right">Worked</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   Loading attendance...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   No matching employees.
                 </TableCell>
               </TableRow>
@@ -423,6 +433,7 @@ export function AdminAttendancePage() {
                   r,
                   meta?.officeStartTime,
                   meta?.officeEndTime,
+                  meta?.breakMinutes,
                 );
                 const isLockedStatus = isLockedAttendanceStatus(r.status);
                 return (
@@ -471,6 +482,9 @@ export function AdminAttendancePage() {
                     </TableCell>
                     <TableCell>{display.checkIn}</TableCell>
                     <TableCell>{display.checkOut}</TableCell>
+                    <TableCell className="max-w-[280px] text-xs text-muted-foreground">
+                      {r.notes?.trim() || "—"}
+                    </TableCell>
                     <TableCell className="text-right">{display.worked}</TableCell>
                   </TableRow>
                 );

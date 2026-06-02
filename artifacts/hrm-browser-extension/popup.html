@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HRM Attendance Bridge</title>
+    <link rel="icon" type="image/png" href="logo.png" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #f6f8fb;
+        color: #0f172a;
+      }
+      .wrap {
+        width: 340px;
+        padding: 16px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #dbe4f0;
+        border-radius: 16px;
+        padding: 14px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 6px;
+      }
+      p {
+        margin: 0;
+        color: #475569;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .field {
+        margin-top: 12px;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #0f766e;
+        color: #fff;
+        flex: 1;
+      }
+      button.secondary {
+        background: #e2e8f0;
+        color: #0f172a;
+      }
+      .status {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: #eff6ff;
+        font-size: 12px;
+        color: #1e3a8a;
+      }
+      .muted {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>HRM Attendance Bridge</h1>
+        <p>Connect this browser to HRM so inactivity can auto pause and auto check out attendance.</p>
+
+        <div class="field">
+          <label for="apiBaseUrl">HRM base URL</label>
+          <input id="apiBaseUrl" placeholder="https://hrm.example.com" />
+        </div>
+
+        <div class="field">
+          <label for="deviceName">Device name</label>
+          <input id="deviceName" placeholder="Office Chrome" />
+        </div>
+
+        <div class="field" id="emailField">
+          <label for="email">HRM email</label>
+          <input id="email" placeholder="employee@company.com" />
+        </div>
+
+        <div class="field" id="passwordField">
+          <label for="password">HRM password</label>
+          <input id="password" type="password" placeholder="Enter your HRM password" />
+        </div>
+
+        <div class="row">
+          <button id="connectBtn" class="primary">Connect</button>
+          <button id="syncBtn" class="secondary" type="button">Sync</button>
+          <button id="disconnectBtn" class="secondary" type="button">Disconnect</button>
+        </div>
+
+        <div id="status" class="status">Not connected</div>
+        <p class="muted">Use the same HRM email and password you already use in the app. Check in first, then connect the extension.</p>
+      </div>
+    </div>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

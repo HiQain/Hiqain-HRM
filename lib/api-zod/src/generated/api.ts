@@ -94,6 +94,7 @@ export const ListEmployeesResponseItem = zod.object({
   "officeStartTime": zod.string().describe('HH:mm'),
   "officeEndTime": zod.string().describe('HH:mm'),
   "gracePeriodMinutes": zod.number(),
+  "breakMinutes": zod.number(),
   "basicSalary": zod.number(),
   "allowances": zod.number().optional(),
   "casualLeaveQuota": zod.number(),
@@ -167,6 +168,7 @@ export const createEmployeeBodyProbationMonthsMin = 0;
 export const createEmployeeBodyGracePeriodMinutesMin = 0;
 
 export const createEmployeeBodyBasicSalaryMin = 0;
+export const createEmployeeBodyBreakMinutesMin = 0;
 
 export const createEmployeeBodyCasualLeaveQuotaMin = 0;
 
@@ -192,6 +194,7 @@ export const CreateEmployeeBody = zod.object({
   "officeStartTime": zod.string(),
   "officeEndTime": zod.string(),
   "gracePeriodMinutes": zod.number().min(createEmployeeBodyGracePeriodMinutesMin),
+  "breakMinutes": zod.number().min(createEmployeeBodyBreakMinutesMin),
   "basicSalary": zod.number().min(createEmployeeBodyBasicSalaryMin),
   "allowances": zod.number().nullish(),
   "casualLeaveQuota": zod.number().min(createEmployeeBodyCasualLeaveQuotaMin).nullish(),
@@ -260,6 +263,7 @@ export const bulkCreateEmployeesBodyMembersItemProbationMonthsMin = 0;
 export const bulkCreateEmployeesBodyMembersItemGracePeriodMinutesMin = 0;
 
 export const bulkCreateEmployeesBodyMembersItemBasicSalaryMin = 0;
+export const bulkCreateEmployeesBodyMembersItemBreakMinutesMin = 0;
 
 export const bulkCreateEmployeesBodyMembersItemCasualLeaveQuotaMin = 0;
 
@@ -285,6 +289,7 @@ export const BulkCreateEmployeesBody = zod.object({
   "officeStartTime": zod.string(),
   "officeEndTime": zod.string(),
   "gracePeriodMinutes": zod.number().min(bulkCreateEmployeesBodyMembersItemGracePeriodMinutesMin),
+  "breakMinutes": zod.number().min(bulkCreateEmployeesBodyMembersItemBreakMinutesMin).nullish(),
   "basicSalary": zod.number().min(bulkCreateEmployeesBodyMembersItemBasicSalaryMin),
   "allowances": zod.number().nullish(),
   "casualLeaveQuota": zod.number().min(bulkCreateEmployeesBodyMembersItemCasualLeaveQuotaMin).nullish(),
@@ -390,6 +395,7 @@ export const GetEmployeeResponse = zod.object({
   "officeStartTime": zod.string().describe('HH:mm'),
   "officeEndTime": zod.string().describe('HH:mm'),
   "gracePeriodMinutes": zod.number(),
+  "breakMinutes": zod.number(),
   "basicSalary": zod.number(),
   "allowances": zod.number().optional(),
   "casualLeaveQuota": zod.number(),
@@ -477,6 +483,7 @@ export const updateEmployeeBodyProbationMonthsMin = 0;
 export const updateEmployeeBodyGracePeriodMinutesMin = 0;
 
 export const updateEmployeeBodyBasicSalaryMin = 0;
+export const updateEmployeeBodyBreakMinutesMin = 0;
 
 export const updateEmployeeBodyCasualLeaveQuotaMin = 0;
 
@@ -499,6 +506,7 @@ export const UpdateEmployeeBody = zod.object({
   "officeStartTime": zod.string().optional(),
   "officeEndTime": zod.string().optional(),
   "gracePeriodMinutes": zod.number().min(updateEmployeeBodyGracePeriodMinutesMin).optional(),
+  "breakMinutes": zod.number().min(updateEmployeeBodyBreakMinutesMin).optional(),
   "basicSalary": zod.number().min(updateEmployeeBodyBasicSalaryMin).optional(),
   "allowances": zod.number().nullish(),
   "casualLeaveQuota": zod.number().min(updateEmployeeBodyCasualLeaveQuotaMin).optional(),
@@ -575,6 +583,7 @@ export const UpdateEmployeeResponse = zod.object({
   "officeStartTime": zod.string().describe('HH:mm'),
   "officeEndTime": zod.string().describe('HH:mm'),
   "gracePeriodMinutes": zod.number(),
+  "breakMinutes": zod.number(),
   "basicSalary": zod.number(),
   "allowances": zod.number().optional(),
   "casualLeaveQuota": zod.number(),
@@ -667,6 +676,7 @@ export const GetEmployeeJourneyResponse = zod.object({
   "officeStartTime": zod.string().describe('HH:mm'),
   "officeEndTime": zod.string().describe('HH:mm'),
   "gracePeriodMinutes": zod.number(),
+  "breakMinutes": zod.number(),
   "basicSalary": zod.number(),
   "allowances": zod.number().optional(),
   "casualLeaveQuota": zod.number(),

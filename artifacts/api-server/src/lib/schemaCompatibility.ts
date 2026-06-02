@@ -101,6 +101,11 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
   );
   await ensureColumn(
     "employees",
+    "break_minutes",
+    "`break_minutes` INT NOT NULL DEFAULT 60 AFTER `grace_period_minutes`",
+  );
+  await ensureColumn(
+    "employees",
     "medical_daily_limit",
     "`medical_daily_limit` DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER `medical_enabled`",
   );
@@ -153,6 +158,26 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
     "leave_requests",
     "attachments",
     "`attachments` JSON NOT NULL DEFAULT ('[]') AFTER `attachment_name`",
+  );
+  await ensureColumn(
+    "payslips",
+    "scheduled_minutes",
+    "`scheduled_minutes` INT NOT NULL DEFAULT 0 AFTER `late_absence_days`",
+  );
+  await ensureColumn(
+    "payslips",
+    "completed_minutes",
+    "`completed_minutes` INT NOT NULL DEFAULT 0 AFTER `scheduled_minutes`",
+  );
+  await ensureColumn(
+    "payslips",
+    "extra_minutes",
+    "`extra_minutes` INT NOT NULL DEFAULT 0 AFTER `completed_minutes`",
+  );
+  await ensureColumn(
+    "payslips",
+    "short_minutes",
+    "`short_minutes` INT NOT NULL DEFAULT 0 AFTER `extra_minutes`",
   );
   await ensureColumn(
     "leave_requests",
@@ -221,5 +246,58 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
       CONSTRAINT \`notifications_user_id_users_id_fk\`
         FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON DELETE CASCADE
     )`,
+  );
+
+  await ensureTable(
+    "attendance_extension_links",
+    `CREATE TABLE IF NOT EXISTS \`attendance_extension_links\` (
+      \`id\` INT NOT NULL AUTO_INCREMENT,
+      \`employee_id\` INT NOT NULL,
+      \`status\` ENUM('pending','connected','revoked') NOT NULL DEFAULT 'pending',
+      \`connection_code\` VARCHAR(32) NULL,
+      \`code_expires_at\` TIMESTAMP NULL,
+      \`access_token_hash\` VARCHAR(128) NULL,
+      \`device_name\` VARCHAR(255) NULL,
+      \`last_state\` ENUM('active','idle','locked','offline') NULL,
+      \`last_heartbeat_at\` TIMESTAMP NULL,
+      \`last_active_at\` TIMESTAMP NULL,
+      \`last_idle_started_at\` TIMESTAMP NULL,
+      \`browser_alive\` TINYINT(1) NULL,
+      \`network_online\` TINYINT(1) NULL,
+      \`extension_version\` VARCHAR(32) NULL,
+      \`disconnected_at\` TIMESTAMP NULL,
+      \`last_warning_at\` TIMESTAMP NULL,
+      \`auto_paused_at\` TIMESTAMP NULL,
+      \`connected_at\` TIMESTAMP NULL,
+      \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      UNIQUE KEY \`attendance_extension_links_employee_unique\` (\`employee_id\`),
+      UNIQUE KEY \`attendance_extension_links_code_unique\` (\`connection_code\`),
+      UNIQUE KEY \`attendance_extension_links_token_unique\` (\`access_token_hash\`),
+      CONSTRAINT \`attendance_extension_links_employee_id_employees_id_fk\`
+        FOREIGN KEY (\`employee_id\`) REFERENCES \`employees\`(\`id\`) ON DELETE CASCADE
+    )`,
+  );
+
+  await ensureColumn(
+    "attendance_extension_links",
+    "browser_alive",
+    "`browser_alive` TINYINT(1) NULL AFTER `last_idle_started_at`",
+  );
+  await ensureColumn(
+    "attendance_extension_links",
+    "network_online",
+    "`network_online` TINYINT(1) NULL AFTER `browser_alive`",
+  );
+  await ensureColumn(
+    "attendance_extension_links",
+    "extension_version",
+    "`extension_version` VARCHAR(32) NULL AFTER `network_online`",
+  );
+  await ensureColumn(
+    "attendance_extension_links",
+    "disconnected_at",
+    "`disconnected_at` TIMESTAMP NULL AFTER `extension_version`",
   );
 }
