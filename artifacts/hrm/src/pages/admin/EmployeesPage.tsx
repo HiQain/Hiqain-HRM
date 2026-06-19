@@ -1915,6 +1915,16 @@ function NewEmployeeSheet({
 
 type CsvRow = Record<string, string>;
 
+function getCsvValue(row: CsvRow, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = row[key];
+    if (value != null && value.trim() !== "") {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
 function parseCsv(text: string): CsvRow[] {
   const cleaned = text.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
@@ -1973,6 +1983,49 @@ function num(v: string | undefined, fallback?: number): number | undefined {
 function str(v: string | undefined): string | undefined {
   const t = (v ?? "").trim();
   return t.length > 0 ? t : undefined;
+}
+
+function parseCsvBoolean(v: string | undefined): boolean | undefined {
+  const normalized = str(v)?.toLowerCase();
+  if (!normalized) return undefined;
+  if (["true", "yes", "y", "1", "active", "enabled"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "no", "n", "0", "inactive", "disabled"].includes(normalized)) {
+    return false;
+  }
+  return undefined;
+}
+
+function normalizeCsvTime(v: string | undefined): string | undefined {
+  const raw = str(v);
+  if (!raw) return undefined;
+
+  const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (twentyFourHourMatch) {
+    const hours = Number(twentyFourHourMatch[1]);
+    const minutes = Number(twentyFourHourMatch[2]);
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    }
+  }
+
+  const meridiemMatch = raw.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+  if (!meridiemMatch) return raw;
+
+  const parsedHours = Number(meridiemMatch[1]);
+  const parsedMinutes = Number(meridiemMatch[2]);
+  if (parsedHours < 1 || parsedHours > 12 || parsedMinutes < 0 || parsedMinutes > 59) {
+    return raw;
+  }
+
+  const meridiem = meridiemMatch[3].toUpperCase();
+  const normalizedHours =
+    meridiem === "AM"
+      ? parsedHours % 12
+      : (parsedHours % 12) + 12;
+
+  return `${String(normalizedHours).padStart(2, "0")}:${String(parsedMinutes).padStart(2, "0")}`;
 }
 
 function BulkUploadSheet({
@@ -2034,9 +2087,9 @@ function BulkUploadSheet({
     if (rows.length === 0) return;
     const generatedPasswords: { row: number; email: string; password: string }[] = [];
     const members = rows.map((r, index) => {
-      const email = r["email"] ?? "";
-      const password = str(r["password"]) ?? DEFAULT_EMPLOYEE_PASSWORD;
-      if (!str(r["password"]) && email) {
+      const email = getCsvValue(r, "email") ?? "";
+      const password = getCsvValue(r, "password") ?? DEFAULT_EMPLOYEE_PASSWORD;
+      if (!getCsvValue(r, "password") && email) {
         generatedPasswords.push({
           row: index + 2,
           email,
@@ -2044,91 +2097,96 @@ function BulkUploadSheet({
         });
       }
 
-      return {
-      name: r["name"] ?? "",
-      email,
-      password,
-      role: ((): "admin" | "hr" | "employee" => {
-        const v = str(r["role"])?.toLowerCase();
-        if (v === "admin") return "admin";
-        if (v === "hr") return "hr";
-        return "employee";
-      })(),
-      phone: str(r["phone"]),
-      position: str(r["position"]),
-      department: str(r["department"]),
-      positionType:
-        (str(r["positionType"])?.toLowerCase() === "remote"
-          ? "remote"
-          : "onsite") as "onsite" | "remote",
-      joiningDate: (str(r["joiningDate"]) ??
-        new Date().toISOString().slice(0, 10)) as unknown as string,
-      probationMonths:
-        num(r["probationMonths"], settings?.defaultProbationMonths ?? 3) ??
-        (settings?.defaultProbationMonths ?? 3),
-      officeStartTime:
-        str(r["officeStartTime"]) ??
-        settings?.defaultOfficeStartTime ??
-        "09:00",
-      officeEndTime:
-        str(r["officeEndTime"]) ??
-        settings?.defaultOfficeEndTime ??
-        "18:00",
-      gracePeriodMinutes:
-        num(
-          r["gracePeriodMinutes"],
-          settings?.defaultGracePeriodMinutes ?? 15,
-        ) ?? (settings?.defaultGracePeriodMinutes ?? 15),
-      breakMinutes:
-        num(
-          r["breakMinutes"],
-          inferBreakMinutes(
-            str(r["officeStartTime"]) ??
-              settings?.defaultOfficeStartTime ??
-              "09:00",
-            str(r["officeEndTime"]) ??
-              settings?.defaultOfficeEndTime ??
-              "18:00",
-          ),
+      const probationMonths =
+        num(getCsvValue(r, "probationMonths", "probation"), settings?.defaultProbationMonths ?? 3) ??
+        (settings?.defaultProbationMonths ?? 3);
+      const officeStartTime =
+        normalizeCsvTime(
+          getCsvValue(r, "officeStartTime", "officeStart", "startTime", "office start"),
         ) ??
-        inferBreakMinutes(
-          str(r["officeStartTime"]) ??
-            settings?.defaultOfficeStartTime ??
-            "09:00",
-          str(r["officeEndTime"]) ??
-            settings?.defaultOfficeEndTime ??
-            "18:00",
+        settings?.defaultOfficeStartTime ??
+        "09:00";
+      const officeEndTime =
+        normalizeCsvTime(
+          getCsvValue(r, "officeEndTime", "officeEnd", "endTime", "office end"),
+        ) ??
+        settings?.defaultOfficeEndTime ??
+        "18:00";
+      const joiningDate =
+        (getCsvValue(r, "joiningDate", "joining_date", "dateOfJoining") ??
+          new Date().toISOString().slice(0, 10)) as unknown as string;
+
+      return {
+        name: getCsvValue(r, "name") ?? "",
+        email,
+        password,
+        isActive:
+          parseCsvBoolean(getCsvValue(r, "isActive", "active", "status")) ?? true,
+        role: ((): "admin" | "hr" | "employee" => {
+          const v = getCsvValue(r, "role")?.toLowerCase();
+          if (v === "admin") return "admin";
+          if (v === "hr") return "hr";
+          return "employee";
+        })(),
+        phone: getCsvValue(r, "phone", "phoneNumber"),
+        position: getCsvValue(r, "position", "jobTitle"),
+        department: getCsvValue(r, "department", "team"),
+        positionType:
+          (getCsvValue(r, "positionType", "workLocation")?.toLowerCase() === "remote"
+            ? "remote"
+            : "onsite") as "onsite" | "remote",
+        joiningDate,
+        probationMonths,
+        officeStartTime,
+        officeEndTime,
+        gracePeriodMinutes:
+          num(
+            getCsvValue(r, "gracePeriodMinutes", "gracePeriodMin", "gracePeriod"),
+            settings?.defaultGracePeriodMinutes ?? 15,
+          ) ?? (settings?.defaultGracePeriodMinutes ?? 15),
+        breakMinutes:
+          num(getCsvValue(r, "breakMinutes"), inferBreakMinutes(officeStartTime, officeEndTime)) ??
+          inferBreakMinutes(officeStartTime, officeEndTime),
+        basicSalary: num(getCsvValue(r, "basicSalary", "salary"), 0) ?? 0,
+        allowances: num(getCsvValue(r, "allowances", "allowance"), 0) ?? 0,
+        casualLeaveQuota: computeProRatedQuota(
+          num(getCsvValue(r, "casualLeaveQuota", "casualLeave"), settings?.defaultCasualLeaveQuota ?? 6) ??
+            (settings?.defaultCasualLeaveQuota ?? 6),
+          joiningDate,
+          probationMonths,
+          settings?.proRatedQuotas,
         ),
-      basicSalary: num(r["basicSalary"], 0) ?? 0,
-      allowances: num(r["allowances"], 0) ?? 0,
-      casualLeaveQuota: computeProRatedQuota(
-        num(r["casualLeaveQuota"], settings?.defaultCasualLeaveQuota ?? 6) ??
-          (settings?.defaultCasualLeaveQuota ?? 6),
-        (str(r["joiningDate"]) ?? new Date().toISOString().slice(0, 10)),
-        num(r["probationMonths"], settings?.defaultProbationMonths ?? 3) ??
-          (settings?.defaultProbationMonths ?? 3),
-        settings?.proRatedQuotas,
-      ),
-      sickLeaveQuota: computeProRatedQuota(
-        num(r["sickLeaveQuota"], settings?.defaultSickLeaveQuota ?? 6) ??
-          (settings?.defaultSickLeaveQuota ?? 6),
-        (str(r["joiningDate"]) ?? new Date().toISOString().slice(0, 10)),
-        num(r["probationMonths"], settings?.defaultProbationMonths ?? 3) ??
-          (settings?.defaultProbationMonths ?? 3),
-        settings?.proRatedQuotas,
-      ),
-      annualLeaveQuota: computeProRatedQuota(
-        num(r["annualLeaveQuota"], settings?.defaultAnnualLeaveQuota ?? 12) ??
-          (settings?.defaultAnnualLeaveQuota ?? 12),
-        (str(r["joiningDate"]) ?? new Date().toISOString().slice(0, 10)),
-        num(r["probationMonths"], settings?.defaultProbationMonths ?? 3) ??
-          (settings?.defaultProbationMonths ?? 3),
-        settings?.proRatedQuotas,
-      ),
-      dateOfBirth: str(r["dateOfBirth"]) as unknown as string | undefined,
-      education: str(r["education"]),
-      address: str(r["address"]),
-    };});
+        sickLeaveQuota: computeProRatedQuota(
+          num(getCsvValue(r, "sickLeaveQuota", "sickLeave"), settings?.defaultSickLeaveQuota ?? 6) ??
+            (settings?.defaultSickLeaveQuota ?? 6),
+          joiningDate,
+          probationMonths,
+          settings?.proRatedQuotas,
+        ),
+        annualLeaveQuota: computeProRatedQuota(
+          num(getCsvValue(r, "annualLeaveQuota", "annualLeave"), settings?.defaultAnnualLeaveQuota ?? 12) ??
+            (settings?.defaultAnnualLeaveQuota ?? 12),
+          joiningDate,
+          probationMonths,
+          settings?.proRatedQuotas,
+        ),
+        dateOfBirth: getCsvValue(r, "dateOfBirth", "dob") as unknown as string | undefined,
+        education: getCsvValue(r, "education"),
+        address: getCsvValue(r, "address"),
+        maritalStatus: getCsvValue(r, "maritalStatus"),
+        wifeName: getCsvValue(r, "wifeName"),
+        wifeDateOfBirth: getCsvValue(r, "wifeDateOfBirth") as unknown as string | undefined,
+        kidsCount: num(getCsvValue(r, "kidsCount")),
+        emergencyContactName: getCsvValue(r, "emergencyContactName"),
+        emergencyContactNumber: getCsvValue(r, "emergencyContactNumber"),
+        emergencyContactRelation: getCsvValue(r, "emergencyContactRelation"),
+        cnic: getCsvValue(r, "cnic"),
+        lastQualification: getCsvValue(r, "lastQualification"),
+        previousCompany: getCsvValue(r, "previousCompany"),
+        lastPay: num(getCsvValue(r, "lastPay")),
+        notes: getCsvValue(r, "notes"),
+      };
+    });
     bulk.mutate(
       { data: { members } },
       {

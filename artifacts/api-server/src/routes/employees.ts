@@ -291,6 +291,37 @@ function proRatedQuota(
   return Math.max(0, Math.round((quota * monthsRemaining) / 12));
 }
 
+function normalizeOfficeTime(value: string | null | undefined): string | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+
+  const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (twentyFourHourMatch) {
+    const hours = Number(twentyFourHourMatch[1]);
+    const minutes = Number(twentyFourHourMatch[2]);
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    }
+  }
+
+  const meridiemMatch = raw.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+  if (!meridiemMatch) return undefined;
+
+  const parsedHours = Number(meridiemMatch[1]);
+  const parsedMinutes = Number(meridiemMatch[2]);
+  if (parsedHours < 1 || parsedHours > 12 || parsedMinutes < 0 || parsedMinutes > 59) {
+    return undefined;
+  }
+
+  const meridiem = meridiemMatch[3].toUpperCase();
+  const normalizedHours =
+    meridiem === "AM"
+      ? parsedHours % 12
+      : (parsedHours % 12) + 12;
+
+  return `${String(normalizedHours).padStart(2, "0")}:${String(parsedMinutes).padStart(2, "0")}`;
+}
+
 router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promise<void> => {
   const parsed = CreateEmployeeBody.safeParse(req.body);
   if (!parsed.success) {
@@ -347,8 +378,9 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
   const probationMonths =
     data.probationMonths ?? settings.defaultProbationMonths;
   const officeStartTime =
-    data.officeStartTime ?? settings.defaultOfficeStartTime;
-  const officeEndTime = data.officeEndTime ?? settings.defaultOfficeEndTime;
+    normalizeOfficeTime(data.officeStartTime) ?? settings.defaultOfficeStartTime;
+  const officeEndTime =
+    normalizeOfficeTime(data.officeEndTime) ?? settings.defaultOfficeEndTime;
   const breakMinutes =
     data.breakMinutes ?? inferBreakMinutes(officeStartTime, officeEndTime);
   const baseCasual = data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
@@ -534,10 +566,11 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
       const probationMonths =
         data.probationMonths ?? settings.defaultProbationMonths;
       const officeStartTime =
-        data.officeStartTime ?? settings.defaultOfficeStartTime;
-      const officeEndTime = data.officeEndTime ?? settings.defaultOfficeEndTime;
+        normalizeOfficeTime(data.officeStartTime) ?? settings.defaultOfficeStartTime;
+      const officeEndTime =
+        normalizeOfficeTime(data.officeEndTime) ?? settings.defaultOfficeEndTime;
       const breakMinutes =
-        data.breakMinutes ?? inferBreakMinutes(officeStartTime, officeEndTime);
+        (data as any).breakMinutes ?? inferBreakMinutes(officeStartTime, officeEndTime);
       const baseCasual =
         data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
       const baseSick = data.sickLeaveQuota ?? settings.defaultSickLeaveQuota;
@@ -646,6 +679,10 @@ router.get("/users/mentionable", requireAuth(), async (_req, res) => {
 
 router.get("/employees/:id", requireAuth(), async (req, res) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ message: "Invalid employee id" });
+    return;
+  }
   const user = getUser(req);
   if (user.role === "employee" && user.employeeId !== id) {
     res.status(403).json({ message: "Forbidden" });
@@ -768,10 +805,22 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
     updates.joiningDate = data.joiningDate as unknown as string;
   if (data.probationMonths !== undefined)
     updates.probationMonths = data.probationMonths;
-  if (data.officeStartTime !== undefined)
-    updates.officeStartTime = data.officeStartTime;
-  if (data.officeEndTime !== undefined)
-    updates.officeEndTime = data.officeEndTime;
+  if (data.officeStartTime !== undefined) {
+    const normalizedStartTime = normalizeOfficeTime(data.officeStartTime);
+    if (!normalizedStartTime) {
+      res.status(400).json({ message: "Invalid office start time" });
+      return;
+    }
+    updates.officeStartTime = normalizedStartTime;
+  }
+  if (data.officeEndTime !== undefined) {
+    const normalizedEndTime = normalizeOfficeTime(data.officeEndTime);
+    if (!normalizedEndTime) {
+      res.status(400).json({ message: "Invalid office end time" });
+      return;
+    }
+    updates.officeEndTime = normalizedEndTime;
+  }
   if (data.gracePeriodMinutes !== undefined)
     updates.gracePeriodMinutes = data.gracePeriodMinutes;
   if (data.breakMinutes !== undefined)
