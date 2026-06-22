@@ -178,6 +178,19 @@ function isLockedAttendanceStatus(status: string) {
   return ["weekend", "holiday", "future", "none"].includes(status);
 }
 
+function formatAttendanceReason(notes?: string | null) {
+  const cleaned = (notes ?? "")
+    .replace(/\[manual_attendance_override\]/g, "")
+    .replace(/\[attendance_work_mode:(?:onsite|remote_work)\]/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
+  return cleaned || "—";
+}
+
 export function AdminAttendancePage() {
   const localToday = ymdLocal(new Date());
   const { data: employees } = useListEmployees();
@@ -598,7 +611,7 @@ export function AdminAttendancePage() {
                     <TableCell>{display.checkIn}</TableCell>
                     <TableCell>{display.checkOut}</TableCell>
                     <TableCell className="max-w-[280px] text-xs text-muted-foreground">
-                      {r.notes?.trim() || "—"}
+                      {formatAttendanceReason(r.notes)}
                     </TableCell>
                     <TableCell className="text-right">{display.worked}</TableCell>
                   </TableRow>

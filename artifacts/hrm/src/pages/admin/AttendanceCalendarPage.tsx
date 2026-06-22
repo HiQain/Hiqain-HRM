@@ -160,6 +160,19 @@ function isLockedAttendanceStatus(status: string) {
   return ["weekend", "holiday", "future", "none"].includes(status);
 }
 
+function formatAttendanceReason(notes?: string | null) {
+  const cleaned = (notes ?? "")
+    .replace(/\[manual_attendance_override\]/g, "")
+    .replace(/\[attendance_work_mode:(?:onsite|remote_work)\]/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
+  return cleaned || "—";
+}
+
 function thisMonth(): string {
   const now = new Date();
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -694,7 +707,7 @@ function ListView({
                       <TableCell>{display.checkIn}</TableCell>
                       <TableCell>{display.checkOut}</TableCell>
                       <TableCell className="max-w-[280px] text-xs text-muted-foreground">
-                        {r.notes?.trim() || "â€”"}
+                        {formatAttendanceReason(r.notes)}
                       </TableCell>
                       <TableCell className="text-right">{display.worked}</TableCell>
                     </TableRow>
@@ -895,3 +908,4 @@ function CalendarView({
     </>
   );
 }
+
