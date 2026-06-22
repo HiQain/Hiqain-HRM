@@ -46,6 +46,35 @@ export function nextOccurrence(month: number, day: number, fromYear: number): Da
 }
 
 export function parseHHMM(s: string): { h: number; m: number } {
-  const [h, m] = s.split(":").map(Number);
-  return { h: h ?? 0, m: m ?? 0 };
+  const raw = s.trim();
+
+  const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (twentyFourHourMatch) {
+    const hours = Number(twentyFourHourMatch[1]);
+    const minutes = Number(twentyFourHourMatch[2]);
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return { h: hours, m: minutes };
+    }
+  }
+
+  const meridiemMatch = raw.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+  if (meridiemMatch) {
+    const parsedHours = Number(meridiemMatch[1]);
+    const parsedMinutes = Number(meridiemMatch[2]);
+    if (
+      parsedHours >= 1 &&
+      parsedHours <= 12 &&
+      parsedMinutes >= 0 &&
+      parsedMinutes <= 59
+    ) {
+      const meridiem = meridiemMatch[3].toUpperCase();
+      const normalizedHours =
+        meridiem === "AM"
+          ? parsedHours % 12
+          : (parsedHours % 12) + 12;
+      return { h: normalizedHours, m: parsedMinutes };
+    }
+  }
+
+  return { h: 0, m: 0 };
 }
