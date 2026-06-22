@@ -105,6 +105,11 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
     "`break_minutes` INT NOT NULL DEFAULT 60 AFTER `grace_period_minutes`",
   );
   await ensureColumn(
+    "attendance",
+    "work_mode",
+    "`work_mode` ENUM('onsite','remote_work') NULL AFTER `status`",
+  );
+  await ensureColumn(
     "employees",
     "medical_daily_limit",
     "`medical_daily_limit` DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER `medical_enabled`",

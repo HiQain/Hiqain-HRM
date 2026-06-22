@@ -50,8 +50,65 @@ import {
   formatTime,
   ymdLocal,
 } from "@/lib/utils";
+import { getApiUrl } from "@/lib/api";
 
 type StatusFilter = "all" | "absent" | "leave" | "late";
+
+function normalizeManualAttendanceStatus(
+  status: string,
+  isLate?: boolean,
+): AttendanceOverrideRequestStatus {
+  if (status === "remote_work") {
+    return isLate ? "late" : "present";
+  }
+  return (status as AttendanceOverrideRequestStatus);
+}
+
+function resolveWorkMode(
+  workMode?: string | null,
+  status?: string,
+  positionType?: string | null,
+): "onsite" | "remote_work" {
+  return workMode === "remote_work" ||
+    (workMode == null && (status === "remote_work" || positionType === "remote"))
+    ? "remote_work"
+    : "onsite";
+}
+
+function WorkModeToggle({
+  mode,
+  disabled,
+  onChange,
+}: {
+  mode: "onsite" | "remote_work";
+  disabled?: boolean;
+  onChange: (mode: "onsite" | "remote_work") => void;
+}) {
+  const nextMode = mode === "onsite" ? "remote_work" : "onsite";
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onChange(nextMode)}
+      className={cn(
+        "inline-flex min-w-[116px] items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        mode === "onsite"
+          ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+          : "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100",
+      )}
+      aria-label={`Work mode: ${mode === "onsite" ? "Onsite" : "Remote Work"}. Click to switch to ${nextMode === "onsite" ? "Onsite" : "Remote Work"}.`}
+    >
+      <span
+        className={cn(
+          "inline-block h-1.5 w-1.5 rounded-full",
+          mode === "onsite" ? "bg-slate-500" : "bg-teal-500",
+        )}
+      />
+      {mode === "onsite" ? "Onsite" : "Remote Work"}
+    </button>
+  );
+}
 
 function shiftDate(ymd: string, days: number): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
@@ -175,6 +232,41 @@ export function AdminAttendancePage() {
     );
   };
 
+  const handleWorkModeChange = (
+    employeeId: number,
+    date: string,
+    nextMode: "onsite" | "remote_work",
+  ) => {
+    setEditingEmpId(employeeId);
+    fetch(getApiUrl("/api/attendance/work-mode"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        employeeId,
+        date,
+        workMode: nextMode,
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.message || "Could not update work mode");
+        }
+        toast.success("Work mode updated");
+        await qc.invalidateQueries({
+          queryKey: getGetTodayAttendanceSummaryQueryKey(params),
+        });
+        setEditingEmpId(null);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Could not update work mode");
+        setEditingEmpId(null);
+      });
+  };
+
   const isToday = effectiveDate === operationalToday;
   const isPast = effectiveDate < operationalToday;
   const employeeMeta = useMemo(
@@ -186,6 +278,7 @@ export function AdminAttendancePage() {
             department: employee.department ?? "",
             joiningDate: employee.joiningDate ?? "",
             employeeCode: employee.employeeCode ?? "",
+            positionType: employee.positionType ?? "onsite",
             officeStartTime: employee.officeStartTime ?? null,
             officeEndTime: employee.officeEndTime ?? null,
             breakMinutes: employee.breakMinutes ?? 0,
@@ -403,6 +496,7 @@ export function AdminAttendancePage() {
           <TableHeader>
             <TableRow>
               <TableHead>Employee</TableHead>
+              <TableHead>Work mode</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[180px]">Change status</TableHead>
               <TableHead>Check-in</TableHead>
@@ -414,13 +508,13 @@ export function AdminAttendancePage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   Loading attendance...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   No matching employees.
                 </TableCell>
               </TableRow>
@@ -434,6 +528,15 @@ export function AdminAttendancePage() {
                   meta?.officeStartTime,
                   meta?.officeEndTime,
                   meta?.breakMinutes,
+                );
+                const attendanceStatus = normalizeManualAttendanceStatus(
+                  r.status,
+                  r.isLate,
+                );
+                const workMode = resolveWorkMode(
+                  r.workMode,
+                  r.status,
+                  meta?.positionType,
                 );
                 const isLockedStatus = isLockedAttendanceStatus(r.status);
                 return (
@@ -450,14 +553,27 @@ export function AdminAttendancePage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={r.status} />
+                        <WorkModeToggle
+                          mode={workMode}
+                          disabled={isSaving || isLockedStatus}
+                          onChange={(nextMode) =>
+                          handleWorkModeChange(
+                            r.employeeId,
+                            r.date,
+                            nextMode,
+                          )
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={attendanceStatus} />
                     </TableCell>
                     <TableCell>
                       {isLockedStatus ? (
                         <span className="text-sm text-muted-foreground">—</span>
                       ) : (
                         <Select
-                          value={r.status}
+                          value={attendanceStatus}
                           onValueChange={(v) =>
                             handleStatusChange(
                               r.employeeId,
@@ -475,7 +591,6 @@ export function AdminAttendancePage() {
                             <SelectItem value="absent">Absent</SelectItem>
                             <SelectItem value="on_leave">On leave</SelectItem>
                             <SelectItem value="half_day">Half day</SelectItem>
-                            <SelectItem value="remote_work">Remote work</SelectItem>
                           </SelectContent>
                         </Select>
                       )}

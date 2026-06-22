@@ -307,8 +307,8 @@ export function normalizeAttendanceStatus(
 
   if (inferredLate) {
     return {
-      status: record.workedMinutes >= fullDayMinutes ? "present" : "late",
-      isLate: record.workedMinutes < fullDayMinutes,
+      status: "late",
+      isLate: true,
     };
   }
 

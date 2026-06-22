@@ -2086,8 +2086,23 @@ function BulkUploadSheet({
   const onUpload = () => {
     if (rows.length === 0) return;
     const generatedPasswords: { row: number; email: string; password: string }[] = [];
-    const members = rows.map((r, index) => {
-      const email = getCsvValue(r, "email") ?? "";
+    const lastRowByEmail = new Map<string, number>();
+    rows.forEach((row, index) => {
+      const normalizedEmail = (getCsvValue(row, "email") ?? "").trim().toLowerCase();
+      if (normalizedEmail) {
+        lastRowByEmail.set(normalizedEmail, index);
+      }
+    });
+    const effectiveRows = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row, index }) => {
+        const normalizedEmail = (getCsvValue(row, "email") ?? "").trim().toLowerCase();
+        if (!normalizedEmail) return true;
+        return lastRowByEmail.get(normalizedEmail) === index;
+      });
+
+    const members = effectiveRows.map(({ row: r, index }) => {
+      const email = (getCsvValue(r, "email") ?? "").trim().toLowerCase();
       const password = getCsvValue(r, "password") ?? DEFAULT_EMPLOYEE_PASSWORD;
       if (!getCsvValue(r, "password") && email) {
         generatedPasswords.push({
@@ -2222,11 +2237,12 @@ function BulkUploadSheet({
       }}
     >
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-        <SheetHeader>
+          <SheetHeader>
           <SheetTitle>Bulk upload members</SheetTitle>
           <SheetDescription>
-            Upload a CSV to add many members at once. Download the sample to see
-            the expected columns.
+            Upload a CSV to add or update many members at once. Matching emails
+            already in HRM will be overwritten by the uploaded row. Download the
+            sample to see the expected columns.
           </SheetDescription>
         </SheetHeader>
 
@@ -2297,7 +2313,7 @@ function BulkUploadSheet({
             <div className="rounded-lg border border-border bg-card p-3 text-sm">
               <p className="font-semibold">Upload finished</p>
               <p className="text-emerald-700">
-                {result.created} employee(s) created
+                {result.created} employee(s) imported
               </p>
               {result.errors.length > 0 && (
                 <div className="mt-2">

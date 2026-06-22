@@ -255,6 +255,84 @@ function getEmployeeBankValues(data: Record<string, unknown>) {
   };
 }
 
+function buildBulkEmployeeValues(
+  data: typeof CreateEmployeeBody._type,
+  settings: Awaited<ReturnType<typeof getSettings>>,
+  employeeCode: string,
+) {
+  const bankValues = getEmployeeBankValues(data as Record<string, unknown>);
+  const joiningDateStr = data.joiningDate as unknown as string;
+  const probationMonths =
+    data.probationMonths ?? settings.defaultProbationMonths;
+  const officeStartTime =
+    normalizeOfficeTime(data.officeStartTime) ?? settings.defaultOfficeStartTime;
+  const officeEndTime =
+    normalizeOfficeTime(data.officeEndTime) ?? settings.defaultOfficeEndTime;
+  const breakMinutes =
+    (data as any).breakMinutes ?? inferBreakMinutes(officeStartTime, officeEndTime);
+  const baseCasual =
+    data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
+  const baseSick = data.sickLeaveQuota ?? settings.defaultSickLeaveQuota;
+  const baseAnnual =
+    data.annualLeaveQuota ?? settings.defaultAnnualLeaveQuota;
+
+  return {
+    name: data.name,
+    personalEmail: (data as any).personalEmail ?? null,
+    phone: data.phone ?? null,
+    position: data.position ?? null,
+    department: data.department ?? null,
+    positionType: data.positionType ?? "onsite",
+    joiningDate: joiningDateStr,
+    probationMonths,
+    officeStartTime,
+    officeEndTime,
+    gracePeriodMinutes:
+      data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
+    breakMinutes,
+    basicSalary: String(data.basicSalary),
+    allowances: String(data.allowances ?? 0),
+    providentFundPercent:
+      Number(settings.defaultProvidentFundPercent) > 0
+        ? String(Number(settings.defaultProvidentFundPercent))
+        : null,
+    casualLeaveQuota: settings.proRatedQuotas
+      ? proRatedQuota(baseCasual, joiningDateStr, probationMonths)
+      : baseCasual,
+    sickLeaveQuota: settings.proRatedQuotas
+      ? proRatedQuota(baseSick, joiningDateStr, probationMonths)
+      : baseSick,
+    annualLeaveQuota: settings.proRatedQuotas
+      ? proRatedQuota(baseAnnual, joiningDateStr, probationMonths)
+      : baseAnnual,
+    dateOfBirth: (data.dateOfBirth as unknown as string) ?? null,
+    education: data.education ?? null,
+    address: data.address ?? null,
+    employeeCode,
+    maritalStatus: (data as any).maritalStatus ?? null,
+    wifeName: (data as any).wifeName ?? null,
+    wifeDateOfBirth:
+      ((data as any).wifeDateOfBirth as unknown as string) ?? null,
+    kidsCount:
+      (data as any).kidsCount != null ? String((data as any).kidsCount) : null,
+    kidsNames: serializeKidsNames((data as any).kidsNames),
+    emergencyContactName: (data as any).emergencyContactName ?? null,
+    emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
+    emergencyContactRelation:
+      (data as any).emergencyContactRelation ?? null,
+    emergencyContact: (data as any).emergencyContact ?? null,
+    cnic: (data as any).cnic ?? null,
+    lastQualification: (data as any).lastQualification ?? null,
+    previousCompany: (data as any).previousCompany ?? null,
+    lastPay:
+      (data as any).lastPay != null ? String((data as any).lastPay) : null,
+    benefits: (data as any).benefits ?? null,
+    notes: (data as any).notes ?? null,
+    immediateFamily: (data as any).immediateFamily ?? null,
+    ...bankValues,
+  };
+}
+
 router.get("/employees", requireAuth(["admin", "hr"]), async (_req, res) => {
   const rows = await db
     .select({
@@ -508,6 +586,7 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
     return;
   }
   const settings = await getSettings();
+  const bulkActor = getUser(req);
   let created = 0;
   let failed = 0;
   const errors: Array<{ row: number; email: string | null; message: string }> = [];
@@ -526,127 +605,72 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
     }
     const data = parsed.data;
     const email = data.email.toLowerCase();
-    const bankValues = getEmployeeBankValues(data as Record<string, unknown>);
-    const exists = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.email, email))
-      .limit(1);
-    if (exists.length) {
-      failed += 1;
-      errors.push({ row: i + 1, email, message: "Email already exists" });
-      continue;
-    }
     try {
       const requestedRole: "admin" | "hr" | "employee" =
         data.role === "admin" ? "admin" : data.role === "hr" ? "hr" : "employee";
       // Only admins can create another admin during bulk import.
-      const bulkActor = getUser(req);
       const safeRole: "admin" | "hr" | "employee" =
         requestedRole === "admin" && bulkActor.role !== "admin"
           ? "employee"
           : requestedRole;
       const passwordHash = await hashPassword(data.password);
-      const insertedUser = await db
-        .insert(usersTable)
-        .values({
-          email,
-          passwordHash,
-          role: safeRole,
-          isActive: (data as any).isActive ?? true,
-          mustChangePassword: true,
-        })
-        .$returningId();
-      const userId = insertedUser[0]?.id;
-      if (!userId) {
-        throw new Error("Failed to create user");
-      }
-      const autoCode = await getNextEmployeeCode();
-      const joiningDateStr = data.joiningDate as unknown as string;
-      const probationMonths =
-        data.probationMonths ?? settings.defaultProbationMonths;
-      const officeStartTime =
-        normalizeOfficeTime(data.officeStartTime) ?? settings.defaultOfficeStartTime;
-      const officeEndTime =
-        normalizeOfficeTime(data.officeEndTime) ?? settings.defaultOfficeEndTime;
-      const breakMinutes =
-        (data as any).breakMinutes ?? inferBreakMinutes(officeStartTime, officeEndTime);
-      const baseCasual =
-        data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
-      const baseSick = data.sickLeaveQuota ?? settings.defaultSickLeaveQuota;
-      const baseAnnual =
-        data.annualLeaveQuota ?? settings.defaultAnnualLeaveQuota;
-      await db.insert(employeesTable).values({
-        userId,
-        name: data.name,
-        personalEmail: (data as any).personalEmail ?? null,
-        phone: data.phone ?? null,
-        position: data.position ?? null,
-        department: data.department ?? null,
-        positionType: data.positionType ?? "onsite",
-        joiningDate: joiningDateStr,
-        probationMonths,
-        officeStartTime,
-        officeEndTime,
-        gracePeriodMinutes:
-          data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
-        breakMinutes,
-        basicSalary: String(data.basicSalary),
-        allowances: String(data.allowances ?? 0),
-        providentFundPercent:
-          Number(settings.defaultProvidentFundPercent) > 0
-            ? String(Number(settings.defaultProvidentFundPercent))
-            : null,
-        casualLeaveQuota: settings.proRatedQuotas
-          ? proRatedQuota(baseCasual, joiningDateStr, probationMonths)
-          : baseCasual,
-        sickLeaveQuota: settings.proRatedQuotas
-          ? proRatedQuota(baseSick, joiningDateStr, probationMonths)
-          : baseSick,
-        annualLeaveQuota: settings.proRatedQuotas
-          ? proRatedQuota(baseAnnual, joiningDateStr, probationMonths)
-          : baseAnnual,
-        dateOfBirth: (data.dateOfBirth as unknown as string) ?? null,
-        education: data.education ?? null,
-        address: data.address ?? null,
-        employeeCode: autoCode,
-        maritalStatus: (data as any).maritalStatus ?? null,
-        wifeName: (data as any).wifeName ?? null,
-        wifeDateOfBirth:
-          ((data as any).wifeDateOfBirth as unknown as string) ?? null,
-        kidsCount:
-          (data as any).kidsCount != null ? String((data as any).kidsCount) : null,
-        kidsNames: serializeKidsNames((data as any).kidsNames),
-        emergencyContactName: (data as any).emergencyContactName ?? null,
-        emergencyContactNumber: (data as any).emergencyContactNumber ?? null,
-        emergencyContactRelation:
-          (data as any).emergencyContactRelation ?? null,
-        emergencyContact: (data as any).emergencyContact ?? null,
-        cnic: (data as any).cnic ?? null,
-        lastQualification: (data as any).lastQualification ?? null,
-        previousCompany: (data as any).previousCompany ?? null,
-        lastPay:
-          (data as any).lastPay != null ? String((data as any).lastPay) : null,
-        benefits: (data as any).benefits ?? null,
-        notes: (data as any).notes ?? null,
-        immediateFamily: (data as any).immediateFamily ?? null,
-        cnicDocumentUrl: (data as any).cnicDocumentUrl ?? null,
-        cnicDocumentName: (data as any).cnicDocumentName ?? null,
-        cnicFrontDocumentUrl: (data as any).cnicFrontDocumentUrl ?? null,
-        cnicFrontDocumentName: (data as any).cnicFrontDocumentName ?? null,
-        cnicBackDocumentUrl: (data as any).cnicBackDocumentUrl ?? null,
-        cnicBackDocumentName: (data as any).cnicBackDocumentName ?? null,
-        qualificationDocumentUrl:
-          (data as any).qualificationDocumentUrl ?? null,
-        qualificationDocumentName:
-          (data as any).qualificationDocumentName ?? null,
-        lastPayslipOneUrl: (data as any).lastPayslipOneUrl ?? null,
-        lastPayslipOneName: (data as any).lastPayslipOneName ?? null,
-        lastPayslipTwoUrl: (data as any).lastPayslipTwoUrl ?? null,
-        lastPayslipTwoName: (data as any).lastPayslipTwoName ?? null,
-        lastPayslipThreeUrl: (data as any).lastPayslipThreeUrl ?? null,
-        lastPayslipThreeName: (data as any).lastPayslipThreeName ?? null,
-        ...bankValues,
+      await db.transaction(async (tx: any) => {
+        const existingUsers = await tx
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.email, email))
+          .limit(1);
+        const existingUser = existingUsers[0];
+
+        let userId = existingUser?.id;
+        if (existingUser) {
+          await tx
+            .update(usersTable)
+            .set({
+              passwordHash,
+              role: safeRole,
+              isActive: (data as any).isActive ?? true,
+              mustChangePassword: true,
+            })
+            .where(eq(usersTable.id, existingUser.id));
+        } else {
+          const insertedUser = await tx
+            .insert(usersTable)
+            .values({
+              email,
+              passwordHash,
+              role: safeRole,
+              isActive: (data as any).isActive ?? true,
+              mustChangePassword: true,
+            })
+            .$returningId();
+          userId = insertedUser[0]?.id;
+        }
+
+        if (!userId) {
+          throw new Error("Failed to create user");
+        }
+
+        const existingEmployees = await tx
+          .select()
+          .from(employeesTable)
+          .where(eq(employeesTable.userId, userId))
+          .limit(1);
+        const existingEmployee = existingEmployees[0];
+        const employeeCode = existingEmployee?.employeeCode ?? (await getNextEmployeeCode());
+        const employeeValues = buildBulkEmployeeValues(data, settings, employeeCode);
+
+        if (existingEmployee) {
+          await tx
+            .update(employeesTable)
+            .set(employeeValues)
+            .where(eq(employeesTable.id, existingEmployee.id));
+        } else {
+          await tx.insert(employeesTable).values({
+            userId,
+            ...employeeValues,
+          });
+        }
       });
       created += 1;
     } catch (err) {

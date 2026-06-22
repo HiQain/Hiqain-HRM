@@ -22,6 +22,7 @@ export interface AttendanceRecord {
   pausedMinutes?: number;
   isPaused?: boolean;
   status: AttendanceRecordStatus;
+  workMode?: 'onsite' | 'remote_work' | null;
   isLate?: boolean;
   /** True when an approved request (late/half-day) means this row should not deduct from payroll */
   excused?: boolean;

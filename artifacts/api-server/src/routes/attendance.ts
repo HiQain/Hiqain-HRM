@@ -85,6 +85,61 @@ function resolveOverrideAttendanceFields(
   };
 }
 
+function resolveDefaultWorkMode(
+  employee?: Pick<typeof employeesTable.$inferSelect, "positionType">,
+): "onsite" | "remote_work" {
+  return employee?.positionType === "remote" ? "remote_work" : "onsite";
+}
+
+const WORK_MODE_NOTE_TAG = "[attendance_work_mode:";
+
+function extractWorkModeOverride(notes?: string | null): "onsite" | "remote_work" | null {
+  if (!notes) return null;
+  const remoteTag = `${WORK_MODE_NOTE_TAG}remote_work]`;
+  const onsiteTag = `${WORK_MODE_NOTE_TAG}onsite]`;
+  if (notes.includes(remoteTag)) return "remote_work";
+  if (notes.includes(onsiteTag)) return "onsite";
+  return null;
+}
+
+function stripWorkModeOverride(notes?: string | null): string | null {
+  if (!notes) return null;
+  const stripped = notes
+    .replace(`${WORK_MODE_NOTE_TAG}remote_work]`, "")
+    .replace(`${WORK_MODE_NOTE_TAG}onsite]`, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+  return stripped.length > 0 ? stripped : null;
+}
+
+function setWorkModeOverrideNote(
+  notes: string | null | undefined,
+  workMode: "onsite" | "remote_work" | null,
+): string | null {
+  const base = stripWorkModeOverride(notes);
+  if (!workMode) return base;
+  return base ? `${base}\n${WORK_MODE_NOTE_TAG}${workMode}]` : `${WORK_MODE_NOTE_TAG}${workMode}]`;
+}
+
+function resolveAttendanceWorkMode(
+  record: Pick<typeof attendanceTable.$inferSelect, "status" | "workMode" | "notes">,
+  employee?: Pick<typeof employeesTable.$inferSelect, "positionType">,
+): "onsite" | "remote_work" {
+  return extractWorkModeOverride(record.notes) ??
+    record.workMode ??
+    (record.status === "remote_work" ? "remote_work" : resolveDefaultWorkMode(employee));
+}
+
+function serializeAttendanceStatus(
+  status: string,
+  isLate: boolean,
+): string {
+  if (status === "remote_work") {
+    return isLate ? "late" : "present";
+  }
+  return status;
+}
+
 function serializeRecord(
   r: typeof attendanceTable.$inferSelect,
   employeeName: string,
@@ -98,6 +153,10 @@ function serializeRecord(
   >,
 ) {
   const normalized = employee ? normalizeAttendanceStatus(r, employee) : null;
+  const serializedStatus = serializeAttendanceStatus(
+    normalized?.status ?? r.status,
+    normalized?.isLate ?? r.isLate,
+  );
   return {
     id: r.id,
     employeeId: r.employeeId,
@@ -109,7 +168,8 @@ function serializeRecord(
     pausedAt: r.pausedAt ? r.pausedAt.toISOString() : null,
     pausedMinutes: r.pausedMinutes ?? 0,
     isPaused: Boolean(r.pausedAt && !r.checkOutTime),
-    status: normalized?.status ?? r.status,
+    status: serializedStatus,
+    workMode: resolveAttendanceWorkMode(r, employee),
     isLate: normalized?.isLate ?? r.isLate,
     excused: r.excused,
     notes: employee ? deriveAttendanceNotes(r, employee) : r.notes,
@@ -195,18 +255,20 @@ router.post(
 
     const isRemoteToday =
       emp.positionType === "remote" || remoteApproved.length > 0;
+    const defaultWorkMode = resolveDefaultWorkMode(emp);
+    const effectiveWorkMode: "onsite" | "remote_work" = isRemoteToday
+      ? "remote_work"
+      : "onsite";
+    const persistedWorkMode =
+      effectiveWorkMode === defaultWorkMode ? null : effectiveWorkMode;
 
     const officeStart = officeStartForShiftDate(emp, shiftDate);
     const graceCutoff = new Date(
       officeStart.getTime() + emp.gracePeriodMinutes * 60_000,
     );
-    const isLate = !isRemoteToday && now > graceCutoff;
+    const isLate = now > graceCutoff;
 
-    const status: "present" | "late" | "remote_work" = isRemoteToday
-      ? "remote_work"
-      : isLate
-        ? "late"
-        : "present";
+    const status: "present" | "late" = isLate ? "late" : "present";
 
     let record;
     if (existingForShiftDate) {
@@ -216,7 +278,10 @@ router.post(
           checkInTime: now,
           isLate,
           status,
-          notes: clearManualAttendanceOverride(existingForShiftDate.notes),
+          notes: setWorkModeOverrideNote(
+            clearManualAttendanceOverride(existingForShiftDate.notes),
+            persistedWorkMode,
+          ),
           pausedAt: null,
           pausedMinutes: 0,
         })
@@ -236,7 +301,7 @@ router.post(
           checkInTime: now,
           isLate,
           status,
-          notes: null,
+          notes: setWorkModeOverrideNote(null, persistedWorkMode),
           pausedAt: null,
           pausedMinutes: 0,
         })
@@ -666,6 +731,7 @@ router.get(
           pausedMinutes: 0,
           isPaused: false,
           status: "none",
+          workMode: resolveDefaultWorkMode(emp),
           isLate: false,
           excused: false,
           notes: null,
@@ -683,6 +749,7 @@ router.get(
           pausedMinutes: 0,
           isPaused: false,
           status: "holiday",
+          workMode: resolveDefaultWorkMode(emp),
           isLate: false,
           excused: false,
           notes: null,
@@ -700,6 +767,7 @@ router.get(
           pausedMinutes: 0,
           isPaused: false,
           status: "weekend",
+          workMode: resolveDefaultWorkMode(emp),
           isLate: false,
           excused: false,
           notes: null,
@@ -710,8 +778,8 @@ router.get(
         else if (normalized.status === "late") late += 1;
         else if (normalized.status === "on_leave") onLeave += 1;
         else if (normalized.status === "half_day") halfDay += 1;
-        else if (normalized.status === "remote_work") remoteWork += 1;
         else absent += 1;
+        if (resolveAttendanceWorkMode(r, emp) === "remote_work") remoteWork += 1;
         out.push(serializeRecord(r, emp.name, emp));
       } else if (isFuture) {
         // Don't fabricate "absent" rows for future dates.
@@ -727,6 +795,7 @@ router.get(
           pausedMinutes: 0,
           isPaused: false,
           status: "future",
+          workMode: resolveDefaultWorkMode(emp),
           isLate: false,
           excused: false,
           notes: null,
@@ -745,6 +814,7 @@ router.get(
           pausedMinutes: 0,
           isPaused: false,
           status: "on_leave",
+          workMode: resolveDefaultWorkMode(emp),
           isLate: false,
           excused: false,
           notes: null,
@@ -763,6 +833,7 @@ router.get(
           pausedMinutes: 0,
           isPaused: false,
           status: "absent",
+          workMode: resolveDefaultWorkMode(emp),
           isLate: false,
           excused: false,
           notes: null,
@@ -1040,6 +1111,7 @@ router.post(
 
     let record;
     if (existing.length) {
+      const currentWorkModeOverride = extractWorkModeOverride(existing[0]!.notes);
       const overrideFields = resolveOverrideAttendanceFields(
         emp,
         date,
@@ -1054,7 +1126,10 @@ router.post(
           checkInTime: overrideFields.checkInTime,
           checkOutTime: overrideFields.checkOutTime,
           workedMinutes: overrideFields.workedMinutes,
-          notes: markManualAttendanceOverride(notes ?? existing[0]!.notes),
+          notes: setWorkModeOverrideNote(
+            markManualAttendanceOverride(notes ?? existing[0]!.notes),
+            currentWorkModeOverride,
+          ),
         })
         .where(eq(attendanceTable.id, existing[0]!.id));
       const updatedRows = await db
@@ -1076,6 +1151,104 @@ router.post(
           checkOutTime: overrideFields.checkOutTime,
           workedMinutes: overrideFields.workedMinutes,
           notes: markManualAttendanceOverride(notes ?? null),
+        })
+        .$returningId();
+      const recordId = inserted[0]?.id;
+      const insertedRows = recordId
+        ? await db
+            .select()
+            .from(attendanceTable)
+            .where(eq(attendanceTable.id, recordId))
+            .limit(1)
+        : [];
+      record = insertedRows[0]!;
+    }
+
+    res.json(serializeRecord(record, emp.name, emp));
+  },
+);
+
+router.post(
+  "/attendance/work-mode",
+  requireAuth(["admin", "hr"]),
+  async (req, res): Promise<void> => {
+    const { employeeId, date, workMode } = req.body ?? {};
+    if (!employeeId || !date || !workMode) {
+      res
+        .status(400)
+        .json({ message: "employeeId, date and workMode required" });
+      return;
+    }
+
+    if (!["onsite", "remote_work"].includes(workMode)) {
+      res.status(400).json({ message: "Invalid work mode" });
+      return;
+    }
+
+    const empRows = await db
+      .select()
+      .from(employeesTable)
+      .where(eq(employeesTable.id, Number(employeeId)))
+      .limit(1);
+    const emp = empRows[0];
+    if (!emp) {
+      res.status(404).json({ message: "Employee not found" });
+      return;
+    }
+
+    const defaultWorkMode = resolveDefaultWorkMode(emp);
+    const persistedWorkMode = workMode === defaultWorkMode ? null : workMode;
+
+    const existing = await db
+      .select()
+      .from(attendanceTable)
+      .where(
+        and(
+          eq(attendanceTable.employeeId, Number(employeeId)),
+          eq(attendanceTable.date, date),
+        ),
+      )
+      .limit(1);
+
+    let record;
+    if (existing.length) {
+      const current = existing[0]!;
+      let nextStatus = current.status;
+      let nextIsLate = current.isLate;
+
+      if (workMode === "onsite" && current.status === "remote_work") {
+        const normalized = normalizeAttendanceStatus(current, emp);
+        nextStatus = normalized.isLate ? "late" : "present";
+        nextIsLate = normalized.isLate;
+      }
+
+      await db
+        .update(attendanceTable)
+        .set({
+          status: nextStatus as typeof attendanceTable.$inferInsert.status,
+          isLate: nextIsLate,
+          notes: setWorkModeOverrideNote(current.notes, persistedWorkMode),
+        })
+        .where(eq(attendanceTable.id, current.id));
+
+      const updatedRows = await db
+        .select()
+        .from(attendanceTable)
+        .where(eq(attendanceTable.id, current.id))
+        .limit(1);
+      record = updatedRows[0]!;
+    } else {
+      const inserted = await db
+        .insert(attendanceTable)
+        .values({
+          employeeId: Number(employeeId),
+          date,
+          status: "absent",
+          isLate: false,
+          checkInTime: null,
+          checkOutTime: null,
+          workedMinutes: 0,
+          notes: setWorkModeOverrideNote(null, persistedWorkMode),
         })
         .$returningId();
       const recordId = inserted[0]?.id;

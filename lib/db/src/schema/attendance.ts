@@ -33,6 +33,7 @@ export const attendanceTable = mysqlTable(
     ])
       .notNull()
       .default("present"),
+    workMode: mysqlEnum("work_mode", ["onsite", "remote_work"]),
     isLate: boolean("is_late").notNull().default(false),
     excused: boolean("excused").notNull().default(false),
     notes: text("notes"),

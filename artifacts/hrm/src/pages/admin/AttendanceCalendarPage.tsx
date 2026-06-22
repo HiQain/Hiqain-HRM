@@ -1,5 +1,14 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Plane, XCircle } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  Clock,
+  Plane,
+  XCircle,
+} from "lucide-react";
 import {
   useListEmployees,
   useGetAttendanceCalendar,
@@ -23,6 +32,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -40,6 +57,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   cn,
@@ -49,6 +71,7 @@ import {
   formatHM12,
   formatTime,
 } from "@/lib/utils";
+import { getApiUrl } from "@/lib/api";
 
 const STATUS_OPTIONS = [
   { value: "present", label: "Present" },
@@ -56,8 +79,68 @@ const STATUS_OPTIONS = [
   { value: "absent", label: "Absent" },
   { value: "on_leave", label: "On Leave" },
   { value: "half_day", label: "Half Day" },
-  { value: "remote_work", label: "Remote Work" },
 ] as const;
+
+function normalizeManualAttendanceStatus(status: string): AttendanceOverrideRequestStatus {
+  return status === "remote_work"
+    ? "present"
+    : (status as AttendanceOverrideRequestStatus);
+}
+
+function resolveDisplayAttendanceStatus(
+  status: string,
+  isLate?: boolean,
+): AttendanceOverrideRequestStatus {
+  if (status === "remote_work") {
+    return isLate ? "late" : "present";
+  }
+  return status as AttendanceOverrideRequestStatus;
+}
+
+function resolveWorkMode(
+  workMode?: string | null,
+  status?: string,
+  positionType?: string | null,
+): "onsite" | "remote_work" {
+  return workMode === "remote_work" ||
+    (workMode == null && (status === "remote_work" || positionType === "remote"))
+    ? "remote_work"
+    : "onsite";
+}
+
+function WorkModeToggle({
+  mode,
+  disabled,
+  onChange,
+}: {
+  mode: "onsite" | "remote_work";
+  disabled?: boolean;
+  onChange: (mode: "onsite" | "remote_work") => void;
+}) {
+  const nextMode = mode === "onsite" ? "remote_work" : "onsite";
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onChange(nextMode)}
+      className={cn(
+        "inline-flex min-w-[116px] items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        mode === "onsite"
+          ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+          : "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-block h-1.5 w-1.5 rounded-full",
+          mode === "onsite" ? "bg-slate-500" : "bg-teal-500",
+        )}
+      />
+      {mode === "onsite" ? "Onsite" : "Remote Work"}
+    </button>
+  );
+}
 
 const DAY_BG: Record<string, string> = {
   present: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200",
@@ -153,6 +236,71 @@ function resolveAttendanceDisplay(
   };
 }
 
+function EmployeeSearchSelect({
+  employees,
+  value,
+  onChange,
+}: {
+  employees: Array<{ id: number; name: string; positionType?: string | null }>;
+  value: number | null;
+  onChange: (employeeId: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedEmployee =
+    employees.find((employee) => employee.id === value) ?? null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-64 justify-between font-normal"
+        >
+          <span className="truncate">
+            {selectedEmployee?.name ?? "Select employee"}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search employee..." />
+          <CommandList className="max-h-72">
+            <CommandEmpty>No employee found.</CommandEmpty>
+            <CommandGroup>
+              {employees.map((employee) => (
+                <CommandItem
+                  key={employee.id}
+                  value={`${employee.name} ${employee.positionType === "remote" ? "remote" : ""}`}
+                  onSelect={() => {
+                    onChange(employee.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "h-4 w-4",
+                      employee.id === value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  <span className="truncate">{employee.name}</span>
+                  {employee.positionType === "remote" ? (
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      Remote
+                    </span>
+                  ) : null}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function AdminAttendanceCalendarPage() {
   const { data: employees, isLoading: empLoading } = useListEmployees();
   const [employeeId, setEmployeeId] = useState<number | null>(null);
@@ -192,6 +340,12 @@ export function AdminAttendanceCalendarPage() {
             </span>
             {empLoading ? (
               <Skeleton className="h-9 w-56" />
+            ) : true ? (
+              <EmployeeSearchSelect
+                employees={employees ?? []}
+                value={effectiveEmployeeId}
+                onChange={setEmployeeId}
+              />
             ) : (
               <Select
                 value={String(effectiveEmployeeId ?? "")}
@@ -200,7 +354,7 @@ export function AdminAttendanceCalendarPage() {
                 <SelectTrigger className="w-64">
                   <SelectValue placeholder="Select employee" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-72">
                   {employees?.map((e) => (
                     <SelectItem key={e.id} value={String(e.id)}>
                       {e.name}
@@ -263,6 +417,7 @@ export function AdminAttendanceCalendarPage() {
         <ListView
           employeeId={effectiveEmployeeId}
           month={month}
+          positionType={selectedEmployee?.positionType}
           officeStartTime={selectedEmployee?.officeStartTime}
           officeEndTime={selectedEmployee?.officeEndTime}
           breakMinutes={selectedEmployee?.breakMinutes}
@@ -275,12 +430,14 @@ export function AdminAttendanceCalendarPage() {
 function ListView({
   employeeId,
   month,
+  positionType,
   officeStartTime,
   officeEndTime,
   breakMinutes,
 }: {
   employeeId: number | null;
   month: string;
+  positionType?: string | null;
   officeStartTime?: string | null;
   officeEndTime?: string | null;
   breakMinutes?: number | null;
@@ -318,6 +475,7 @@ function ListView({
         checkOutTime: null,
         workedMinutes: 0,
         status: day.status,
+        workMode: null,
         isLate: false,
         excused: false,
         notes: null,
@@ -374,6 +532,47 @@ function ListView({
     );
   };
 
+  const handleWorkModeChange = (
+    rowKey: string,
+    date: string,
+    nextMode: "onsite" | "remote_work",
+  ) => {
+    if (!employeeId) return;
+    setEditingRowKey(rowKey);
+    fetch(getApiUrl("/api/attendance/work-mode"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        employeeId,
+        date,
+        workMode: nextMode,
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.message || "Could not update work mode");
+        }
+        toast.success("Work mode updated");
+        await Promise.all([
+          qc.invalidateQueries({
+            queryKey: getGetEmployeeAttendanceQueryKey(employeeId, params),
+          }),
+          qc.invalidateQueries({
+            queryKey: getGetAttendanceCalendarQueryKey(calendarParams),
+          }),
+        ]);
+        setEditingRowKey(null);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Could not update work mode");
+        setEditingRowKey(null);
+      });
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -398,29 +597,31 @@ function ListView({
           <TableHeader>
             <TableRow>
               <TableHead>Date</TableHead>
+              <TableHead>Work mode</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Change status</TableHead>
               <TableHead>Check-in</TableHead>
               <TableHead>Check-out</TableHead>
+              <TableHead>Reason</TableHead>
               <TableHead className="text-right">Worked</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {!employeeId ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   Select an employee to view attendance.
                 </TableCell>
               </TableRow>
             ) : isLoading || calendarLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   No records for this month.
                 </TableCell>
               </TableRow>
@@ -433,19 +634,41 @@ function ListView({
                     officeEndTime,
                     breakMinutes,
                   );
+                  const attendanceStatus = resolveDisplayAttendanceStatus(
+                    r.status,
+                    r.isLate,
+                  );
+                  const workMode = resolveWorkMode(
+                    r.workMode,
+                    r.status,
+                    positionType,
+                  );
                   const isLockedStatus = isLockedAttendanceStatus(r.status);
                   return (
                     <TableRow key={`${r.date}-${r.id}`}>
                       <TableCell>{formatDate(r.date)}</TableCell>
                       <TableCell>
-                        <StatusBadge status={r.status} />
+                        <WorkModeToggle
+                          mode={workMode}
+                          disabled={editingRowKey === `${r.date}-${r.id}` && override.isPending}
+                          onChange={(nextMode) =>
+                            handleWorkModeChange(
+                              `${r.date}-${r.id}`,
+                              r.date,
+                              nextMode,
+                            )
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={attendanceStatus} />
                       </TableCell>
                       <TableCell>
                         {isLockedStatus ? (
                           <span className="text-sm text-muted-foreground">—</span>
                         ) : (
                           <Select
-                            value={r.status}
+                            value={attendanceStatus}
                             onValueChange={(value) =>
                               handleStatusChange(
                                 `${r.date}-${r.id}`,
@@ -470,6 +693,9 @@ function ListView({
                       </TableCell>
                       <TableCell>{display.checkIn}</TableCell>
                       <TableCell>{display.checkOut}</TableCell>
+                      <TableCell className="max-w-[280px] text-xs text-muted-foreground">
+                        {r.notes?.trim() || "â€”"}
+                      </TableCell>
                       <TableCell className="text-right">{display.worked}</TableCell>
                     </TableRow>
                   );
@@ -584,7 +810,7 @@ function CalendarView({
                     setEditStatus(
                       isLockedAttendanceStatus(cellStatus)
                         ? "present"
-                        : cell.status,
+                        : normalizeManualAttendanceStatus(cell.status),
                     );
                   }}
                   className={cn(
@@ -640,7 +866,7 @@ function CalendarView({
           </DialogHeader>
           <div className="space-y-3">
             <label className="text-sm font-medium">Status</label>
-            <Select value={editStatus} onValueChange={setEditStatus}>
+            <Select value={normalizeManualAttendanceStatus(editStatus)} onValueChange={setEditStatus}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
