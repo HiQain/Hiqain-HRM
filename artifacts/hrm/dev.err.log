@@ -1,0 +1,26 @@
+npm warn Unknown project config "auto-install-peers". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "strict-peer-dependencies". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+[2m3:31:48 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/me[39m
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+[2m3:39:16 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/me[39m
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+[2m4:24:31 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api[39m
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+[2m4:25:07 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/me[39m
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+[2m4:35:41 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/me[39m
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+[2m4:59:38 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api[39m
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+[2m5:02:35 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/me[39m
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+[2m5:06:52 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/me[39m
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)

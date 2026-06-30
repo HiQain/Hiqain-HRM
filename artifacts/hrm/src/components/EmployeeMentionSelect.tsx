@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Check, ChevronsUpDown, X } from "lucide-react";
 import { useListMentionableMembers } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ export function EmployeeMentionSelect({
 }) {
   const { data: members } = useListMentionableMembers();
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const options = useMemo(
     () => (members ?? []).filter((m) => !excludeIds.includes(m.id)),
@@ -49,7 +50,7 @@ export function EmployeeMentionSelect({
   };
 
   return (
-    <div className="space-y-1.5">
+    <div ref={containerRef} className="space-y-1.5">
       <Label>{label}</Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -67,7 +68,11 @@ export function EmployeeMentionSelect({
             <ChevronsUpDown className="h-4 w-4 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] p-0"
+          align="start"
+          container={containerRef.current}
+        >
           <Command>
             <CommandInput placeholder="Search members..." />
             <CommandList>

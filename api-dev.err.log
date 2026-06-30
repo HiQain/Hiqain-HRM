@@ -1,0 +1,41 @@
+npm warn Unknown project config "auto-install-peers". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "strict-peer-dependencies". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "auto-install-peers". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "strict-peer-dependencies". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+  dist\index.mjs                   2.4mb
+  dist\pino-worker.mjs           150.3kb
+  dist\pino-file.mjs             139.3kb
+  dist\pino-pretty.mjs           111.5kb
+  dist\thread-stream-worker.mjs    7.0kb
+  ...and 5 more output files...
+
+Done in 2930ms
+npm warn Unknown project config "auto-install-peers". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "strict-peer-dependencies". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+C:\Users\Siddique\Desktop\hiqain-projects\Hiqain-HRM\lib\db\src\index.ts:17
+    throw new Error(
+          ^
+
+Error: Set DATABASE_URL or provide MYSQL_DATABASE and MYSQL_USER for MySQL.
+    at getDatabaseUrl (C:\Users\Siddique\Desktop\hiqain-projects\Hiqain-HRM\lib\db\src\index.ts:17:11)
+    at <anonymous> (C:\Users\Siddique\Desktop\hiqain-projects\Hiqain-HRM\lib\db\src\index.ts:26:21)
+    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)
+    at async node:internal/modules/esm/loader:639:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.15.0
+npm error Lifecycle script `start` failed with error:
+npm error code 1
+npm error path C:\Users\Siddique\Desktop\hiqain-projects\Hiqain-HRM\artifacts\api-server
+npm error workspace @workspace/api-server@0.0.0
+npm error location C:\Users\Siddique\Desktop\hiqain-projects\Hiqain-HRM\artifacts\api-server
+npm error command failed
+npm error command C:\Windows\system32\cmd.exe /d /s /c node --enable-source-maps ./dist/index.mjs
+npm error Lifecycle script `dev` failed with error:
+npm error code 1
+npm error path C:\Users\Siddique\Desktop\hiqain-projects\Hiqain-HRM\artifacts\api-server
+npm error workspace @workspace/api-server@0.0.0
+npm error location C:\Users\Siddique\Desktop\hiqain-projects\Hiqain-HRM\artifacts\api-server
+npm error command failed
+npm error command C:\Windows\system32\cmd.exe /d /s /c npm run build && npm run start

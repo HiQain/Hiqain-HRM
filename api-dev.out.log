@@ -1,0 +1,12 @@
+
+> @workspace/api-server@0.0.0 dev
+> npm run build && npm run start
+
+
+> @workspace/api-server@0.0.0 build
+> node ./build.mjs
+
+
+> @workspace/api-server@0.0.0 start
+> node --enable-source-maps ./dist/index.mjs
+

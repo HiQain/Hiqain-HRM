@@ -349,29 +349,7 @@ export function EmployeesPage() {
                     {e.email}
                   </p>
                 </div>
-                <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100">
-                  <Link href={`/admin/employees/${e.id}`}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      title="View profile"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    title="Edit profile"
-                    onClick={() => {
-                      setEditingEmployee(e);
-                      setOpen(true);
-                    }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                <div className="opacity-70 group-hover:opacity-100">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button

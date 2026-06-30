@@ -37,6 +37,7 @@ import {
   Briefcase,
   ShieldCheck,
   Pencil,
+  Copy,
   Trash2,
   FileDown,
   Upload,
@@ -68,6 +69,12 @@ import {
 } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -309,7 +316,12 @@ function ProfileTab({ employee }: { employee: any }) {
         <ReadonlyGrid>
           <ReadonlyField label="Employee code" value={employee.employeeCode} />
           <ReadonlyField label="Full name" value={employee.name} />
-          <ReadonlyField label="Work email" value={employee.email} />
+          <ReadonlyField
+            label="Work email"
+            value={employee.email}
+            copyValue={employee.email}
+            copyLabel="work email"
+          />
           <ReadonlyField label="Account role" value={employee.role} />
           <ReadonlyField label="Personal email" value={employee.personalEmail} />
           <ReadonlyField label="Phone number" value={employee.phone} />
@@ -488,27 +500,60 @@ function ReadonlyField({
   value,
   className,
   multiline = false,
+  copyValue,
+  copyLabel,
 }: {
   label: string;
   value: string | number | null | undefined;
   className?: string;
   multiline?: boolean;
+  copyValue?: string | null;
+  copyLabel?: string;
 }) {
+  const normalizedCopyValue = copyValue?.trim() || "";
+  const hasValue =
+    value !== null && value !== undefined && String(value).trim().length > 0;
+
+  const handleCopy = async () => {
+    if (!normalizedCopyValue) return;
+
+    try {
+      await navigator.clipboard.writeText(normalizedCopyValue);
+      toast.success(`${copyLabel ?? label} copied`);
+    } catch {
+      toast.error(`Could not copy ${copyLabel ?? label}`);
+    }
+  };
+
   return (
     <div className={cn("space-y-1.5", className)}>
       <Label className="text-sm font-medium text-foreground">{label}</Label>
-      <div
-        className={cn(
-          "min-h-11 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground",
-          multiline && "min-h-20 whitespace-pre-wrap",
-        )}
-      >
-        {value !== null &&
-        value !== undefined &&
-        String(value).trim().length > 0
-          ? value
-          : "—"}
-      </div>
+      {normalizedCopyValue && !multiline ? (
+        <InputGroup>
+          <InputGroupInput readOnly value={hasValue ? String(value) : ""} />
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              onClick={() => void handleCopy()}
+              aria-label={`Copy ${copyLabel ?? label}`}
+              title={`Copy ${copyLabel ?? label}`}
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+      ) : (
+        <div
+          className={cn(
+            "min-h-11 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground",
+            multiline && "min-h-20 whitespace-pre-wrap",
+          )}
+        >
+          {hasValue ? value : "—"}
+        </div>
+      )}
     </div>
   );
 }
@@ -2166,3 +2211,4 @@ function ContractUploader(props: {
     />
   );
 }
+

@@ -1,0 +1,14 @@
+
+> @workspace/hrm@0.0.0 dev
+> node ../../node_modules/vite/bin/vite.js --config vite.config.ts --host 0.0.0.0 --port 5173
+
+
+  [32m[1mVITE[22m v7.3.3[39m  [2mready in [0m[1m1428[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://172.16.0.169:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://172.28.80.1:[1m5173[22m/[39m
+[2m3:39:06 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mindex.html[22m
+[2m4:23:03 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mindex.html[22m
+[2m4:23:03 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mindex.html[22m
+[2m5:02:20 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mindex.html[22m
