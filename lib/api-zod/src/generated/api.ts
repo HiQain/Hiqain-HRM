@@ -2198,7 +2198,7 @@ export const DeleteNewsPostParams = zod.object({
  * @summary List general requests. Admin sees all, employee sees own.
  */
 export const ListGeneralRequestsQueryParams = zod.object({
-  "type": zod.enum(['half_day', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']).optional(),
+  "type": zod.enum(['half_day', 'early_off_no_break', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']).optional(),
   "status": zod.enum(['pending', 'approved', 'rejected']).optional()
 })
 
@@ -2206,7 +2206,7 @@ export const ListGeneralRequestsResponseItem = zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
   "employeeName": zod.string().optional(),
-  "type": zod.enum(['half_day', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
+  "type": zod.enum(['half_day', 'early_off_no_break', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
   "date": zod.coerce.date(),
   "dateTo": zod.coerce.date().nullish(),
   "amount": zod.number().nullish(),
@@ -2237,7 +2237,7 @@ export const ListGeneralRequestsResponse = zod.array(ListGeneralRequestsResponse
 
 
 export const CreateGeneralRequestBody = zod.object({
-  "type": zod.enum(['half_day', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
+  "type": zod.enum(['half_day', 'early_off_no_break', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
   "date": zod.coerce.date(),
   "dateTo": zod.coerce.date().nullish(),
   "amount": zod.number().nullish(),
@@ -2264,7 +2264,7 @@ export const UpdateGeneralRequestParams = zod.object({
 
 
 export const UpdateGeneralRequestBody = zod.object({
-  "type": zod.enum(['half_day', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']).optional(),
+  "type": zod.enum(['half_day', 'early_off_no_break', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']).optional(),
   "date": zod.coerce.date().optional(),
   "dateTo": zod.coerce.date().nullish(),
   "amount": zod.number().nullish(),
@@ -2283,7 +2283,7 @@ export const UpdateGeneralRequestResponse = zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
   "employeeName": zod.string().optional(),
-  "type": zod.enum(['half_day', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
+  "type": zod.enum(['half_day', 'early_off_no_break', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
   "date": zod.coerce.date(),
   "dateTo": zod.coerce.date().nullish(),
   "amount": zod.number().nullish(),
@@ -2336,7 +2336,7 @@ export const ApproveGeneralRequestResponse = zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
   "employeeName": zod.string().optional(),
-  "type": zod.enum(['half_day', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
+  "type": zod.enum(['half_day', 'early_off_no_break', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
   "date": zod.coerce.date(),
   "dateTo": zod.coerce.date().nullish(),
   "amount": zod.number().nullish(),
@@ -2523,7 +2523,7 @@ export const RejectGeneralRequestResponse = zod.object({
   "id": zod.number(),
   "employeeId": zod.number(),
   "employeeName": zod.string().optional(),
-  "type": zod.enum(['half_day', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
+  "type": zod.enum(['half_day', 'early_off_no_break', 'loan', 'increment', 'remote_work', 'late', 'resignation', 'other']),
   "date": zod.coerce.date(),
   "dateTo": zod.coerce.date().nullish(),
   "amount": zod.number().nullish(),

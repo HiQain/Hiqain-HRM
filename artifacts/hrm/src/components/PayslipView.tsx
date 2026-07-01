@@ -79,7 +79,6 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
   const margin = 42;
   const contentW = w - margin * 2;
   const leftColW = contentW / 2;
-  const halfGap = 10;
   const pageBottom = doc.internal.pageSize.getHeight() - margin;
   const lineColor: [number, number, number] = [205, 213, 224];
   const mutedColor: [number, number, number] = [98, 109, 124];
@@ -138,21 +137,25 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
   doc.setTextColor(...strongColor);
 
   const breakdown = getBreakdownRows(p);
-  const earningsRows = breakdown.earnings.map((row) => [row.label, formatCurrency(row.amount)] as const);
-  const deductionRows = breakdown.deductions.map((row) => [row.label, formatCurrency(row.amount)] as const);
+  const earningsRows = breakdown.earnings.map(
+    (row) => [row.label, formatCurrency(row.amount)] as const,
+  );
+  const deductionRows = breakdown.deductions.map(
+    (row) => [row.label, formatCurrency(row.amount)] as const,
+  );
   const rowCount = Math.max(earningsRows.length, deductionRows.length, 1);
   const totalAddition = p.basicSalary + p.allowances + p.bonus;
   const totalDeduction = p.otherDeductions + p.loanDeduction;
 
-  // Header
   drawBox(margin, y, contentW, 72);
   if (logoDataUrl) {
     try {
       doc.addImage(logoDataUrl, "PNG", margin + 14, y + 12, 26, 26);
     } catch {
-      // ignore logo error
+      // Ignore logo rendering issues and continue with text-only PDF.
     }
   }
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text("HiQain", w / 2, y + 26, { align: "center" });
@@ -166,7 +169,6 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
   });
   y += 84;
 
-  // Employee info
   drawCell(margin, y, leftColW, 48, "EMPLOYEE CODE", empCode(p.employeeId, p.employeeCode));
   drawCell(margin + leftColW, y, leftColW, 48, "NAME", p.employeeName);
   y += 48;
@@ -174,22 +176,6 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
   drawCell(margin + leftColW, y, leftColW, 48, "MODE OF PAYMENT", "Online");
   y += 48;
 
-  // Attendance
-  const quarterW = contentW / 4;
-  drawCell(margin, y, quarterW, 52, "WORKING DAYS", String(p.totalWorkingDays));
-  drawCell(margin + quarterW, y, quarterW, 52, "PRESENT", String(p.presentDays));
-  drawCell(margin + quarterW * 2, y, quarterW, 52, "ABSENT", String(p.absentDays));
-  drawCell(
-    margin + quarterW * 3,
-    y,
-    quarterW,
-    52,
-    "LATE → ABSENCE",
-    `${p.lateCount} late · ${p.lateAbsenceDays ?? 0} day${(p.lateAbsenceDays ?? 0) === 1 ? "" : "s"}`,
-  );
-  y += 64;
-
-  // Breakdown headers
   drawBox(margin, y, leftColW, 28);
   drawBox(margin + leftColW, y, leftColW, 28);
   doc.setFont("helvetica", "bold");
@@ -207,7 +193,6 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
     y += 28;
   }
 
-  // Totals
   drawBox(margin, y, leftColW, 30);
   drawBox(margin + leftColW, y, leftColW, 30);
   doc.setFont("helvetica", "bold");
@@ -223,7 +208,6 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
   });
   y += 30;
 
-  // Net payment
   drawBox(margin, y, contentW, 42);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
@@ -234,12 +218,13 @@ function downloadPayslipPdf(p: Payslip, logoDataUrl?: string) {
   });
   y += 42;
 
-  // Footer
   const footerY = Math.min(y + 26, pageBottom);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(9);
   doc.setTextColor(...mutedColor);
-  doc.text("System generated. No signature required.", w / 2, footerY, { align: "center" });
+  doc.text("System generated. No signature required.", w / 2, footerY, {
+    align: "center",
+  });
 
   const safeName = p.employeeName.replace(/\s+/g, "-").toLowerCase();
   doc.save(`payslip-${safeName}-${p.year}-${String(p.month).padStart(2, "0")}.pdf`);
@@ -254,15 +239,14 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
   const shortMinutes = Math.max(0, Number(payslip.shortMinutes ?? 0));
   const breakdown = getBreakdownRows(payslip);
   const rowCount = Math.max(breakdown.earnings.length, breakdown.deductions.length, 1);
-  const earningsRows = Array.from({ length: rowCount }, (_, index) =>
-    breakdown.earnings[index] ?? null,
-  );
-  const deductionRows = Array.from({ length: rowCount }, (_, index) =>
-    breakdown.deductions[index] ?? null,
-  );
+  const earningsRows = Array.from({ length: rowCount }, (_, index) => (
+    breakdown.earnings[index] ?? null
+  ));
+  const deductionRows = Array.from({ length: rowCount }, (_, index) => (
+    breakdown.deductions[index] ?? null
+  ));
 
   const handleDownload = () => {
-    // Try to load logo as data URL for PDF
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
@@ -292,9 +276,8 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
         </Button>
       </div>
 
-      <div className="border border-border rounded-lg overflow-hidden text-sm font-mono">
-        {/* Company header */}
-        <div className="bg-muted/50 border-b border-border px-4 py-3 flex items-center justify-center gap-3">
+      <div className="overflow-hidden rounded-lg border border-border text-sm font-mono">
+        <div className="flex items-center justify-center gap-3 border-b border-border bg-muted/50 px-4 py-3">
           <img
             src={`${import.meta.env.BASE_URL}logo.png`}
             alt="HiQain"
@@ -302,39 +285,41 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
           />
           <div className="text-center">
             <p className="font-bold text-base">HiQain</p>
-            <p className="text-xs text-muted-foreground">Pay Slip for {formatMonth(payslip.month, payslip.year)}</p>
+            <p className="text-xs text-muted-foreground">
+              Pay Slip for {formatMonth(payslip.month, payslip.year)}
+            </p>
           </div>
         </div>
 
-        {/* Employee Info */}
-        <div className="grid grid-cols-2 border-b border-border divide-x divide-border">
-          <InfoCell label="EMPLOYEE CODE" value={empCode(payslip.employeeId, payslip.employeeCode)} />
+        <div className="grid grid-cols-2 divide-x divide-border border-b border-border">
+          <InfoCell
+            label="EMPLOYEE CODE"
+            value={empCode(payslip.employeeId, payslip.employeeCode)}
+          />
           <InfoCell label="NAME" value={payslip.employeeName} />
         </div>
-        <div className="grid grid-cols-2 border-b border-border divide-x divide-border">
+        <div className="grid grid-cols-2 divide-x divide-border border-b border-border">
           <InfoCell label="DESIGNATION" value={payslip.employeePosition || "-"} />
           <InfoCell label="MODE OF PAYMENT" value="Online" />
         </div>
 
-        {/* Attendance summary */}
-        <div className="grid grid-cols-4 border-b border-border divide-x divide-border bg-muted/10">
+        <div className="grid grid-cols-4 divide-x divide-border border-b border-border bg-muted/10">
           <InfoCell label="WORKING DAYS" value={String(payslip.totalWorkingDays)} />
           <InfoCell label="PRESENT" value={String(payslip.presentDays)} />
           <InfoCell label="ABSENT" value={String(payslip.absentDays)} />
           <InfoCell
-            label="LATE → ABSENCE"
-            value={`${payslip.lateCount} late · ${payslip.lateAbsenceDays ?? 0} day${(payslip.lateAbsenceDays ?? 0) === 1 ? "" : "s"} applied`}
+            label="LATE -> ABSENCE"
+            value={`${payslip.lateCount} late, ${payslip.lateAbsenceDays ?? 0} day${(payslip.lateAbsenceDays ?? 0) === 1 ? "" : "s"} applied`}
           />
         </div>
 
-        <div className="grid grid-cols-4 border-b border-border divide-x divide-border bg-muted/5">
+        <div className="grid grid-cols-4 divide-x divide-border border-b border-border bg-muted/5">
           <InfoCell label="HOURS REQUIRED" value={formatDuration(scheduledMinutes)} />
           <InfoCell label="HOURS COMPLETED" value={formatDuration(completedMinutes)} />
           <InfoCell label="EXTRA HOURS" value={formatDuration(extraMinutes)} />
           <InfoCell label="LESS HOURS" value={formatDuration(shortMinutes)} />
         </div>
 
-        {/* Columns header */}
         <div className="grid grid-cols-2 divide-x divide-border border-b border-border bg-muted/30">
           <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Earnings / Addition
@@ -344,9 +329,7 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
           </div>
         </div>
 
-        {/* Earnings + Deductions rows */}
         <div className="grid grid-cols-2 divide-x divide-border">
-          {/* Left: Earnings */}
           <div className="divide-y divide-border/50">
             {earningsRows.map((row, index) => (
               <SlipRow
@@ -356,7 +339,6 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
               />
             ))}
           </div>
-          {/* Right: Deductions */}
           <div className="divide-y divide-border/50">
             {deductionRows.map((row, index) => (
               <SlipRow
@@ -368,20 +350,17 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
           </div>
         </div>
 
-        {/* Totals */}
         <div className="grid grid-cols-2 divide-x divide-border border-t border-border bg-muted/20">
           <TotalRow label="TOTAL ADDITION" value={totalAddition} />
           <TotalRow label="TOTAL DEDUCTION" value={totalDeduction} />
         </div>
 
-        {/* Net Payment */}
-        <div className="border-t border-border bg-primary/5 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center justify-between border-t border-border bg-primary/5 px-4 py-3">
           <span className="font-bold text-sm uppercase tracking-wide">NET PAYMENT</span>
           <span className="font-bold text-lg">{formatCurrency(payslip.netSalary)}</span>
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-border px-4 py-3 text-center text-xs text-muted-foreground italic">
+        <div className="border-t border-border px-4 py-3 text-center text-xs italic text-muted-foreground">
           System generated. No signature required.
         </div>
       </div>
@@ -392,7 +371,9 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
 function InfoCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="px-4 py-2.5 text-xs">
-      <span className="font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
       <div className="mt-0.5 font-medium text-foreground">{value}</div>
     </div>
   );
@@ -400,12 +381,14 @@ function InfoCell({ label, value }: { label: string; value: string }) {
 
 function SlipRow({ label, value }: { label: string; value: number | null }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2 min-h-[36px] gap-2">
-      <span className="text-xs text-muted-foreground uppercase tracking-wide leading-tight">
+    <div className="flex min-h-[36px] items-center justify-between gap-2 px-4 py-2">
+      <span className="text-xs uppercase tracking-wide leading-tight text-muted-foreground">
         {label || "\u00A0"}
       </span>
       {value !== null && (
-        <span className="text-xs font-medium whitespace-nowrap">{formatCurrency(value)}</span>
+        <span className="whitespace-nowrap text-xs font-medium">
+          {formatCurrency(value)}
+        </span>
       )}
     </div>
   );
@@ -413,7 +396,7 @@ function SlipRow({ label, value }: { label: string; value: number | null }) {
 
 function TotalRow({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2.5 gap-2">
+    <div className="flex items-center justify-between gap-2 px-4 py-2.5">
       <span className="text-xs font-bold uppercase tracking-wide">{label}</span>
       <span className="text-xs font-bold">{formatCurrency(value)}</span>
     </div>

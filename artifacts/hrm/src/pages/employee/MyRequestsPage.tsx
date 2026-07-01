@@ -21,6 +21,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
+import { EmployeeInventoryRequestsSection } from "@/components/EmployeeInventoryRequestsSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReasonCell } from "@/components/ReasonCell";
 import { DateField } from "@/components/DateField";
@@ -67,6 +68,7 @@ import { buildProvidentFundSummary } from "@/lib/providentFund";
 type FilterType =
   | "all"
   | "half_day"
+  | "early_off_no_break"
   | "loan"
   | "increment"
   | "remote_work"
@@ -77,6 +79,7 @@ type FilterType =
 
 const TYPE_LABEL: Record<string, string> = {
   half_day: "Half Day",
+  early_off_no_break: "Early Off & No Break",
   loan: "Loan",
   increment: "Increment",
   remote_work: "Remote Work",
@@ -128,6 +131,7 @@ export function MyRequestsPage() {
         <TabsList className="flex-wrap bg-card">
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="half_day">Half Day</TabsTrigger>
+          <TabsTrigger value="early_off_no_break">Early Off & No Break</TabsTrigger>
           <TabsTrigger value="late">Late</TabsTrigger>
           <TabsTrigger value="remote_work">Remote Work</TabsTrigger>
           <TabsTrigger value="loan">Loan</TabsTrigger>
@@ -246,6 +250,8 @@ export function MyRequestsPage() {
         }}
         editing={editing}
       />
+
+      <EmployeeInventoryRequestsSection />
     </div>
   );
 }
@@ -382,7 +388,10 @@ function RequestDialog({
   const requiresAmount = type === "loan" || type === "increment";
   const requiresPfAmount = (type as string) === "pf_withdrawal";
   const supportsDateRange =
-    type === "half_day" || type === "remote_work" || type === "late";
+    type === "half_day" ||
+    type === "early_off_no_break" ||
+    type === "remote_work" ||
+    type === "late";
   const pfSummary =
     employee && payslips
       ? buildProvidentFundSummary(
@@ -508,6 +517,7 @@ function RequestDialog({
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="half_day">Half Day</SelectItem>
+                <SelectItem value="early_off_no_break">Early Off & No Break</SelectItem>
                 <SelectItem value="late">Late Arrival</SelectItem>
                 <SelectItem value="remote_work">Remote Work</SelectItem>
                 <SelectItem value="loan">Loan</SelectItem>

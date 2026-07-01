@@ -11,6 +11,7 @@ export type GeneralRequestType = typeof GeneralRequestType[keyof typeof GeneralR
 
 export const GeneralRequestType = {
   half_day: 'half_day',
+  early_off_no_break: 'early_off_no_break',
   loan: 'loan',
   increment: 'increment',
   remote_work: 'remote_work',

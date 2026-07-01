@@ -27,7 +27,6 @@ import { EmployeeDashboard } from "@/pages/employee/EmployeeDashboard";
 import { MyMedicalPage } from "@/pages/employee/MyMedicalPage";
 import { EmployeeProfilePage } from "@/pages/employee/EmployeeProfilePage";
 import { MyAttendancePage } from "@/pages/employee/MyAttendancePage";
-import { MyInventoryPage } from "@/pages/employee/MyInventoryPage";
 import { MyLeavesPage } from "@/pages/employee/MyLeavesPage";
 import { MyRequestsPage } from "@/pages/employee/MyRequestsPage";
 import { MyPayslipsPage } from "@/pages/employee/MyPayslipsPage";
@@ -52,6 +51,14 @@ function RedirectToAdmin() {
 
 function RedirectToEmployee() {
   return <Redirect to="/employee" />;
+}
+
+function RedirectAdminInventory() {
+  return <Redirect to="/admin/requests" />;
+}
+
+function RedirectEmployeeInventory() {
+  return <Redirect to="/employee/requests" />;
 }
 
 function RedirectToHome({ role }: { role: "admin" | "hr" | "employee" }) {
@@ -110,7 +117,7 @@ function AuthGate() {
           <Route path="/admin/salary" component={AdminSalaryPage} />
           <Route path="/admin/view" component={AdminMonthlyViewPage} />
           <Route path="/admin/medical" component={AdminMedicalPage} />
-          <Route path="/admin/inventory" component={AdminInventoryPage} />
+          <Route path="/admin/inventory" component={RedirectAdminInventory} />
           <Route path="/admin/feed" component={FeedPage} />
           <Route path="/admin/notifications" component={NotificationsPage} />
           <Route path="/admin/settings" component={AdminSettingsPage} />
@@ -137,14 +144,14 @@ function AuthGate() {
           <Route path="/admin/salary" component={AdminSalaryPage} />
           <Route path="/admin/view" component={AdminMonthlyViewPage} />
           <Route path="/admin/medical" component={AdminMedicalPage} />
-          <Route path="/admin/inventory" component={AdminInventoryPage} />
+          <Route path="/admin/inventory" component={RedirectAdminInventory} />
           <Route path="/admin/feed" component={FeedPage} />
           <Route path="/admin/notifications" component={NotificationsPage} />
           <Route path="/admin/settings" component={AdminSettingsPage} />
           <Route path="/employee" component={EmployeeDashboard} />
           <Route path="/employee/profile" component={EmployeeProfilePage} />
           <Route path="/employee/attendance" component={MyAttendancePage} />
-          <Route path="/employee/inventory" component={MyInventoryPage} />
+          <Route path="/employee/inventory" component={RedirectEmployeeInventory} />
           <Route path="/employee/leaves" component={MyLeavesPage} />
           <Route path="/employee/medical" component={MyMedicalPage} />
           <Route path="/employee/requests" component={MyRequestsPage} />
@@ -165,7 +172,7 @@ function AuthGate() {
           <Route path="/employee" component={EmployeeDashboard} />
           <Route path="/employee/profile" component={EmployeeProfilePage} />
           <Route path="/employee/attendance" component={MyAttendancePage} />
-          <Route path="/employee/inventory" component={MyInventoryPage} />
+          <Route path="/employee/inventory" component={RedirectEmployeeInventory} />
           <Route path="/employee/leaves" component={MyLeavesPage} />
           <Route path="/employee/medical" component={MyMedicalPage} />
           <Route path="/employee/requests" component={MyRequestsPage} />

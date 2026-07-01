@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   useGetMe,
   useGetEmployee,
@@ -14,10 +14,11 @@ import {
   getGetMyLoanEligibilityQueryKey,
   getGetMyPayslipsQueryKey,
 } from "@workspace/api-client-react";
-import { Wallet, Coins, Receipt, Landmark, AlertCircle } from "lucide-react";
+import { Wallet, Coins, Receipt, Landmark, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -31,6 +32,7 @@ import {
   computeSalaryStructurePreview,
   getDefaultAllowanceBreakdown,
   isManualTaxComponent,
+  isProvidentFundApplicableForPeriod,
 } from "@/lib/salary";
 
 function getDisplayedPayrollTax(
@@ -63,7 +65,12 @@ function getPayslipHourMetrics(
   };
 }
 
+function maskSensitiveValue(value: string, visible: boolean) {
+  return visible ? value : "••••••";
+}
+
 export function MySalaryPage() {
+  const [showAmounts, setShowAmounts] = useState(false);
   const { data: me } = useGetMe();
   const employeeId = me?.employeeId ?? 0;
 
@@ -98,15 +105,6 @@ export function MySalaryPage() {
     query: { queryKey: getGetSettingsQueryKey(), enabled: employeeId > 0 },
   });
 
-  if (empLoading || !emp) {
-    return (
-      <div className="space-y-5">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-32 w-full rounded-xl" />
-      </div>
-    );
-  }
-
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
@@ -114,7 +112,7 @@ export function MySalaryPage() {
     () => (components ?? []).filter((component) => !isManualTaxComponent(component)),
     [components],
   );
-  const defaultAllowanceRows = getDefaultAllowanceBreakdown(emp.allowances ?? 0);
+  const defaultAllowanceRows = getDefaultAllowanceBreakdown(emp?.allowances ?? 0);
   const earnings = useMemo(
     () => [...defaultAllowanceRows, ...visibleComponents.filter((c) => !c.isDeduction)],
     [defaultAllowanceRows, visibleComponents],
@@ -124,12 +122,19 @@ export function MySalaryPage() {
     [visibleComponents],
   );
   const latestPayslip = payslips?.[0];
-  const defaultAllowances = emp.allowances ?? 0;
-  const totalSalary = emp.basicSalary + defaultAllowances;
+  const defaultAllowances = emp?.allowances ?? 0;
+  const totalSalary = (emp?.basicSalary ?? 0) + defaultAllowances;
+  const providentFundApplicable = isProvidentFundApplicableForPeriod(
+    emp?.probationEndDate,
+    currentMonth,
+    currentYear,
+  );
   const effectiveProvidentFundPercent =
-    emp.providentFundPercent ?? Number(settings?.defaultProvidentFundPercent ?? 0);
+    providentFundApplicable
+      ? emp?.providentFundPercent ?? Number(settings?.defaultProvidentFundPercent ?? 0)
+      : 0;
   const salaryPreview = computeSalaryStructurePreview({
-    basicSalary: emp.basicSalary,
+    basicSalary: emp?.basicSalary ?? 0,
     defaultAllowances,
     components: visibleComponents,
     providentFundPercent: effectiveProvidentFundPercent,
@@ -170,42 +175,64 @@ export function MySalaryPage() {
     [loans],
   );
 
+  if (empLoading || !emp) {
+    return (
+      <div className="space-y-5">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full rounded-xl" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="My Salary"
         description="Your current salary structure, active loans and eligibility for new loans."
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowAmounts((current) => !current)}
+          >
+            {showAmounts ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showAmounts ? "Hide amounts" : "Show amounts"}
+          </Button>
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           icon={<Wallet className="h-4 w-4" />}
           label="Total salary"
-          value={formatCurrency(totalSalary)}
+          value={maskSensitiveValue(formatCurrency(totalSalary), showAmounts)}
         />
         <StatCard
           icon={<Wallet className="h-4 w-4" />}
           label="Basic salary"
-          value={formatCurrency(emp.basicSalary)}
+          value={maskSensitiveValue(formatCurrency(emp.basicSalary), showAmounts)}
         />
         <StatCard
           icon={<Coins className="h-4 w-4" />}
           label="Allowances (default)"
-          value={formatCurrency(emp.allowances ?? 0)}
+          value={maskSensitiveValue(formatCurrency(emp.allowances ?? 0), showAmounts)}
         />
         <StatCard
           icon={<Receipt className="h-4 w-4" />}
           label="PF deduction"
           value={
             effectiveProvidentFundPercent > 0
-              ? `${effectiveProvidentFundPercent}% of basic`
-              : "—"
+              ? maskSensitiveValue(`${effectiveProvidentFundPercent}% of basic`, showAmounts)
+              : "After probation"
           }
         />
         <StatCard
           icon={<Landmark className="h-4 w-4" />}
           label="Tax"
-          value={formatCurrency(latestPayslip ? latestPayrollTax : currentProjectedTax)}
+          value={maskSensitiveValue(
+            formatCurrency(latestPayslip ? latestPayrollTax : currentProjectedTax),
+            showAmounts,
+          )}
         />
       </div>
 
@@ -221,12 +248,14 @@ export function MySalaryPage() {
           rows={earnings}
           totalsLabel="Total earnings"
           totals={earnSum}
+          showAmounts={showAmounts}
         />
         <ComponentTable
           title="Deductions"
           rows={deductions}
           totalsLabel="Total deductions"
           totals={dedSum}
+          showAmounts={showAmounts}
         />
         {!latestPayslip ? (
           <div className="border-t border-border px-4 py-8 text-center text-sm text-muted-foreground">
@@ -236,27 +265,28 @@ export function MySalaryPage() {
           <div className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-5">
             <PayrollPreviewCard
               label="Home rent"
-              value={formatCurrency(defaultAllowanceRows[0]?.value ?? 0)}
+              value={maskSensitiveValue(formatCurrency(defaultAllowanceRows[0]?.value ?? 0), showAmounts)}
             />
             <PayrollPreviewCard
               label="Utility bills"
-              value={formatCurrency(defaultAllowanceRows[1]?.value ?? 0)}
+              value={maskSensitiveValue(formatCurrency(defaultAllowanceRows[1]?.value ?? 0), showAmounts)}
             />
             <PayrollPreviewCard
               label="Payroll tax"
-              value={formatCurrency(latestPayrollTax)}
+              value={maskSensitiveValue(formatCurrency(latestPayrollTax), showAmounts)}
               tone="down"
             />
             <PayrollPreviewCard
               label="PF deduction"
-              value={formatCurrency(
-                (effectiveProvidentFundPercent / 100) * emp.basicSalary,
+              value={maskSensitiveValue(
+                formatCurrency((effectiveProvidentFundPercent / 100) * emp.basicSalary),
+                showAmounts,
               )}
               tone="down"
             />
             <PayrollPreviewCard
               label="Late penalty"
-              value={formatCurrency(latestLatePenalty)}
+              value={maskSensitiveValue(formatCurrency(latestLatePenalty), showAmounts)}
               hint={`${latestPayslip.lateAbsenceDays ?? 0} penalty day(s)`}
               tone="down"
             />
@@ -286,19 +316,20 @@ export function MySalaryPage() {
               <StatCard
                 icon={<Receipt className="h-4 w-4" />}
                 label="Tax"
-                value={formatCurrency(latestPayrollTax)}
+                value={maskSensitiveValue(formatCurrency(latestPayrollTax), showAmounts)}
               />
               <StatCard
                 icon={<Wallet className="h-4 w-4" />}
                 label="Total deductions"
-                value={formatCurrency(
-                  latestPayslip.otherDeductions + latestPayslip.loanDeduction,
+                value={maskSensitiveValue(
+                  formatCurrency(latestPayslip.otherDeductions + latestPayslip.loanDeduction),
+                  showAmounts,
                 )}
               />
               <StatCard
                 icon={<Wallet className="h-4 w-4" />}
                 label="Net salary"
-                value={formatCurrency(latestPayslip.netSalary)}
+                value={maskSensitiveValue(formatCurrency(latestPayslip.netSalary), showAmounts)}
               />
             </div>
             <div className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -342,7 +373,7 @@ export function MySalaryPage() {
               </p>
               <p className="text-sm font-semibold">
                 {eligibility.eligible
-                  ? formatCurrency(eligibility.maxAmount)
+                    ? maskSensitiveValue(formatCurrency(eligibility.maxAmount), showAmounts)
                   : "Not eligible"}
               </p>
               {!eligibility.eligible && eligibility.reason && (
@@ -375,16 +406,16 @@ export function MySalaryPage() {
                   <TableCell className="font-medium">
                     {formatMonth(loan.startMonth, loan.startYear)}
                   </TableCell>
-                  <TableCell>{formatCurrency(loan.principalAmount)}</TableCell>
+                  <TableCell>{maskSensitiveValue(formatCurrency(loan.principalAmount), showAmounts)}</TableCell>
                   <TableCell>
-                    {formatCurrency(loan.monthlyInstallment)}
+                    {maskSensitiveValue(formatCurrency(loan.monthlyInstallment), showAmounts)}
                     <span className="ml-1 text-xs text-muted-foreground">
                       × {loan.monthsToRepay}
                     </span>
                   </TableCell>
-                  <TableCell>{formatCurrency(loan.totalPaid)}</TableCell>
+                  <TableCell>{maskSensitiveValue(formatCurrency(loan.totalPaid), showAmounts)}</TableCell>
                   <TableCell className="font-semibold">
-                    {formatCurrency(loan.remainingBalance)}
+                    {maskSensitiveValue(formatCurrency(loan.remainingBalance), showAmounts)}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -456,6 +487,7 @@ function ComponentTable({
   rows,
   totalsLabel,
   totals,
+  showAmounts,
 }: {
   title: string;
   rows: Array<{
@@ -467,6 +499,7 @@ function ComponentTable({
   }>;
   totalsLabel: string;
   totals: { fixed: number; percent: number };
+  showAmounts: boolean;
 }) {
   return (
     <div>
@@ -496,9 +529,10 @@ function ComponentTable({
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-mono">
-                  {r.valueType === "percentage"
-                    ? `${r.value}%`
-                    : formatCurrency(r.value)}
+                  {maskSensitiveValue(
+                    r.valueType === "percentage" ? `${r.value}%` : formatCurrency(r.value),
+                    showAmounts,
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -507,10 +541,13 @@ function ComponentTable({
                 {totalsLabel}
               </TableCell>
               <TableCell className="text-right font-mono font-semibold">
-                {totals.fixed > 0 ? formatCurrency(totals.fixed) : "—"}
+                {maskSensitiveValue(
+                  totals.fixed > 0 ? formatCurrency(totals.fixed) : "—",
+                  showAmounts,
+                )}
                 {totals.percent > 0 && (
                   <span className="ml-1 text-xs text-muted-foreground">
-                    + {totals.percent.toFixed(1)}%
+                    {showAmounts ? `+ ${totals.percent.toFixed(1)}%` : ""}
                   </span>
                 )}
               </TableCell>

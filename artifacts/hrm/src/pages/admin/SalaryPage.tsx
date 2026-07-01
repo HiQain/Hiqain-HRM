@@ -31,6 +31,8 @@ import {
   TrendingUp,
   Trash2,
   Wand2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
@@ -70,6 +72,7 @@ import {
   getDefaultAllowanceBreakdown,
   resolveHistoricalCompensation,
   isManualTaxComponent,
+  isProvidentFundApplicableForPeriod,
 } from "@/lib/salary";
 
 function getDisplayedPayrollTax(
@@ -102,9 +105,14 @@ function getPayslipHourMetrics(
   };
 }
 
+function maskSensitiveValue(value: string, visible: boolean) {
+  return visible ? value : "••••••";
+}
+
 export function AdminSalaryPage() {
   const { data: employees } = useListEmployees();
   const now = new Date();
+  const [showAmounts, setShowAmounts] = useState(false);
   const [empId, setEmpId] = useState<number | null>(null);
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [year, setYear] = useState<number>(now.getFullYear());
@@ -231,8 +239,15 @@ export function AdminSalaryPage() {
   const displayedDefaultAllowances =
     monthPayslip?.allowances ?? effectiveCompensation.defaultAllowances;
   const totalSalary = displayedBasicSalary + displayedDefaultAllowances;
+  const providentFundApplicable = isProvidentFundApplicableForPeriod(
+    emp?.probationEndDate,
+    month,
+    year,
+  );
   const effectiveProvidentFundPercent =
-    emp?.providentFundPercent ?? Number(settings?.defaultProvidentFundPercent ?? 0);
+    providentFundApplicable
+      ? emp?.providentFundPercent ?? Number(settings?.defaultProvidentFundPercent ?? 0)
+      : 0;
   const salaryPreview = computeSalaryStructurePreview({
     basicSalary: displayedBasicSalary,
     defaultAllowances: displayedDefaultAllowances,
@@ -282,6 +297,16 @@ export function AdminSalaryPage() {
       <PageHeader
         title="Employee Salary"
         description="Select an employee to review their salary structure, deductions, late count, loans, and payroll history. You can excuse late marks here before generating the payslip."
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowAmounts((current) => !current)}
+          >
+            {showAmounts ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showAmounts ? "Hide amounts" : "Show amounts"}
+          </Button>
+        }
       />
 
       <div className="grid gap-3 rounded-xl border border-border bg-card p-5 shadow-sm sm:grid-cols-4">
@@ -363,31 +388,31 @@ export function AdminSalaryPage() {
               <StatCard
                 icon={<Wallet className="h-4 w-4" />}
                 label="Total salary"
-                value={formatCurrency(totalSalary)}
+                value={maskSensitiveValue(formatCurrency(totalSalary), showAmounts)}
               />
               <StatCard
                 icon={<Wallet className="h-4 w-4" />}
                 label="Basic salary"
-                value={formatCurrency(displayedBasicSalary)}
+                value={maskSensitiveValue(formatCurrency(displayedBasicSalary), showAmounts)}
               />
               <StatCard
                 icon={<Coins className="h-4 w-4" />}
                 label="Default allowances"
-                value={formatCurrency(displayedDefaultAllowances)}
+                value={maskSensitiveValue(formatCurrency(displayedDefaultAllowances), showAmounts)}
               />
               <StatCard
                 icon={<Receipt className="h-4 w-4" />}
                 label="PF deduction"
                 value={
                   effectiveProvidentFundPercent > 0
-                    ? `${effectiveProvidentFundPercent}% of basic`
-                    : "—"
+                    ? maskSensitiveValue(`${effectiveProvidentFundPercent}% of basic`, showAmounts)
+                    : "After probation"
                 }
               />
               <StatCard
                 icon={<Landmark className="h-4 w-4" />}
                 label="Tax"
-                value={formatCurrency(currentTax)}
+                value={maskSensitiveValue(formatCurrency(currentTax), showAmounts)}
               />
             </div>
           </section>
@@ -480,27 +505,28 @@ export function AdminSalaryPage() {
                   Default salary components are shown below.
                 </p>
               </div>
-              <ComponentTable title="Earnings" rows={earnings} />
-              <ComponentTable title="Deductions" rows={deductions} />
+              <ComponentTable title="Earnings" rows={earnings} showAmounts={showAmounts} />
+              <ComponentTable title="Deductions" rows={deductions} showAmounts={showAmounts} />
               <div className="border-t border-border px-4 py-5">
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <MoneySummaryCard
                     label="Home rent"
-                    value={formatCurrency(defaultAllowanceRows[0]?.value ?? 0)}
+                    value={maskSensitiveValue(formatCurrency(defaultAllowanceRows[0]?.value ?? 0), showAmounts)}
                   />
                   <MoneySummaryCard
                     label="Utility bills"
-                    value={formatCurrency(defaultAllowanceRows[1]?.value ?? 0)}
+                    value={maskSensitiveValue(formatCurrency(defaultAllowanceRows[1]?.value ?? 0), showAmounts)}
                   />
                   <MoneySummaryCard
                     label="Payroll tax"
-                    value={formatCurrency(currentTax)}
+                    value={maskSensitiveValue(formatCurrency(currentTax), showAmounts)}
                     tone="down"
                   />
                   <MoneySummaryCard
                     label="PF deduction"
-                    value={formatCurrency(
-                      (effectiveProvidentFundPercent / 100) * displayedBasicSalary,
+                    value={maskSensitiveValue(
+                      formatCurrency((effectiveProvidentFundPercent / 100) * displayedBasicSalary),
+                      showAmounts,
                     )}
                     tone="down"
                   />
@@ -537,16 +563,16 @@ export function AdminSalaryPage() {
                           {formatMonth(loan.startMonth, loan.startYear)}
                         </TableCell>
                         <TableCell>
-                          {formatCurrency(loan.principalAmount)}
+                          {maskSensitiveValue(formatCurrency(loan.principalAmount), showAmounts)}
                         </TableCell>
                         <TableCell>
-                          {formatCurrency(loan.monthlyInstallment)}
+                          {maskSensitiveValue(formatCurrency(loan.monthlyInstallment), showAmounts)}
                           <span className="ml-1 text-xs text-muted-foreground">
                             × {loan.monthsToRepay}
                           </span>
                         </TableCell>
                         <TableCell className="font-semibold">
-                          {formatCurrency(loan.remainingBalance)}
+                          {maskSensitiveValue(formatCurrency(loan.remainingBalance), showAmounts)}
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -612,34 +638,37 @@ export function AdminSalaryPage() {
                 />
                 <PayrollStat
                   label="Per day salary"
-                  value={formatCurrency(generatedPerDaySalary)}
+                  value={maskSensitiveValue(formatCurrency(generatedPerDaySalary), showAmounts)}
                   hint="Calculated on a 30-day month"
                 />
                 <PayrollStat
                   label="Late penalty days"
                   value={String(monthPayslip.lateAbsenceDays ?? 0)}
                   hint={`${monthPayslip.lateCount} lates recorded`}
-                  subvalue={formatCurrency(monthPayslipLatePenalty)}
+                  subvalue={maskSensitiveValue(formatCurrency(monthPayslipLatePenalty), showAmounts)}
                   tone={(monthPayslip.lateAbsenceDays ?? 0) > 0 ? "down" : undefined}
                 />
                 <PayrollStat
                   label="Tax"
-                  value={formatCurrency(currentTax)}
+                  value={maskSensitiveValue(formatCurrency(currentTax), showAmounts)}
                   tone="down"
                 />
                 <PayrollStat
                   label="Total deductions"
-                  value={formatCurrency(
-                    Number(monthPayslip.otherDeductions) +
-                    Number(monthPayslip.loanDeduction),
+                  value={maskSensitiveValue(
+                    formatCurrency(
+                      Number(monthPayslip.otherDeductions) +
+                      Number(monthPayslip.loanDeduction),
+                    ),
+                    showAmounts,
                   )}
-                  hint={`Loan ${formatCurrency(monthPayslip.loanDeduction)}`}
+                  hint={`Loan ${maskSensitiveValue(formatCurrency(monthPayslip.loanDeduction), showAmounts)}`}
                   tone="down"
                 />
                 <PayrollStat
                   label="Net salary"
-                  value={formatCurrency(monthPayslip.netSalary)}
-                  hint={`Bonus ${formatCurrency(monthPayslip.bonus)}`}
+                  value={maskSensitiveValue(formatCurrency(monthPayslip.netSalary), showAmounts)}
+                  hint={`Bonus ${maskSensitiveValue(formatCurrency(monthPayslip.bonus), showAmounts)}`}
                   tone="up"
                 />
               </div>
@@ -667,10 +696,11 @@ export function AdminSalaryPage() {
             )}
           </section>
 
-          <ManageSalaryComponentsCard
-            employeeId={id}
-            defaultAllowanceRows={defaultAllowanceRows}
-          />
+            <ManageSalaryComponentsCard
+              employeeId={id}
+              defaultAllowanceRows={defaultAllowanceRows}
+              showAmounts={showAmounts}
+            />
 
           <section className="rounded-xl border border-border bg-card shadow-sm">
             <div className="border-b border-border p-4">
@@ -728,13 +758,13 @@ export function AdminSalaryPage() {
                               : "—"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(p.loanDeduction)}
+                          {maskSensitiveValue(formatCurrency(p.loanDeduction), showAmounts)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(p.otherDeductions)}
+                          {maskSensitiveValue(formatCurrency(p.otherDeductions), showAmounts)}
                         </TableCell>
                         <TableCell className="text-right font-semibold">
-                          {formatCurrency(p.netSalary)}
+                          {maskSensitiveValue(formatCurrency(p.netSalary), showAmounts)}
                         </TableCell>
                       </TableRow>
                     );
@@ -752,6 +782,7 @@ export function AdminSalaryPage() {
 function ManageSalaryComponentsCard({
   employeeId,
   defaultAllowanceRows,
+  showAmounts,
 }: {
   employeeId: number;
   defaultAllowanceRows: Array<{
@@ -764,6 +795,7 @@ function ManageSalaryComponentsCard({
     isDeduction?: boolean;
     isTaxable?: boolean;
   }>;
+  showAmounts: boolean;
 }) {
   const qc = useQueryClient();
   const { data: components } = useListSalaryComponents(employeeId, {
@@ -952,7 +984,7 @@ function ManageSalaryComponentsCard({
         )}
         {valueType === "percentage" && (
           <div className="lg:col-span-12 text-xs text-muted-foreground">
-            This will add {formatCurrency(resolvedAmount)} to salary.
+            This will add {maskSensitiveValue(formatCurrency(resolvedAmount), showAmounts)} to salary.
           </div>
         )}
         <div className="lg:col-span-12">
@@ -995,9 +1027,12 @@ function ManageSalaryComponentsCard({
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm">
-                  {component.valueType === "percentage"
-                    ? `${component.value}%`
-                    : formatCurrency(component.value)}
+                  {maskSensitiveValue(
+                    component.valueType === "percentage"
+                      ? `${component.value}%`
+                      : formatCurrency(component.value),
+                    showAmounts,
+                  )}
                 </span>
                 {component.id > 0 && (
                   <Button
@@ -1171,6 +1206,7 @@ function MoneySummaryCard({
 function ComponentTable({
   title,
   rows,
+  showAmounts,
 }: {
   title: string;
   rows: Array<{
@@ -1180,6 +1216,7 @@ function ComponentTable({
     valueType: string;
     value: number;
   }>;
+  showAmounts: boolean;
 }) {
   return (
     <div>
@@ -1209,9 +1246,10 @@ function ComponentTable({
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-mono">
-                  {r.valueType === "percentage"
-                    ? `${r.value}%`
-                    : formatCurrency(r.value)}
+                  {maskSensitiveValue(
+                    r.valueType === "percentage" ? `${r.value}%` : formatCurrency(r.value),
+                    showAmounts,
+                  )}
                 </TableCell>
               </TableRow>
             ))}

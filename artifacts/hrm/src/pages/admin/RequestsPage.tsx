@@ -19,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, PiggyBank, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
+import { AdminInventoryRequestsSection } from "@/components/AdminInventoryRequestsSection";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReasonCell } from "@/components/ReasonCell";
@@ -55,6 +56,7 @@ type FilterStatus = "all" | "pending" | "approved" | "rejected";
 type FilterType =
   | "all"
   | "half_day"
+  | "early_off_no_break"
   | "loan"
   | "increment"
   | "remote_work"
@@ -65,6 +67,7 @@ type FilterType =
 
 const TYPE_LABEL: Record<string, string> = {
   half_day: "Half Day",
+  early_off_no_break: "Early Off & No Break",
   loan: "Loan",
   increment: "Increment",
   remote_work: "Remote Work",
@@ -180,6 +183,7 @@ export function AdminRequestsPage() {
           <TabsList className="flex-wrap bg-card">
             <TabsTrigger value="all">All types</TabsTrigger>
             <TabsTrigger value="half_day">Half Day</TabsTrigger>
+            <TabsTrigger value="early_off_no_break">Early Off & No Break</TabsTrigger>
             <TabsTrigger value="late">Late</TabsTrigger>
             <TabsTrigger value="remote_work">Remote Work</TabsTrigger>
             <TabsTrigger value="loan">Loan</TabsTrigger>
@@ -325,6 +329,8 @@ export function AdminRequestsPage() {
           setPfDialog(null);
         }}
       />
+
+      <AdminInventoryRequestsSection />
     </div>
   );
 }

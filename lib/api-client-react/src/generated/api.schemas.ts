@@ -1070,6 +1070,7 @@ export type GeneralRequestType = typeof GeneralRequestType[keyof typeof GeneralR
 
 export const GeneralRequestType = {
   half_day: 'half_day',
+  early_off_no_break: 'early_off_no_break',
   loan: 'loan',
   increment: 'increment',
   remote_work: 'remote_work',
@@ -1112,6 +1113,7 @@ export type CreateGeneralRequestType = typeof CreateGeneralRequestType[keyof typ
 
 export const CreateGeneralRequestType = {
   half_day: 'half_day',
+  early_off_no_break: 'early_off_no_break',
   loan: 'loan',
   increment: 'increment',
   remote_work: 'remote_work',
@@ -1139,6 +1141,7 @@ export type UpdateGeneralRequestType = typeof UpdateGeneralRequestType[keyof typ
 
 export const UpdateGeneralRequestType = {
   half_day: 'half_day',
+  early_off_no_break: 'early_off_no_break',
   loan: 'loan',
   increment: 'increment',
   remote_work: 'remote_work',
@@ -1545,6 +1548,7 @@ export type ListGeneralRequestsType = typeof ListGeneralRequestsType[keyof typeo
 
 export const ListGeneralRequestsType = {
   half_day: 'half_day',
+  early_off_no_break: 'early_off_no_break',
   loan: 'loan',
   increment: 'increment',
   remote_work: 'remote_work',

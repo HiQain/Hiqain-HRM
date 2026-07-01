@@ -2463,7 +2463,7 @@ components:
         id: { type: integer }
         employeeId: { type: integer }
         employeeName: { type: string }
-        type: { type: string, enum: [half_day, loan, increment, remote_work, late, resignation, other] }
+        type: { type: string, enum: [half_day, early_off_no_break, loan, increment, remote_work, late, resignation, other] }
         date: { type: string, format: date }
         dateTo: { type: string, format: date, nullable: true }
         amount: { type: number, nullable: true }
@@ -2490,7 +2490,7 @@ components:
       type: object
       required: [type, date, reason]
       properties:
-        type: { type: string, enum: [half_day, loan, increment, remote_work, late, resignation, other] }
+        type: { type: string, enum: [half_day, early_off_no_break, loan, increment, remote_work, late, resignation, other] }
         date: { type: string, format: date }
         dateTo: { type: string, format: date, nullable: true }
         amount: { type: number, nullable: true }
@@ -2509,7 +2509,7 @@ components:
     UpdateGeneralRequest:
       type: object
       properties:
-        type: { type: string, enum: [half_day, loan, increment, remote_work, late, resignation, other] }
+        type: { type: string, enum: [half_day, early_off_no_break, loan, increment, remote_work, late, resignation, other] }
         date: { type: string, format: date }
         dateTo: { type: string, format: date, nullable: true }
         amount: { type: number, nullable: true }

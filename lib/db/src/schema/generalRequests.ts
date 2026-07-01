@@ -18,6 +18,7 @@ export const generalRequestsTable = mysqlTable("general_requests", {
     .references(() => employeesTable.id, { onDelete: "cascade" }),
   type: mysqlEnum("type", [
     "half_day",
+    "early_off_no_break",
     "loan",
     "increment",
     "remote_work",

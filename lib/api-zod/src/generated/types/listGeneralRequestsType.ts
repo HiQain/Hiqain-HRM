@@ -11,6 +11,7 @@ export type ListGeneralRequestsType = typeof ListGeneralRequestsType[keyof typeo
 
 export const ListGeneralRequestsType = {
   half_day: 'half_day',
+  early_off_no_break: 'early_off_no_break',
   loan: 'loan',
   increment: 'increment',
   remote_work: 'remote_work',

@@ -46,7 +46,7 @@ export function MedicalPage({ mode }: { mode: MedicalMode }) {
         title="Medical"
         description={
           isAdminMode
-            ? "Manage yearly IPD allowance and per-day limits."
+            ? "Manage yearly IPD allowance."
             : "View your yearly IPD medical allowance and covered family members."
         }
       />
@@ -77,21 +77,23 @@ export function MedicalPage({ mode }: { mode: MedicalMode }) {
       <div className="grid gap-4 lg:grid-cols-3">
         <SummaryCard
           label="Medical status"
-          value={summary.data?.medicalEnabled ? "Enabled" : "Disabled"}
+          value={
+            summary.data?.medicalEnabled
+              ? "Enabled"
+              : isAdminMode
+                ? "Disabled"
+                : "Not Eligible"
+          }
           hint="Coverage access"
         />
         <SummaryCard
           label="Per day limit"
-          value={
-            summary.data ? formatCurrency(summary.data.limits.daily) : "—"
-          }
+          value={summary.data ? formatCurrency(summary.data.limits.daily) : "-"}
           hint="Daily IPD limit"
         />
         <SummaryCard
           label="Yearly IPD allowance"
-          value={
-            summary.data ? formatCurrency(summary.data.limits.overall) : "—"
-          }
+          value={summary.data ? formatCurrency(summary.data.limits.overall) : "-"}
           hint="Year-wise total limit"
         />
       </div>

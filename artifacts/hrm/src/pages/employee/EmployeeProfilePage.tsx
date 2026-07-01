@@ -59,6 +59,7 @@ export function EmployeeProfilePage() {
   }
 
   const probationActive = new Date(employee.probationEndDate) > new Date();
+  const grossSalary = (employee.basicSalary ?? 0) + (employee.allowances ?? 0);
 
   return (
     <div className="space-y-6">
@@ -133,6 +134,10 @@ export function EmployeeProfilePage() {
             <li className="flex justify-between">
               <span className="text-muted-foreground">Allowances</span>
               <span className="font-semibold">{formatCurrency(employee.allowances)}</span>
+            </li>
+            <li className="flex justify-between">
+              <span className="text-muted-foreground">Gross salary</span>
+              <span className="font-semibold">{formatCurrency(grossSalary)}</span>
             </li>
           </ul>
         </div>

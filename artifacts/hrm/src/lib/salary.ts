@@ -163,6 +163,22 @@ export function getDefaultAllowanceBreakdown(defaultAllowances: number) {
   ].filter((item) => item.value > 0);
 }
 
+export function isProvidentFundApplicableForPeriod(
+  probationEndDate: string | Date | null | undefined,
+  month: number,
+  year: number,
+) {
+  if (!probationEndDate) return true;
+
+  const periodEnd = new Date(Date.UTC(year, month, 0));
+  const probationEnd =
+    probationEndDate instanceof Date
+      ? probationEndDate
+      : new Date(`${probationEndDate}T00:00:00Z`);
+
+  return periodEnd.getTime() > probationEnd.getTime();
+}
+
 export function computeSalaryStructurePreview({
   basicSalary,
   defaultAllowances,
