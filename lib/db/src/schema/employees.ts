@@ -87,7 +87,6 @@ export const employeesTable = mysqlTable("employees", {
   bankName: varchar("bank_name", { length: 255 }),
   bankIban: varchar("bank_iban", { length: 64 }),
   bankBranchCode: varchar("bank_branch_code", { length: 64 }),
-  bankBranchName: varchar("bank_branch_name", { length: 255 }),
   primaryBankAccountTitle: varchar("primary_bank_account_title", {
     length: 255,
   }),
@@ -97,7 +96,9 @@ export const employeesTable = mysqlTable("employees", {
   primaryBankName: varchar("primary_bank_name", { length: 255 }),
   primaryBankIban: varchar("primary_bank_iban", { length: 64 }),
   primaryBankBranchCode: varchar("primary_bank_branch_code", { length: 64 }),
-  primaryBankBranchName: varchar("primary_bank_branch_name", { length: 255 }),
+  primaryBankBranchLocation: varchar("primary_bank_branch_location", {
+    length: 255,
+  }),
   secondaryBankAccountTitle: varchar("secondary_bank_account_title", {
     length: 255,
   }),
@@ -109,7 +110,7 @@ export const employeesTable = mysqlTable("employees", {
   secondaryBankBranchCode: varchar("secondary_bank_branch_code", {
     length: 64,
   }),
-  secondaryBankBranchName: varchar("secondary_bank_branch_name", {
+  secondaryBankBranchLocation: varchar("secondary_bank_branch_location", {
     length: 255,
   }),
   medicalEnabled: boolean("medical_enabled").notNull().default(false),

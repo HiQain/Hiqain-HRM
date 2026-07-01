@@ -101,6 +101,16 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
   );
   await ensureColumn(
     "employees",
+    "primary_bank_branch_location",
+    "`primary_bank_branch_location` VARCHAR(255) NULL AFTER `primary_bank_branch_code`",
+  );
+  await ensureColumn(
+    "employees",
+    "secondary_bank_branch_location",
+    "`secondary_bank_branch_location` VARCHAR(255) NULL AFTER `secondary_bank_branch_code`",
+  );
+  await ensureColumn(
+    "employees",
     "break_minutes",
     "`break_minutes` INT NOT NULL DEFAULT 60 AFTER `grace_period_minutes`",
   );

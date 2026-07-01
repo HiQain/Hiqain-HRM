@@ -591,8 +591,8 @@ function NewEmployeeSheet({
           primaryBankIban: editingEmployee.primaryBankIban ?? "",
           primaryBankBranchCode:
             editingEmployee.primaryBankBranchCode ?? "",
-          primaryBankBranchName:
-            editingEmployee.primaryBankBranchName ?? "",
+          primaryBankBranchLocation:
+            editingEmployee.primaryBankBranchLocation ?? "",
           secondaryBankAccountTitle:
             editingEmployee.secondaryBankAccountTitle ?? "",
           secondaryBankAccountNumber:
@@ -601,8 +601,8 @@ function NewEmployeeSheet({
           secondaryBankIban: editingEmployee.secondaryBankIban ?? "",
           secondaryBankBranchCode:
             editingEmployee.secondaryBankBranchCode ?? "",
-          secondaryBankBranchName:
-            editingEmployee.secondaryBankBranchName ?? "",
+          secondaryBankBranchLocation:
+            editingEmployee.secondaryBankBranchLocation ?? "",
           medicalEnabled: Boolean(editingEmployee.medicalEnabled ?? false),
           medicalDailyLimit: String(editingEmployee.medicalDailyLimit ?? 0),
           medicalOverallLimit: String(editingEmployee.medicalOverallLimit ?? 0),
@@ -692,13 +692,13 @@ function NewEmployeeSheet({
       primaryBankName: PRIMARY_PAYROLL_BANK,
       primaryBankIban: "",
       primaryBankBranchCode: "",
-      primaryBankBranchName: "",
+      primaryBankBranchLocation: "",
       secondaryBankAccountTitle: "",
       secondaryBankAccountNumber: "",
       secondaryBankName: "",
       secondaryBankIban: "",
       secondaryBankBranchCode: "",
-      secondaryBankBranchName: "",
+      secondaryBankBranchLocation: "",
       medicalEnabled: false,
       medicalDailyLimit: "",
       medicalOverallLimit: "",
@@ -875,13 +875,13 @@ function NewEmployeeSheet({
       primaryBankName: PRIMARY_PAYROLL_BANK,
       primaryBankIban: form.primaryBankIban || undefined,
       primaryBankBranchCode: form.primaryBankBranchCode || undefined,
-      primaryBankBranchName: form.primaryBankBranchName || undefined,
+      primaryBankBranchLocation: form.primaryBankBranchLocation || undefined,
       secondaryBankAccountTitle: form.secondaryBankAccountTitle || undefined,
       secondaryBankAccountNumber: form.secondaryBankAccountNumber || undefined,
       secondaryBankName: form.secondaryBankName || undefined,
       secondaryBankIban: form.secondaryBankIban || undefined,
       secondaryBankBranchCode: form.secondaryBankBranchCode || undefined,
-      secondaryBankBranchName: form.secondaryBankBranchName || undefined,
+      secondaryBankBranchLocation: form.secondaryBankBranchLocation || undefined,
       medicalEnabled: form.medicalEnabled,
       medicalDailyLimit: Number(form.medicalDailyLimit) || 0,
       medicalOverallLimit: Number(form.medicalOverallLimit) || 0,
@@ -1615,11 +1615,11 @@ function NewEmployeeSheet({
               </Field>
               <Field label="Branch location">
                 <Input
-                  value={form.primaryBankBranchName}
+                  value={form.primaryBankBranchLocation}
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      primaryBankBranchName: e.target.value,
+                      primaryBankBranchLocation: e.target.value,
                     })
                   }
                   placeholder="Main Branch, Karachi"
@@ -1686,11 +1686,11 @@ function NewEmployeeSheet({
               </Field>
               <Field label="Branch location">
                 <Input
-                  value={form.secondaryBankBranchName}
+                  value={form.secondaryBankBranchLocation}
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      secondaryBankBranchName: e.target.value,
+                      secondaryBankBranchLocation: e.target.value,
                     })
                   }
                   placeholder="Gulshan Branch, Karachi"

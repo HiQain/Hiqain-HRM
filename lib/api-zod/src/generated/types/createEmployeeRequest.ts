@@ -81,18 +81,16 @@ export interface CreateEmployeeRequest {
   bankIban?: string | null;
   /** Legacy compatibility field. Prefer primaryBank* fields. */
   bankBranchCode?: string | null;
-  /** Legacy compatibility field. Prefer primaryBank* fields. */
-  bankBranchName?: string | null;
   primaryBankAccountTitle?: string | null;
   primaryBankAccountNumber?: string | null;
   primaryBankName?: string | null;
   primaryBankIban?: string | null;
   primaryBankBranchCode?: string | null;
-  primaryBankBranchName?: string | null;
+  primaryBankBranchLocation?: string | null;
   secondaryBankAccountTitle?: string | null;
   secondaryBankAccountNumber?: string | null;
   secondaryBankName?: string | null;
   secondaryBankIban?: string | null;
   secondaryBankBranchCode?: string | null;
-  secondaryBankBranchName?: string | null;
+  secondaryBankBranchLocation?: string | null;
 }
