@@ -1647,16 +1647,19 @@ components:
         bankName: { type: string, nullable: true, description: "Legacy compatibility field mapped from the primary payroll account." }
         bankIban: { type: string, nullable: true, description: "Legacy compatibility field mapped from the primary payroll account." }
         bankBranchCode: { type: string, nullable: true, description: "Legacy compatibility field mapped from the primary payroll account." }
+        bankBranchName: { type: string, nullable: true, description: "Legacy compatibility field mapped from the primary payroll account." }
         primaryBankAccountTitle: { type: string, nullable: true }
         primaryBankAccountNumber: { type: string, nullable: true }
         primaryBankName: { type: string, nullable: true, description: "Primary payroll bank. This is always Bank Al Habib." }
         primaryBankIban: { type: string, nullable: true }
         primaryBankBranchCode: { type: string, nullable: true }
+        primaryBankBranchName: { type: string, nullable: true }
         secondaryBankAccountTitle: { type: string, nullable: true }
         secondaryBankAccountNumber: { type: string, nullable: true }
         secondaryBankName: { type: string, nullable: true, description: "Secondary bank used before probation completion when needed." }
         secondaryBankIban: { type: string, nullable: true }
         secondaryBankBranchCode: { type: string, nullable: true }
+        secondaryBankBranchName: { type: string, nullable: true }
         providentFundPercent: { type: number, nullable: true }
 
     EmployeeDetail:
@@ -1742,16 +1745,19 @@ components:
         bankName: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
         bankIban: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
         bankBranchCode: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankBranchName: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
         primaryBankAccountTitle: { type: string, nullable: true }
         primaryBankAccountNumber: { type: string, nullable: true }
         primaryBankName: { type: string, nullable: true }
         primaryBankIban: { type: string, nullable: true }
         primaryBankBranchCode: { type: string, nullable: true }
+        primaryBankBranchName: { type: string, nullable: true }
         secondaryBankAccountTitle: { type: string, nullable: true }
         secondaryBankAccountNumber: { type: string, nullable: true }
         secondaryBankName: { type: string, nullable: true }
         secondaryBankIban: { type: string, nullable: true }
         secondaryBankBranchCode: { type: string, nullable: true }
+        secondaryBankBranchName: { type: string, nullable: true }
 
     UpdateEmployeeRequest:
       type: object
@@ -1812,16 +1818,19 @@ components:
         bankName: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
         bankIban: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
         bankBranchCode: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
+        bankBranchName: { type: string, nullable: true, description: "Legacy compatibility field. Prefer primaryBank* fields." }
         primaryBankAccountTitle: { type: string, nullable: true }
         primaryBankAccountNumber: { type: string, nullable: true }
         primaryBankName: { type: string, nullable: true }
         primaryBankIban: { type: string, nullable: true }
         primaryBankBranchCode: { type: string, nullable: true }
+        primaryBankBranchName: { type: string, nullable: true }
         secondaryBankAccountTitle: { type: string, nullable: true }
         secondaryBankAccountNumber: { type: string, nullable: true }
         secondaryBankName: { type: string, nullable: true }
         secondaryBankIban: { type: string, nullable: true }
         secondaryBankBranchCode: { type: string, nullable: true }
+        secondaryBankBranchName: { type: string, nullable: true }
         providentFundPercent: { type: number, nullable: true }
 
     EmployeeJourney:

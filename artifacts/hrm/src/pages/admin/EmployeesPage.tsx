@@ -591,6 +591,8 @@ function NewEmployeeSheet({
           primaryBankIban: editingEmployee.primaryBankIban ?? "",
           primaryBankBranchCode:
             editingEmployee.primaryBankBranchCode ?? "",
+          primaryBankBranchName:
+            editingEmployee.primaryBankBranchName ?? "",
           secondaryBankAccountTitle:
             editingEmployee.secondaryBankAccountTitle ?? "",
           secondaryBankAccountNumber:
@@ -599,6 +601,8 @@ function NewEmployeeSheet({
           secondaryBankIban: editingEmployee.secondaryBankIban ?? "",
           secondaryBankBranchCode:
             editingEmployee.secondaryBankBranchCode ?? "",
+          secondaryBankBranchName:
+            editingEmployee.secondaryBankBranchName ?? "",
           medicalEnabled: Boolean(editingEmployee.medicalEnabled ?? false),
           medicalDailyLimit: String(editingEmployee.medicalDailyLimit ?? 0),
           medicalOverallLimit: String(editingEmployee.medicalOverallLimit ?? 0),
@@ -688,11 +692,13 @@ function NewEmployeeSheet({
       primaryBankName: PRIMARY_PAYROLL_BANK,
       primaryBankIban: "",
       primaryBankBranchCode: "",
+      primaryBankBranchName: "",
       secondaryBankAccountTitle: "",
       secondaryBankAccountNumber: "",
       secondaryBankName: "",
       secondaryBankIban: "",
       secondaryBankBranchCode: "",
+      secondaryBankBranchName: "",
       medicalEnabled: false,
       medicalDailyLimit: "",
       medicalOverallLimit: "",
@@ -869,11 +875,13 @@ function NewEmployeeSheet({
       primaryBankName: PRIMARY_PAYROLL_BANK,
       primaryBankIban: form.primaryBankIban || undefined,
       primaryBankBranchCode: form.primaryBankBranchCode || undefined,
+      primaryBankBranchName: form.primaryBankBranchName || undefined,
       secondaryBankAccountTitle: form.secondaryBankAccountTitle || undefined,
       secondaryBankAccountNumber: form.secondaryBankAccountNumber || undefined,
       secondaryBankName: form.secondaryBankName || undefined,
       secondaryBankIban: form.secondaryBankIban || undefined,
       secondaryBankBranchCode: form.secondaryBankBranchCode || undefined,
+      secondaryBankBranchName: form.secondaryBankBranchName || undefined,
       medicalEnabled: form.medicalEnabled,
       medicalDailyLimit: Number(form.medicalDailyLimit) || 0,
       medicalOverallLimit: Number(form.medicalOverallLimit) || 0,
@@ -1605,6 +1613,17 @@ function NewEmployeeSheet({
                   placeholder="0123"
                 />
               </Field>
+              <Field label="Branch name">
+                <Input
+                  value={form.primaryBankBranchName}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      primaryBankBranchName: e.target.value,
+                    })
+                  }
+                />
+              </Field>
             </div>
           </Section>
 
@@ -1660,6 +1679,17 @@ function NewEmployeeSheet({
                     setForm({
                       ...form,
                       secondaryBankBranchCode: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Branch name">
+                <Input
+                  value={form.secondaryBankBranchName}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      secondaryBankBranchName: e.target.value,
                     })
                   }
                 />

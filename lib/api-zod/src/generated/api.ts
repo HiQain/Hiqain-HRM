@@ -143,16 +143,19 @@ export const ListEmployeesResponseItem = zod.object({
   "bankName": zod.string().nullish().describe('Legacy compatibility field mapped from the primary payroll account.'),
   "bankIban": zod.string().nullish().describe('Legacy compatibility field mapped from the primary payroll account.'),
   "bankBranchCode": zod.string().nullish().describe('Legacy compatibility field mapped from the primary payroll account.'),
+  "bankBranchName": zod.string().nullish().describe('Legacy compatibility field mapped from the primary payroll account.'),
   "primaryBankAccountTitle": zod.string().nullish(),
   "primaryBankAccountNumber": zod.string().nullish(),
   "primaryBankName": zod.string().nullish().describe('Primary payroll bank. This is always Bank Al Habib.'),
   "primaryBankIban": zod.string().nullish(),
   "primaryBankBranchCode": zod.string().nullish(),
+  "primaryBankBranchName": zod.string().nullish(),
   "secondaryBankAccountTitle": zod.string().nullish(),
   "secondaryBankAccountNumber": zod.string().nullish(),
   "secondaryBankName": zod.string().nullish().describe('Secondary bank used before probation completion when needed.'),
   "secondaryBankIban": zod.string().nullish(),
   "secondaryBankBranchCode": zod.string().nullish(),
+  "secondaryBankBranchName": zod.string().nullish(),
   "providentFundPercent": zod.number().nullish()
 })
 export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem)
@@ -240,16 +243,20 @@ export const CreateEmployeeBody = zod.object({
   "bankName": zod.string().nullish().describe('Legacy compatibility field. Prefer primaryBank\* fields.'),
   "bankIban": zod.string().nullish().describe('Legacy compatibility field. Prefer primaryBank\* fields.'),
   "bankBranchCode": zod.string().nullish().describe('Legacy compatibility field. Prefer primaryBank\* fields.'),
+  "bankBranchName": zod.string().nullish().describe('Legacy compatibility field. Prefer primaryBank\* fields.'),
   "primaryBankAccountTitle": zod.string().nullish(),
   "primaryBankAccountNumber": zod.string().nullish(),
   "primaryBankName": zod.string().nullish(),
   "primaryBankIban": zod.string().nullish(),
   "primaryBankBranchCode": zod.string().nullish(),
+  "primaryBankBranchName": zod.string().nullish(),
   "secondaryBankAccountTitle": zod.string().nullish(),
   "secondaryBankAccountNumber": zod.string().nullish(),
   "secondaryBankName": zod.string().nullish(),
   "secondaryBankIban": zod.string().nullish(),
   "secondaryBankBranchCode": zod.string().nullish()
+  ,
+  "secondaryBankBranchName": zod.string().nullish()
 })
 
 
@@ -554,16 +561,19 @@ export const UpdateEmployeeBody = zod.object({
   "bankName": zod.string().nullish().describe('Legacy compatibility field. Prefer primaryBank\* fields.'),
   "bankIban": zod.string().nullish().describe('Legacy compatibility field. Prefer primaryBank\* fields.'),
   "bankBranchCode": zod.string().nullish().describe('Legacy compatibility field. Prefer primaryBank\* fields.'),
+  "bankBranchName": zod.string().nullish().describe('Legacy compatibility field. Prefer primaryBank\* fields.'),
   "primaryBankAccountTitle": zod.string().nullish(),
   "primaryBankAccountNumber": zod.string().nullish(),
   "primaryBankName": zod.string().nullish(),
   "primaryBankIban": zod.string().nullish(),
   "primaryBankBranchCode": zod.string().nullish(),
+  "primaryBankBranchName": zod.string().nullish(),
   "secondaryBankAccountTitle": zod.string().nullish(),
   "secondaryBankAccountNumber": zod.string().nullish(),
   "secondaryBankName": zod.string().nullish(),
   "secondaryBankIban": zod.string().nullish(),
   "secondaryBankBranchCode": zod.string().nullish(),
+  "secondaryBankBranchName": zod.string().nullish(),
   "providentFundPercent": zod.number().nullish()
 })
 

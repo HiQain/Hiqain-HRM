@@ -1,6 +1,4 @@
 import { defineConfig } from "drizzle-kit";
-import path from "path";
-
 function getDatabaseUrl(): string {
   if (process.env.DATABASE_URL) {
     return process.env.DATABASE_URL;
@@ -20,7 +18,7 @@ function getDatabaseUrl(): string {
 }
 
 export default defineConfig({
-  schema: path.join(__dirname, "./src/schema/index.ts"),
+  schema: "./src/schema/*.ts",
   dialect: "mysql",
   dbCredentials: {
     url: getDatabaseUrl(),

@@ -78,17 +78,21 @@ export interface Employee {
   bankIban?: string | null;
   /** Legacy compatibility field mapped from the primary payroll account. */
   bankBranchCode?: string | null;
+  /** Legacy compatibility field mapped from the primary payroll account. */
+  bankBranchName?: string | null;
   primaryBankAccountTitle?: string | null;
   primaryBankAccountNumber?: string | null;
   /** Primary payroll bank. This is always Bank Al Habib. */
   primaryBankName?: string | null;
   primaryBankIban?: string | null;
   primaryBankBranchCode?: string | null;
+  primaryBankBranchName?: string | null;
   secondaryBankAccountTitle?: string | null;
   secondaryBankAccountNumber?: string | null;
   /** Secondary bank used before probation completion when needed. */
   secondaryBankName?: string | null;
   secondaryBankIban?: string | null;
   secondaryBankBranchCode?: string | null;
+  secondaryBankBranchName?: string | null;
   providentFundPercent?: number | null;
 }

@@ -120,6 +120,8 @@ function serializeEmployee(
   const primaryBankIban = e.primaryBankIban ?? e.bankIban ?? null;
   const primaryBankBranchCode =
     e.primaryBankBranchCode ?? e.bankBranchCode ?? null;
+  const primaryBankBranchName =
+    e.primaryBankBranchName ?? e.bankBranchName ?? null;
   return {
     id: e.id,
     userId: e.userId,
@@ -188,16 +190,19 @@ function serializeEmployee(
     bankName: primaryBankName,
     bankIban: primaryBankIban,
     bankBranchCode: primaryBankBranchCode,
+    bankBranchName: primaryBankBranchName,
     primaryBankAccountTitle,
     primaryBankAccountNumber,
     primaryBankName,
     primaryBankIban,
     primaryBankBranchCode,
+    primaryBankBranchName,
     secondaryBankAccountTitle: e.secondaryBankAccountTitle,
     secondaryBankAccountNumber: e.secondaryBankAccountNumber,
     secondaryBankName: e.secondaryBankName,
     secondaryBankIban: e.secondaryBankIban,
     secondaryBankBranchCode: e.secondaryBankBranchCode,
+    secondaryBankBranchName: e.secondaryBankBranchName,
     medicalEnabled: Boolean(e.medicalEnabled),
     medicalDailyLimit: Number(e.medicalDailyLimit ?? 0),
     medicalOverallLimit: Number(e.medicalOverallLimit ?? 0),
@@ -225,6 +230,10 @@ function getEmployeeBankValues(data: Record<string, unknown>) {
     (data.primaryBankBranchCode as string | null | undefined) ??
     (data.bankBranchCode as string | null | undefined) ??
     null;
+  const primaryBankBranchName =
+    (data.primaryBankBranchName as string | null | undefined) ??
+    (data.bankBranchName as string | null | undefined) ??
+    null;
   const secondaryBankAccountTitle =
     (data.secondaryBankAccountTitle as string | null | undefined) ?? null;
   const secondaryBankAccountNumber =
@@ -235,6 +244,8 @@ function getEmployeeBankValues(data: Record<string, unknown>) {
     (data.secondaryBankIban as string | null | undefined) ?? null;
   const secondaryBankBranchCode =
     (data.secondaryBankBranchCode as string | null | undefined) ?? null;
+  const secondaryBankBranchName =
+    (data.secondaryBankBranchName as string | null | undefined) ?? null;
 
   return {
     bankAccountTitle: primaryBankAccountTitle,
@@ -242,16 +253,19 @@ function getEmployeeBankValues(data: Record<string, unknown>) {
     bankName: PRIMARY_PAYROLL_BANK_NAME,
     bankIban: primaryBankIban,
     bankBranchCode: primaryBankBranchCode,
+    bankBranchName: primaryBankBranchName,
     primaryBankAccountTitle,
     primaryBankAccountNumber,
     primaryBankName: PRIMARY_PAYROLL_BANK_NAME,
     primaryBankIban,
     primaryBankBranchCode,
+    primaryBankBranchName,
     secondaryBankAccountTitle,
     secondaryBankAccountNumber,
     secondaryBankName,
     secondaryBankIban,
     secondaryBankBranchCode,
+    secondaryBankBranchName,
   };
 }
 
@@ -929,16 +943,19 @@ router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> =>
     "bankName",
     "bankIban",
     "bankBranchCode",
+    "bankBranchName",
     "primaryBankAccountTitle",
     "primaryBankAccountNumber",
     "primaryBankName",
     "primaryBankIban",
     "primaryBankBranchCode",
+    "primaryBankBranchName",
     "secondaryBankAccountTitle",
     "secondaryBankAccountNumber",
     "secondaryBankName",
     "secondaryBankIban",
     "secondaryBankBranchCode",
+    "secondaryBankBranchName",
   ].some((key) => extra[key] !== undefined);
   if (hasBankPayload) {
     Object.assign(updates, getEmployeeBankValues(extra));
