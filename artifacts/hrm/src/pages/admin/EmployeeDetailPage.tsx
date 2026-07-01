@@ -419,7 +419,7 @@ function ProfileTab({ employee }: { employee: any }) {
           <ReadonlyField label="Bank name" value={employee.primaryBankName ?? employee.bankName ?? PRIMARY_PAYROLL_BANK} />
           <ReadonlyField label="IBAN" value={employee.primaryBankIban ?? employee.bankIban} />
           <ReadonlyField label="Branch code" value={employee.primaryBankBranchCode ?? employee.bankBranchCode} />
-          <ReadonlyField label="Branch name" value={employee.primaryBankBranchName ?? employee.bankBranchName} />
+          <ReadonlyField label="Branch location" value={employee.primaryBankBranchName ?? employee.bankBranchName} />
         </ReadonlyGrid>
       </ReadonlySection>
 
@@ -430,7 +430,7 @@ function ProfileTab({ employee }: { employee: any }) {
           <ReadonlyField label="Bank name" value={employee.secondaryBankName} />
           <ReadonlyField label="IBAN" value={employee.secondaryBankIban} />
           <ReadonlyField label="Branch code" value={employee.secondaryBankBranchCode} />
-          <ReadonlyField label="Branch name" value={employee.secondaryBankBranchName} />
+          <ReadonlyField label="Branch location" value={employee.secondaryBankBranchName} />
         </ReadonlyGrid>
       </ReadonlySection>
 

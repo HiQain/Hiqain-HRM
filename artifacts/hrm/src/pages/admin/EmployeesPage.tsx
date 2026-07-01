@@ -1613,7 +1613,7 @@ function NewEmployeeSheet({
                   placeholder="0123"
                 />
               </Field>
-              <Field label="Branch name">
+              <Field label="Branch location">
                 <Input
                   value={form.primaryBankBranchName}
                   onChange={(e) =>
@@ -1622,6 +1622,7 @@ function NewEmployeeSheet({
                       primaryBankBranchName: e.target.value,
                     })
                   }
+                  placeholder="Main Branch, Karachi"
                 />
               </Field>
             </div>
@@ -1683,7 +1684,7 @@ function NewEmployeeSheet({
                   }
                 />
               </Field>
-              <Field label="Branch name">
+              <Field label="Branch location">
                 <Input
                   value={form.secondaryBankBranchName}
                   onChange={(e) =>
@@ -1692,6 +1693,7 @@ function NewEmployeeSheet({
                       secondaryBankBranchName: e.target.value,
                     })
                   }
+                  placeholder="Gulshan Branch, Karachi"
                 />
               </Field>
             </div>
