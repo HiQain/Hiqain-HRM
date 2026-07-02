@@ -143,6 +143,7 @@ export function normalizeAttendanceWorkedMinutes({
   officeEndTime?: string | null;
   breakMinutes?: number | null;
 }) {
+  if (status === "absent") return 0;
   if ((workedMinutes ?? 0) > 0) return workedMinutes ?? 0;
   const fullShiftMinutes = computeScheduledShiftMinutes(
     officeStartTime,

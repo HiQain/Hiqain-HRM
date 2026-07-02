@@ -362,7 +362,8 @@ router.get(
           label: statusCellLabel(status, leaveType),
           checkInTime: record?.checkInTime?.toISOString() ?? null,
           checkOutTime: record?.checkOutTime?.toISOString() ?? null,
-          workedMinutes: record?.workedMinutes ?? null,
+          workedMinutes:
+            status === "absent" ? 0 : (record?.workedMinutes ?? null),
           excused: record?.excused ?? false,
           notes: record?.notes ?? null,
           isOffDay: day.isOffDay,

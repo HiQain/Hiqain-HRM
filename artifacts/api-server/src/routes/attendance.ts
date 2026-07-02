@@ -157,6 +157,8 @@ function serializeRecord(
     normalized?.status ?? r.status,
     normalized?.isLate ?? r.isLate,
   );
+  const serializedWorkedMinutes =
+    normalized?.status === "absent" ? 0 : r.workedMinutes;
   return {
     id: r.id,
     employeeId: r.employeeId,
@@ -164,7 +166,7 @@ function serializeRecord(
     date: r.date,
     checkInTime: r.checkInTime ? r.checkInTime.toISOString() : null,
     checkOutTime: r.checkOutTime ? r.checkOutTime.toISOString() : null,
-    workedMinutes: r.workedMinutes,
+    workedMinutes: serializedWorkedMinutes,
     pausedAt: r.pausedAt ? r.pausedAt.toISOString() : null,
     pausedMinutes: r.pausedMinutes ?? 0,
     isPaused: Boolean(r.pausedAt && !r.checkOutTime),

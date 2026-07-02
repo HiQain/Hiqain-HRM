@@ -237,6 +237,8 @@ router.get(
     const normalizedTodayRec = todayRec
       ? normalizeAttendanceStatus({ ...todayRec, workedMinutes: liveWorkedMinutes }, e)
       : null;
+    const serializedWorkedMinutes =
+      normalizedTodayRec?.status === "absent" ? 0 : liveWorkedMinutes;
     const todayAttendance = {
       hasCheckedIn: !!todayRec?.checkInTime,
       hasCheckedOut: !!todayRec?.checkOutTime,
@@ -253,7 +255,7 @@ router.get(
             checkOutTime: todayRec.checkOutTime
               ? todayRec.checkOutTime.toISOString()
               : null,
-            workedMinutes: liveWorkedMinutes,
+            workedMinutes: serializedWorkedMinutes,
             pausedAt: todayRec.pausedAt ? todayRec.pausedAt.toISOString() : null,
             pausedMinutes: todayRec.pausedMinutes ?? 0,
             isPaused: !!todayRec.pausedAt && !todayRec.checkOutTime,
