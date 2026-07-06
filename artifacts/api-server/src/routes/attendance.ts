@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import {
   db,
   attendanceTable,
@@ -24,11 +24,44 @@ import {
   shiftDateByDays,
   isOvernightShift,
 } from "../lib/attendance";
+import { disconnectAttendanceExtensionAfterCheckout } from "../lib/attendanceExtension";
 import { isPayrollOffDay, toHolidaySet } from "../lib/payroll";
 import { getSettings } from "./settings";
 import { inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
+const OFFICE_IPS = new Set(
+  String(process.env.HRM_OFFICE_IPS || process.env.OFFICE_IP || "103.125.243.53")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
+
+function normalizeIp(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("::ffff:")) return trimmed.slice(7);
+  return trimmed;
+}
+
+function extractClientIp(req: Request): string | null {
+  const forwarded = req.headers["x-forwarded-for"];
+  const firstForwarded = Array.isArray(forwarded)
+    ? forwarded[0]
+    : typeof forwarded === "string"
+      ? forwarded.split(",")[0]
+      : null;
+  return normalizeIp(firstForwarded) ??
+    normalizeIp(req.ip) ??
+    normalizeIp(req.socket.remoteAddress);
+}
+
+function isRemoteByIp(req: Request) {
+  const clientIp = extractClientIp(req);
+  if (!clientIp) return false;
+  return !OFFICE_IPS.has(clientIp);
+}
 
 function resolveOverrideAttendanceFields(
   employee: Pick<
@@ -256,7 +289,9 @@ router.post(
       .limit(1);
 
     const isRemoteToday =
-      emp.positionType === "remote" || remoteApproved.length > 0;
+      emp.positionType === "remote" ||
+      remoteApproved.length > 0 ||
+      isRemoteByIp(req);
     const defaultWorkMode = resolveDefaultWorkMode(emp);
     const effectiveWorkMode: "onsite" | "remote_work" = isRemoteToday
       ? "remote_work"
@@ -396,6 +431,7 @@ router.post(
         notes: clearManualAttendanceOverride(rec.notes),
       })
       .where(eq(attendanceTable.id, rec.id));
+    await disconnectAttendanceExtensionAfterCheckout(user.employeeId);
     const updatedRows = await db
       .select()
       .from(attendanceTable)

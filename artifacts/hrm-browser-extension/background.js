@@ -43,6 +43,21 @@ async function notify(title, message) {
   });
 }
 
+async function clearConnectionState(errorMessage = "") {
+  await chrome.storage.local.remove([
+    "accessToken",
+    "employeeName",
+    "idleStartedAt",
+    "lastActiveAt",
+    "attendanceState",
+    "lastHeartbeatAt",
+  ]);
+  await chrome.storage.local.set({
+    lastHeartbeatError: errorMessage,
+    lastServerAction: "disconnected",
+  });
+}
+
 async function sendHeartbeat(trigger = "timer") {
   const config = await getConfig();
   if (!config.apiBaseUrl || !config.accessToken) return;
@@ -91,10 +106,21 @@ async function sendHeartbeat(trigger = "timer") {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
+      if (res.status === 401 || res.status === 403) {
+        await clearConnectionState(body.message || "Extension session ended");
+      }
       throw new Error(body.message || "Heartbeat rejected");
     }
 
     const body = await res.json();
+    if (body.attendanceState === "checked_out" || body.action === "checked_out") {
+      await clearConnectionState("Attendance checked out. Extension disconnected.");
+      await notify(
+        "HRM extension disconnected",
+        "Attendance is checked out, so browser syncing has stopped.",
+      );
+      return;
+    }
     await chrome.storage.local.set({
       lastServerAction: body.action || "none",
       lastHeartbeatAt: body.lastHeartbeatAt || now.toISOString(),

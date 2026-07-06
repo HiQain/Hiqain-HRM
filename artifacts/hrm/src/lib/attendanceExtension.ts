@@ -6,6 +6,7 @@ export type AttendanceExtensionStatus = {
   eligible?: boolean;
   link: {
     connected: boolean;
+    stale?: boolean;
     status: "pending" | "connected" | "revoked";
     deviceName: string | null;
     lastState: "active" | "idle" | "locked" | "offline" | null;

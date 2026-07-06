@@ -163,7 +163,9 @@ export function AdminExtensionActivityPage() {
                     </TableCell>
                     <TableCell>
                       {row.extension?.connected ? (
-                        row.extension.warningActive ? (
+                        row.extension.stale ? (
+                          <span className="text-sm font-medium text-amber-700">Stale heartbeat</span>
+                        ) : row.extension.warningActive ? (
                           <span className="text-sm font-medium text-amber-700">Warning active</span>
                         ) : (
                           <span className="text-sm font-medium text-emerald-700">Connected</span>

@@ -20,6 +20,7 @@ type ExtensionState = "active" | "idle" | "locked" | "offline";
 export const EXTENSION_IDLE_PAUSE_MINUTES = 10;
 export const EXTENSION_WARNING_MINUTES = 20;
 export const EXTENSION_AUTO_CHECKOUT_MINUTES = 30;
+export const EXTENSION_STALE_HEARTBEAT_MINUTES = 2;
 const CONNECT_CODE_TTL_MINUTES = 15;
 const DISCONNECT_GRACE_MINUTES = 30;
 
@@ -53,12 +54,22 @@ function serializeLink(link: LinkRow | null) {
   if (!link) return null;
   const connected = link.status === "connected" && !!link.accessTokenHash;
   const now = new Date();
+  const heartbeatStaleMinutes = connected ? minutesBetween(now, link.lastHeartbeatAt) : 0;
+  const stale = connected && heartbeatStaleMinutes >= EXTENSION_STALE_HEARTBEAT_MINUTES;
+  const effectiveLastState = connected
+    ? stale
+      ? "offline"
+      : (link.lastState ?? null)
+    : link.status === "revoked"
+      ? "offline"
+      : (link.lastState ?? null);
   const idleForMinutes =
-    connected && link.lastState && link.lastState !== "active"
+    connected && !stale && link.lastState && link.lastState !== "active"
       ? minutesBetween(now, link.lastIdleStartedAt)
       : 0;
   const warningActive =
     connected &&
+    !stale &&
     !!link.lastHeartbeatAt &&
     !!link.lastIdleStartedAt &&
     !!link.lastState &&
@@ -70,18 +81,31 @@ function serializeLink(link: LinkRow | null) {
     : null;
   return {
     connected,
+    stale,
     status: link.status,
     deviceName: link.deviceName ?? null,
-    lastState: connected ? (link.lastState ?? null) : null,
+    lastState: effectiveLastState,
     lastHeartbeatAt: connected ? link.lastHeartbeatAt?.toISOString() ?? null : null,
     lastActiveAt: connected ? link.lastActiveAt?.toISOString() ?? null : null,
     lastWarningAt: connected ? link.lastWarningAt?.toISOString() ?? null : null,
     idleForMinutes,
-    heartbeatStaleMinutes: connected ? minutesBetween(now, link.lastHeartbeatAt) : 0,
+    heartbeatStaleMinutes,
     browserAlive:
-      connected && typeof link.browserAlive === "number" ? Boolean(link.browserAlive) : null,
+      connected
+        ? stale
+          ? false
+          : typeof link.browserAlive === "number"
+            ? Boolean(link.browserAlive)
+            : null
+        : null,
     networkOnline:
-      connected && typeof link.networkOnline === "number" ? Boolean(link.networkOnline) : null,
+      connected
+        ? stale
+          ? false
+          : typeof link.networkOnline === "number"
+            ? Boolean(link.networkOnline)
+            : null
+        : null,
     extensionVersion: connected ? (link.extensionVersion ?? null) : null,
     disconnectedAt: link.disconnectedAt?.toISOString() ?? null,
     warningActive,
@@ -90,6 +114,24 @@ function serializeLink(link: LinkRow | null) {
     codeExpiresAt: link.status === "pending" ? link.codeExpiresAt?.toISOString() ?? null : null,
     connectedAt: link.connectedAt?.toISOString() ?? null,
   };
+}
+
+async function revokeExtensionLinkForCheckout(link: Pick<LinkRow, "id">) {
+  await db
+    .update(attendanceExtensionLinksTable)
+    .set({
+      status: "revoked",
+      connectionCode: null,
+      codeExpiresAt: null,
+      accessTokenHash: null,
+      lastState: "offline",
+      lastWarningAt: null,
+      autoPausedAt: null,
+      browserAlive: 0,
+      networkOnline: 0,
+      disconnectedAt: new Date(),
+    })
+    .where(eq(attendanceExtensionLinksTable.id, link.id));
 }
 
 async function getLinkByEmployeeId(employeeId: number) {
@@ -129,7 +171,13 @@ async function getLinkByToken(token: string) {
 
 export async function getAttendanceExtensionStatus(employeeId: number) {
   const employee = await getEmployeeById(employeeId);
-  const link = await getLinkByEmployeeId(employeeId);
+  const attendance = await loadAttendanceContext(employeeId);
+  const sessionState = attendanceSessionState(attendance?.record ?? null);
+  let link = await getLinkByEmployeeId(employeeId);
+  if (link && sessionState === "checked_out" && link.status === "connected") {
+    await revokeExtensionLinkForCheckout(link);
+    link = await getLinkByEmployeeId(employeeId);
+  }
   return {
     eligible: !!employee,
     link: serializeLink(link),
@@ -155,15 +203,20 @@ export async function getAdminAttendanceExtensionStatuses() {
 
   return Promise.all(
     employees.map(async (employee) => {
-      const link = await getLinkByEmployeeId(employee.id);
+      let link = await getLinkByEmployeeId(employee.id);
       const status = await loadAttendanceContext(employee.id);
+      const sessionState = attendanceSessionState(status?.record ?? null);
+      if (link && sessionState === "checked_out" && link.status === "connected") {
+        await revokeExtensionLinkForCheckout(link);
+        link = await getLinkByEmployeeId(employee.id);
+      }
       return {
         employeeId: employee.id,
         employeeName: employee.name,
         employeeCode: employee.employeeCode ?? null,
         department: employee.department ?? null,
         position: employee.position ?? null,
-        attendanceState: attendanceSessionState(status?.record ?? null),
+        attendanceState: sessionState,
         extension: serializeLink(link),
       };
     }),
@@ -259,6 +312,15 @@ export async function disconnectAttendanceExtension(employeeId: number) {
       "An employee manually disconnected the attendance browser extension. The session was auto-paused and will be forced to check out after 30 minutes if not restored.",
     href: "/admin/extension-activity",
   });
+
+  return getAttendanceExtensionStatus(employeeId);
+}
+
+export async function disconnectAttendanceExtensionAfterCheckout(employeeId: number) {
+  const existing = await getLinkByEmployeeId(employeeId);
+  if (!existing) return getAttendanceExtensionStatus(employeeId);
+
+  await revokeExtensionLinkForCheckout(existing);
 
   return getAttendanceExtensionStatus(employeeId);
 }
@@ -473,6 +535,18 @@ export async function processAttendanceExtensionHeartbeat(args: {
   let action: "none" | "paused" | "resumed" | "warned" | "checked_out" = "none";
   const statusBefore = await loadAttendanceContext(link.employeeId, now);
   const sessionBefore = attendanceSessionState(statusBefore?.record ?? null);
+  if (sessionBefore === "checked_out") {
+    await revokeExtensionLinkForCheckout(link);
+    return {
+      ok: true,
+      action: "checked_out" as const,
+      shouldWarn: false,
+      attendanceState: sessionBefore,
+      lastHeartbeatAt: now.toISOString(),
+      idleForMinutes: 0,
+      employeeId: link.employeeId,
+    };
+  }
   const manuallyPausedBefore = isManuallyPausedSession(
     statusBefore?.record,
     link,
@@ -513,6 +587,18 @@ export async function processAttendanceExtensionHeartbeat(args: {
 
   const statusAfter = await loadAttendanceContext(link.employeeId, now);
   const sessionAfter = attendanceSessionState(statusAfter?.record ?? null);
+  if (sessionAfter === "checked_out") {
+    await revokeExtensionLinkForCheckout(link);
+    return {
+      ok: true,
+      action: "checked_out" as const,
+      shouldWarn: false,
+      attendanceState: sessionAfter,
+      lastHeartbeatAt: now.toISOString(),
+      idleForMinutes,
+      employeeId: link.employeeId,
+    };
+  }
   await db
     .update(attendanceExtensionLinksTable)
     .set({

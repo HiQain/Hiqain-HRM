@@ -10,9 +10,11 @@ type AttendanceLike = {
   checkOutTime: Date | null;
   workedMinutes: number | null;
   notes?: string | null;
+  workMode?: "onsite" | "remote_work" | null;
 };
 const ATTENDANCE_TIMEZONE_OFFSET_MINUTES = 5 * 60;
 const MANUAL_OVERRIDE_NOTE_PREFIX = "[manual_attendance_override]";
+const ATTENDANCE_REMOTE_WORK_MODE_TAG = "[attendance_work_mode:remote_work]";
 const MISSING_CHECKOUT_ABSENT_NOTE =
   "Absent auto-marked because check-out was not recorded before shift end.";
 
@@ -185,6 +187,7 @@ export function isMissingCheckoutAbsent(
   now: Date = new Date(),
 ) {
   if (emp.positionType !== "onsite") return false;
+  if (record.notes?.includes(ATTENDANCE_REMOTE_WORK_MODE_TAG)) return false;
   if (!record.checkInTime || record.checkOutTime) return false;
   if (hasManualAttendanceOverride(record.notes)) return false;
   return now.getTime() > officeEndForShiftDate(emp, record.date).getTime();
@@ -240,10 +243,21 @@ export function normalizeAttendanceStatus(
     | "positionType"
   >,
 ) {
-  if (record.status === "remote_work" || record.status === "on_leave") {
+  if (record.status === "on_leave") {
     return {
       status: record.status,
       isLate: record.isLate,
+    };
+  }
+
+  if (
+    record.status === "remote_work" ||
+    record.workMode === "remote_work" ||
+    record.notes?.includes(ATTENDANCE_REMOTE_WORK_MODE_TAG)
+  ) {
+    return {
+      status: "remote_work",
+      isLate: false,
     };
   }
 
