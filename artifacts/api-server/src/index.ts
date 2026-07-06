@@ -1,5 +1,28 @@
-import app from "./app";
-import { logger } from "./lib/logger";
+import path from "node:path";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+function loadWorkspaceEnv() {
+  const loadEnvFile = (process as typeof process & {
+    loadEnvFile?: (path?: string) => void;
+  }).loadEnvFile;
+
+  if (typeof loadEnvFile !== "function") return;
+
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const workspaceEnvPath = path.resolve(currentDir, "../../../.env");
+
+  if (existsSync(workspaceEnvPath)) {
+    loadEnvFile(workspaceEnvPath);
+  }
+}
+
+loadWorkspaceEnv();
+
+const [{ default: app }, { logger }] = await Promise.all([
+  import("./app"),
+  import("./lib/logger"),
+]);
 
 const rawPort = process.env["PORT"];
 

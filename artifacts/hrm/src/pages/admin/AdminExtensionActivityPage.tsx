@@ -77,7 +77,7 @@ export function AdminExtensionActivityPage() {
     <div className="space-y-8">
       <PageHeader
         title="Extension Activity"
-        description="Live browser-extension health for remote employees."
+        description="Live browser-extension health for all employees."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -100,7 +100,7 @@ export function AdminExtensionActivityPage() {
           <div>
             <p className="text-sm font-semibold text-foreground">Employee browser activity</p>
             <p className="text-sm text-muted-foreground">
-              See which remote employees are connected, stale, warning, or offline.
+              See which employees are connected, stale, warning, or offline.
             </p>
           </div>
           <div className="relative w-full sm:max-w-xs">

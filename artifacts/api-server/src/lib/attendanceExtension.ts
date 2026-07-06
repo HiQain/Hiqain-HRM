@@ -22,8 +22,6 @@ export const EXTENSION_WARNING_MINUTES = 20;
 export const EXTENSION_AUTO_CHECKOUT_MINUTES = 30;
 const CONNECT_CODE_TTL_MINUTES = 15;
 const DISCONNECT_GRACE_MINUTES = 30;
-const REMOTE_ONLY_MESSAGE =
-  "Browser extension attendance automation is only available for remote employees.";
 
 type LinkRow = typeof attendanceExtensionLinksTable.$inferSelect;
 
@@ -112,13 +110,10 @@ async function getEmployeeById(employeeId: number) {
   return rows[0] ?? null;
 }
 
-export async function ensureRemoteAttendanceExtensionEmployee(employeeId: number) {
+export async function ensureAttendanceExtensionEmployee(employeeId: number) {
   const employee = await getEmployeeById(employeeId);
   if (!employee) {
     throw new Error("Employee not found");
-  }
-  if (employee.positionType !== "remote") {
-    throw new Error(REMOTE_ONLY_MESSAGE);
   }
   return employee;
 }
@@ -136,7 +131,7 @@ export async function getAttendanceExtensionStatus(employeeId: number) {
   const employee = await getEmployeeById(employeeId);
   const link = await getLinkByEmployeeId(employeeId);
   return {
-    eligible: employee?.positionType === "remote",
+    eligible: !!employee,
     link: serializeLink(link),
     thresholds: {
       pauseMinutes: EXTENSION_IDLE_PAUSE_MINUTES,
@@ -156,7 +151,6 @@ export async function getAdminAttendanceExtensionStatuses() {
       position: employeesTable.position,
     })
     .from(employeesTable)
-    .where(eq(employeesTable.positionType, "remote"))
     .orderBy(asc(employeesTable.name));
 
   return Promise.all(
@@ -177,7 +171,7 @@ export async function getAdminAttendanceExtensionStatuses() {
 }
 
 export async function createAttendanceExtensionCode(employeeId: number) {
-  await ensureRemoteAttendanceExtensionEmployee(employeeId);
+  await ensureAttendanceExtensionEmployee(employeeId);
   const existing = await getLinkByEmployeeId(employeeId);
   const code = generateConnectionCode();
   const expiresAt = new Date(Date.now() + CONNECT_CODE_TTL_MINUTES * 60_000);
@@ -213,7 +207,7 @@ export async function createAttendanceExtensionCode(employeeId: number) {
 }
 
 export async function ensureAttendanceExtensionCode(employeeId: number) {
-  await ensureRemoteAttendanceExtensionEmployee(employeeId);
+  await ensureAttendanceExtensionEmployee(employeeId);
   const existing = await getLinkByEmployeeId(employeeId);
   if (
     existing?.status === "connected" ||
@@ -329,7 +323,7 @@ export async function connectAttendanceExtension(
   if (!row?.link) {
     throw new Error("Invalid connection code");
   }
-  const employee = await ensureRemoteAttendanceExtensionEmployee(row.link.employeeId);
+  const employee = await ensureAttendanceExtensionEmployee(row.link.employeeId);
   if (!row.link.codeExpiresAt || row.link.codeExpiresAt.getTime() < Date.now()) {
     throw new Error("Connection code expired. Generate a new one from HRM.");
   }
@@ -371,7 +365,7 @@ export async function connectAttendanceExtensionForEmployee(
   employeeId: number,
   deviceName?: string | null,
 ) {
-  const employee = await ensureRemoteAttendanceExtensionEmployee(employeeId);
+  const employee = await ensureAttendanceExtensionEmployee(employeeId);
   const rows = await db
     .select({
       link: attendanceExtensionLinksTable,
@@ -461,7 +455,7 @@ export async function processAttendanceExtensionHeartbeat(args: {
   if (!link) {
     throw new Error("Extension session is invalid. Reconnect from HRM.");
   }
-  await ensureRemoteAttendanceExtensionEmployee(link.employeeId);
+  await ensureAttendanceExtensionEmployee(link.employeeId);
 
   const now = args.detectedAt ?? new Date();
   const state = args.state;
@@ -589,7 +583,7 @@ export async function runAttendanceExtensionOfflineSweep() {
   for (const link of links) {
     try {
       const employee = await getEmployeeById(link.employeeId);
-      if (!employee || employee.positionType !== "remote") {
+      if (!employee) {
         continue;
       }
       const status = await loadAttendanceContext(link.employeeId, now);
@@ -636,7 +630,7 @@ export async function runAttendanceExtensionOfflineSweep() {
   for (const link of disconnectedLinks) {
     try {
       const employee = await getEmployeeById(link.employeeId);
-      if (!employee || employee.positionType !== "remote") {
+      if (!employee) {
         continue;
       }
       const status = await loadAttendanceContext(link.employeeId, now);

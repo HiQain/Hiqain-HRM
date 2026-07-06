@@ -28,6 +28,7 @@ import {
   Bell,
   HeartPulse,
   Activity,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   useLogout,
@@ -63,6 +64,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: "Salary", href: "/admin/salary", icon: Wallet },
   { label: "View", href: "/admin/view", icon: LayoutGrid },
   { label: "Payslips", href: "/admin/payslips", icon: Receipt },
+  { label: "Standup Users", href: "/admin/standup-users", icon: FileSpreadsheet },
   { label: "News Feed", href: "/admin/feed", icon: PartyPopper },
   { label: "Settings", href: "/admin/settings", icon: SettingsIcon },
 ];
@@ -77,6 +79,7 @@ const EMP_NAV: NavItem[] = [
   { label: "Salary", href: "/employee/salary", icon: Wallet },
   { label: "Provident Fund", href: "/employee/provident-fund", icon: PiggyBank },
   { label: "Payslips", href: "/employee/payslips", icon: Receipt },
+  { label: "Standup Sheet", href: "/employee/standup-sheet", icon: FileSpreadsheet },
   { label: "News Feed", href: "/employee/feed", icon: PartyPopper },
   { label: "Settings", href: "/employee/settings", icon: SettingsIcon },
 ];
@@ -91,8 +94,10 @@ const HR_NAV: NavItem[] = [
   { label: "Salary", href: "/employee/salary", icon: Wallet },
   { label: "Provident Fund", href: "/employee/provident-fund", icon: PiggyBank },
   { label: "Payslips", href: "/employee/payslips", icon: Receipt },
+  { label: "Standup Sheet", href: "/employee/standup-sheet", icon: FileSpreadsheet },
   { label: "Feed", href: "/employee/feed", icon: PartyPopper },
   { label: "Team", href: "/admin/employees", icon: Users },
+  { label: "Standup Users", href: "/admin/standup-users", icon: FileSpreadsheet },
   { label: "Team Attendance", href: "/admin/attendance", icon: CalendarDays },
   { label: "Extension Activity", href: "/admin/extension-activity", icon: Activity },
   { label: "Team Requests", href: "/admin/requests", icon: Inbox },

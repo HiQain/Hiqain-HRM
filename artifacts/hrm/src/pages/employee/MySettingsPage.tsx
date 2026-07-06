@@ -222,9 +222,8 @@ export function MySettingsPage() {
         />
       </Section>
 
-      {employee?.positionType === "remote" ? (
-        <Section title="Browser Extension" icon={FileText}>
-          <div className="space-y-4">
+      <Section title="Browser Extension" icon={FileText}>
+        <div className="space-y-4">
             <div className="rounded-xl border border-border bg-muted/40 p-4">
               <p className="text-sm font-semibold text-foreground">
                 Browser-connected attendance automation
@@ -339,9 +338,8 @@ export function MySettingsPage() {
                 checkout.
               </p>
             </div>
-          </div>
-        </Section>
-      ) : null}
+        </div>
+      </Section>
 
       <Section title="Company policy" icon={ScrollText}>
         <PolicyView

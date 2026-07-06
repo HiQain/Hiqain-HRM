@@ -315,4 +315,22 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
     "disconnected_at",
     "`disconnected_at` TIMESTAMP NULL AFTER `extension_version`",
   );
+
+  await ensureTable(
+    "standup_entries",
+    `CREATE TABLE IF NOT EXISTS \`standup_entries\` (
+      \`id\` INT NOT NULL AUTO_INCREMENT,
+      \`employee_id\` INT NOT NULL,
+      \`standup_date\` DATE NOT NULL,
+      \`sort_order\` INT NOT NULL DEFAULT 0,
+      \`project\` TEXT NOT NULL,
+      \`working\` TEXT NOT NULL,
+      \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      KEY \`standup_entries_employee_date_idx\` (\`employee_id\`, \`standup_date\`, \`sort_order\`),
+      CONSTRAINT \`standup_entries_employee_id_employees_id_fk\`
+        FOREIGN KEY (\`employee_id\`) REFERENCES \`employees\`(\`id\`) ON DELETE CASCADE
+    )`,
+  );
 }
