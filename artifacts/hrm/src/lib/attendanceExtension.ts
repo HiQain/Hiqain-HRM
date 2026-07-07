@@ -26,8 +26,8 @@ export type AttendanceExtensionStatus = {
   } | null;
   thresholds: {
     pauseMinutes: number;
-    warningMinutes: number;
-    checkoutMinutes: number;
+    warningMinutes: number | null;
+    checkoutMinutes: number | null;
   };
 };
 

@@ -17,10 +17,9 @@ import { notifyEmployeeUser, notifyRoles } from "./notifications";
 
 type ExtensionState = "active" | "idle" | "locked" | "offline";
 
-export const EXTENSION_IDLE_PAUSE_MINUTES = 10;
-export const EXTENSION_WARNING_MINUTES = 20;
-export const EXTENSION_AUTO_CHECKOUT_MINUTES = 30;
+export const EXTENSION_IDLE_PAUSE_MINUTES = 15;
 export const EXTENSION_STALE_HEARTBEAT_MINUTES = 2;
+const EXTENSION_STALE_AUTO_CHECKOUT_MINUTES = 30;
 const CONNECT_CODE_TTL_MINUTES = 15;
 const DISCONNECT_GRACE_MINUTES = 30;
 
@@ -67,18 +66,6 @@ function serializeLink(link: LinkRow | null) {
     connected && !stale && link.lastState && link.lastState !== "active"
       ? minutesBetween(now, link.lastIdleStartedAt)
       : 0;
-  const warningActive =
-    connected &&
-    !stale &&
-    !!link.lastHeartbeatAt &&
-    !!link.lastIdleStartedAt &&
-    !!link.lastState &&
-    link.lastState !== "active" &&
-    idleForMinutes >= EXTENSION_WARNING_MINUTES &&
-    idleForMinutes < EXTENSION_AUTO_CHECKOUT_MINUTES;
-  const warningCountdownMinutes = warningActive
-    ? Math.max(0, EXTENSION_AUTO_CHECKOUT_MINUTES - idleForMinutes)
-    : null;
   return {
     connected,
     stale,
@@ -108,8 +95,8 @@ function serializeLink(link: LinkRow | null) {
         : null,
     extensionVersion: connected ? (link.extensionVersion ?? null) : null,
     disconnectedAt: link.disconnectedAt?.toISOString() ?? null,
-    warningActive,
-    warningCountdownMinutes,
+    warningActive: false,
+    warningCountdownMinutes: null,
     pendingCode: link.status === "pending" ? link.connectionCode ?? null : null,
     codeExpiresAt: link.status === "pending" ? link.codeExpiresAt?.toISOString() ?? null : null,
     connectedAt: link.connectedAt?.toISOString() ?? null,
@@ -183,8 +170,8 @@ export async function getAttendanceExtensionStatus(employeeId: number) {
     link: serializeLink(link),
     thresholds: {
       pauseMinutes: EXTENSION_IDLE_PAUSE_MINUTES,
-      warningMinutes: EXTENSION_WARNING_MINUTES,
-      checkoutMinutes: EXTENSION_AUTO_CHECKOUT_MINUTES,
+      warningMinutes: null,
+      checkoutMinutes: null,
     },
   };
 }
@@ -417,8 +404,8 @@ export async function connectAttendanceExtension(
     deviceName: deviceName?.trim() || row.link.deviceName || "Employee browser",
     thresholds: {
       pauseMinutes: EXTENSION_IDLE_PAUSE_MINUTES,
-      warningMinutes: EXTENSION_WARNING_MINUTES,
-      checkoutMinutes: EXTENSION_AUTO_CHECKOUT_MINUTES,
+      warningMinutes: null,
+      checkoutMinutes: null,
     },
   };
 }
@@ -488,8 +475,8 @@ export async function connectAttendanceExtensionForEmployee(
     deviceName: deviceName?.trim() || row.link?.deviceName || "Employee browser",
     thresholds: {
       pauseMinutes: EXTENSION_IDLE_PAUSE_MINUTES,
-      warningMinutes: EXTENSION_WARNING_MINUTES,
-      checkoutMinutes: EXTENSION_AUTO_CHECKOUT_MINUTES,
+      warningMinutes: null,
+      checkoutMinutes: null,
     },
   };
 }
@@ -532,7 +519,7 @@ export async function processAttendanceExtensionHeartbeat(args: {
       ? 0
       : args.idleForMinutes ?? minutesBetween(now, idleStartedAt);
 
-  let action: "none" | "paused" | "resumed" | "warned" | "checked_out" = "none";
+  let action: "none" | "paused" | "resumed" | "checked_out" = "none";
   const statusBefore = await loadAttendanceContext(link.employeeId, now);
   const sessionBefore = attendanceSessionState(statusBefore?.record ?? null);
   if (sessionBefore === "checked_out") {
@@ -557,25 +544,6 @@ export async function processAttendanceExtensionHeartbeat(args: {
       const resumed = await autoResumeAttendance(link.employeeId, now);
       if (resumed.changed) {
         action = "resumed";
-      }
-    }
-  } else if (!manuallyPausedBefore && idleForMinutes >= EXTENSION_AUTO_CHECKOUT_MINUTES) {
-    const checkedOut = await autoCheckOutAttendance(link.employeeId, now);
-    if (checkedOut.changed) {
-      action = "checked_out";
-    }
-  } else if (!manuallyPausedBefore && idleForMinutes >= EXTENSION_WARNING_MINUTES) {
-    const warnedRecently =
-      link.lastWarningAt &&
-      idleStartedAt &&
-      link.lastWarningAt.getTime() >= idleStartedAt.getTime();
-    if (!warnedRecently) {
-      action = "warned";
-    }
-    if (sessionBefore === "active") {
-      const paused = await autoPauseAttendance(link.employeeId, now);
-      if (paused.changed) {
-        action = action === "warned" ? "warned" : "paused";
       }
     }
   } else if (!manuallyPausedBefore && idleForMinutes >= EXTENSION_IDLE_PAUSE_MINUTES) {
@@ -615,12 +583,11 @@ export async function processAttendanceExtensionHeartbeat(args: {
           : link.networkOnline,
       extensionVersion: args.extensionVersion?.trim() || link.extensionVersion,
       disconnectedAt: null,
-      lastWarningAt:
-        action === "warned" ? now : state === "active" ? null : link.lastWarningAt,
+      lastWarningAt: state === "active" ? null : link.lastWarningAt,
       autoPausedAt:
         action === "paused"
           ? now
-          : action === "resumed" || action === "checked_out" || state === "active"
+          : action === "resumed" || state === "active"
             ? null
             : link.autoPausedAt,
     })
@@ -629,7 +596,7 @@ export async function processAttendanceExtensionHeartbeat(args: {
   return {
     ok: true,
     action,
-    shouldWarn: action === "warned",
+    shouldWarn: false,
     attendanceState: sessionAfter,
     lastHeartbeatAt: now.toISOString(),
     idleForMinutes,
@@ -640,7 +607,7 @@ export async function processAttendanceExtensionHeartbeat(args: {
 export async function runAttendanceExtensionOfflineSweep() {
   const now = new Date();
   const threshold = new Date(
-    now.getTime() - EXTENSION_AUTO_CHECKOUT_MINUTES * 60_000,
+    now.getTime() - EXTENSION_STALE_AUTO_CHECKOUT_MINUTES * 60_000,
   );
   const disconnectGraceThreshold = new Date(
     now.getTime() - DISCONNECT_GRACE_MINUTES * 60_000,

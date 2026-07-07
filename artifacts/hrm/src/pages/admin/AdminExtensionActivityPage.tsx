@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   Activity,
-  AlertTriangle,
   CheckCircle2,
   Search,
   WifiOff,
@@ -63,7 +62,6 @@ export function AdminExtensionActivityPage() {
   }, [rows, search]);
 
   const connectedCount = rows.filter((row) => row.extension?.connected).length;
-  const warningCount = rows.filter((row) => row.extension?.warningActive).length;
   const staleCount = rows.filter(
     (row) =>
       row.extension?.connected &&
@@ -88,7 +86,6 @@ export function AdminExtensionActivityPage() {
         ) : (
           <>
             <StatCard label="Connected browsers" value={connectedCount} icon={CheckCircle2} tone="success" />
-            <StatCard label="Active warnings" value={warningCount} icon={AlertTriangle} tone="warning" />
             <StatCard label="Stale heartbeats" value={staleCount} icon={WifiOff} tone="danger" />
             <StatCard label="Open attendance sessions" value={activeAttendanceCount} icon={Activity} tone="primary" />
           </>
@@ -165,8 +162,6 @@ export function AdminExtensionActivityPage() {
                       {row.extension?.connected ? (
                         row.extension.stale ? (
                           <span className="text-sm font-medium text-amber-700">Stale heartbeat</span>
-                        ) : row.extension.warningActive ? (
-                          <span className="text-sm font-medium text-amber-700">Warning active</span>
                         ) : (
                           <span className="text-sm font-medium text-emerald-700">Connected</span>
                         )

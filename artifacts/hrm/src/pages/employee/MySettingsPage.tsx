@@ -230,12 +230,8 @@ export function MySettingsPage() {
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {`Install the browser extension, then connect it from the extension popup using your normal HRM email and password. Once connected, HRM can auto pause after ${
-                  extensionStatus?.thresholds.pauseMinutes ?? 10
-                } minutes idle, warn after ${
-                  extensionStatus?.thresholds.warningMinutes ?? 20
-                } minutes, and auto check out after ${
-                  extensionStatus?.thresholds.checkoutMinutes ?? 30
-                } minutes.`}
+                  extensionStatus?.thresholds.pauseMinutes ?? 15
+                } minutes idle.`}
               </p>
             </div>
 

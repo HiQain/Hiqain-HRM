@@ -27,14 +27,6 @@ import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -59,8 +51,6 @@ export function EmployeeDashboard() {
   const checkOut = useCheckOut();
   const { data: extensionStatus } = useAttendanceExtensionStatus();
   const [now, setNow] = useState(() => Date.now());
-  const [warningOpen, setWarningOpen] = useState(false);
-  const [dismissedWarningAt, setDismissedWarningAt] = useState<string | null>(null);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: getGetEmployeeDashboardQueryKey() });
@@ -72,21 +62,6 @@ export function EmployeeDashboard() {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
-
-  useEffect(() => {
-    const warningAt = extensionStatus?.link?.lastWarningAt ?? null;
-    if (
-      extensionStatus?.link?.warningActive &&
-      warningAt &&
-      dismissedWarningAt !== warningAt
-    ) {
-      setWarningOpen(true);
-    }
-  }, [
-    dismissedWarningAt,
-    extensionStatus?.link?.lastWarningAt,
-    extensionStatus?.link?.warningActive,
-  ]);
 
   if (isLoading || !data) {
     return (
@@ -383,8 +358,7 @@ export function EmployeeDashboard() {
                 Connect this browser to keep idle attendance automation on
               </h3>
               <p className="mt-1 text-sm text-amber-900/80">
-                HRM can auto-pause after 10 minutes idle, warn after 20, and auto
-                check out after 30 once this browser is linked.
+                HRM can auto-pause after 15 minutes idle once this browser is linked.
               </p>
               <p className="mt-3 text-sm text-amber-900/70">
                 Open the extension popup and sign in with the same HRM email and password you already use here.
@@ -456,51 +430,6 @@ export function EmployeeDashboard() {
           )}
         </div>
       </div>
-
-      <Dialog
-        open={warningOpen}
-        onOpenChange={(open) => {
-          setWarningOpen(open);
-          if (!open && extensionLink?.lastWarningAt) {
-            setDismissedWarningAt(extensionLink.lastWarningAt);
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Low activity detected</DialogTitle>
-            <DialogDescription>
-              HRM has not seen activity in this browser for {extensionLink?.idleForMinutes ?? 0} minutes.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              If inactivity continues, HRM will auto check you out in about{" "}
-              {extensionLink?.warningCountdownMinutes ?? 0} minute(s).
-            </p>
-            <p>
-              Move the mouse, type, or focus back on your work browser. If needed,
-              open the extension and press <span className="font-medium text-foreground">Sync</span>.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (extensionLink?.lastWarningAt) {
-                  setDismissedWarningAt(extensionLink.lastWarningAt);
-                }
-                setWarningOpen(false);
-              }}
-            >
-              Dismiss
-            </Button>
-            <Link href="/employee/settings">
-              <Button onClick={() => setWarningOpen(false)}>Open extension help</Button>
-            </Link>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
     </div>
   );
