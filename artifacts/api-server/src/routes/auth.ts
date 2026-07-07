@@ -16,6 +16,7 @@ import {
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+const REMEMBER_ME_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 
 router.post("/auth/login", async (req, res): Promise<void> => {
   const parsed = LoginBody.safeParse(req.body);
@@ -23,6 +24,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     res.status(400).json({ message: "Invalid login payload" });
     return;
   }
+  const rememberMe = req.body?.rememberMe === true;
   const { email, password } = parsed.data;
   const user = await getUserByEmail(email);
   if (!user) {
@@ -39,6 +41,13 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
   req.session.userId = user.id;
+  if (rememberMe) {
+    req.session.cookie.maxAge = REMEMBER_ME_MAX_AGE_MS;
+  } else {
+    const cookie = req.session.cookie as any;
+    cookie.expires = undefined;
+    cookie.maxAge = undefined;
+  }
   await new Promise<void>((resolve, reject) =>
     req.session.save((err) => (err ? reject(err) : resolve())),
   );

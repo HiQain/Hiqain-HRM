@@ -13,6 +13,7 @@ import {
   Sun,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { PasswordField } from "@/components/PasswordField";
@@ -21,6 +22,7 @@ import { useTheme } from "@/hooks/use-theme";
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const qc = useQueryClient();
   const login = useLogin();
@@ -30,7 +32,7 @@ export function LoginPage() {
     e.preventDefault();
     setError(null);
     login.mutate(
-      { data: { email: email.trim(), password } },
+      { data: { email: email.trim(), password, rememberMe } as any },
       {
         onSuccess: async () => {
           await qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
@@ -155,6 +157,19 @@ export function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Your password"
                   />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="remember-me"
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked === true)}
+                  />
+                  <Label
+                    htmlFor="remember-me"
+                    className="cursor-pointer text-sm font-normal text-muted-foreground"
+                  >
+                    Remember me
+                  </Label>
                 </div>
                 {error && (
                   <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
