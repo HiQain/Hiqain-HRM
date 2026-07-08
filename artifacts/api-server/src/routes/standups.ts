@@ -1,20 +1,34 @@
 import { Router, type IRouter } from "express";
 import { asc, eq } from "drizzle-orm";
+import type { RowDataPacket } from "mysql2";
 import { z } from "zod";
 import {
   db,
   employeesTable,
+  pool,
   usersTable,
 } from "@workspace/db";
 import { standupEntriesTable } from "../../../../lib/db/src/schema/standupEntries";
 import { getUser, requireAuth } from "../lib/auth";
 
 const router: IRouter = Router();
+const DEFAULT_STANDUP_COLUMN_WIDTH = 220;
+const DEFAULT_PROJECT_COLUMN_WIDTH = 180;
+const DEFAULT_WORKING_COLUMN_WIDTH = 360;
+const MIN_STANDUP_COLUMN_WIDTH = 140;
+
+const StandupColumnBody = z.object({
+  key: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  width: z.number().int().min(MIN_STANDUP_COLUMN_WIDTH).max(1200).optional(),
+  kind: z.enum(["system", "custom"]).optional(),
+});
 
 const StandupEntryBody = z.object({
   id: z.number().int().positive().optional(),
-  project: z.string().trim(),
-  working: z.string().trim(),
+  project: z.string(),
+  working: z.string(),
+  extraValues: z.record(z.string(), z.string()).optional(),
 });
 
 const StandupDayBody = z.object({
@@ -24,7 +38,138 @@ const StandupDayBody = z.object({
 
 const UpdateStandupBody = z.object({
   days: z.array(StandupDayBody),
+  columns: z.array(StandupColumnBody).optional(),
 });
+
+type StandupColumn = z.infer<typeof StandupColumnBody>;
+let ensuredStandupColumnsStorage = false;
+
+function normalizeStandupColumns(columns?: StandupColumn[] | null): StandupColumn[] {
+  const seen = new Set<string>();
+  const normalized: StandupColumn[] = [];
+  const incomingProjectWidth = columns?.find((column) => column.key === "project")?.width;
+  const incomingWorkingWidth = columns?.find((column) => column.key === "working")?.width;
+  const projectWidth = incomingProjectWidth ?? DEFAULT_PROJECT_COLUMN_WIDTH;
+  const workingWidth =
+    incomingWorkingWidth == null || incomingWorkingWidth <= projectWidth
+      ? Math.max(DEFAULT_WORKING_COLUMN_WIDTH, projectWidth + 120)
+      : incomingWorkingWidth;
+
+  const addColumn = (column: StandupColumn) => {
+    const key = column.key.trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    normalized.push({
+      key,
+      label: column.label.trim() || key,
+      width:
+        typeof column.width === "number"
+          ? Math.min(Math.max(column.width, MIN_STANDUP_COLUMN_WIDTH), 1200)
+          : key === "project"
+            ? DEFAULT_PROJECT_COLUMN_WIDTH
+            : key === "working"
+              ? DEFAULT_WORKING_COLUMN_WIDTH
+              : DEFAULT_STANDUP_COLUMN_WIDTH,
+      kind: column.kind ?? (key === "project" || key === "working" ? "system" : "custom"),
+    });
+  };
+
+  addColumn({
+    key: "project",
+    label:
+      columns?.find((column) => column.key === "project")?.label ?? "Project",
+    width: projectWidth,
+    kind: "system",
+  });
+  addColumn({
+    key: "working",
+    label:
+      columns?.find((column) => column.key === "working")?.label ?? "Working",
+    width: workingWidth,
+    kind: "system",
+  });
+
+  for (const column of columns ?? []) {
+    if (column.key === "project" || column.key === "working") continue;
+    addColumn({
+      ...column,
+      kind: "custom",
+    });
+  }
+
+  return normalized;
+}
+
+async function ensureStandupColumnsStorage() {
+  if (ensuredStandupColumnsStorage) return;
+
+  const [databaseRows] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS db");
+  const databaseName = databaseRows[0]?.["db"];
+  if (typeof databaseName !== "string" || !databaseName) {
+    throw new Error("Could not determine current database name");
+  }
+
+  const [columnRows] = await pool.execute<(RowDataPacket & { column_name: string })[]>(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = ?
+       AND table_name = 'app_settings'
+       AND column_name = 'standup_columns'`,
+    [databaseName],
+  );
+
+  if (columnRows.length === 0) {
+    try {
+      await pool.query(
+        "ALTER TABLE `app_settings` ADD COLUMN `standup_columns` JSON NULL AFTER `public_holidays`",
+      );
+    } catch (error) {
+      const code = (error as { code?: string } | undefined)?.code;
+      if (code !== "ER_DUP_FIELDNAME") {
+        throw error;
+      }
+    }
+  }
+
+  ensuredStandupColumnsStorage = true;
+}
+
+async function getStandupColumns(): Promise<StandupColumn[]> {
+  await ensureStandupColumnsStorage();
+  const [rows] = await pool.query<(RowDataPacket & { standup_columns?: string | StandupColumn[] | null })[]>(
+    "SELECT standup_columns FROM app_settings ORDER BY id ASC LIMIT 1",
+  );
+  const rawValue = rows[0]?.standup_columns;
+  const parsedValue =
+    typeof rawValue === "string"
+      ? (JSON.parse(rawValue) as StandupColumn[])
+      : Array.isArray(rawValue)
+        ? rawValue
+        : [];
+  return normalizeStandupColumns(parsedValue);
+}
+
+async function saveStandupColumns(columns: StandupColumn[]) {
+  await ensureStandupColumnsStorage();
+  const normalized = normalizeStandupColumns(columns);
+  const [rows] = await pool.query<(RowDataPacket & { id: number })[]>(
+    "SELECT id FROM app_settings ORDER BY id ASC LIMIT 1",
+  );
+
+  if (rows[0]?.id) {
+    await pool.execute(
+      "UPDATE app_settings SET standup_columns = ? WHERE id = ?",
+      [JSON.stringify(normalized), rows[0].id],
+    );
+    return normalized;
+  }
+
+  await pool.execute(
+    "INSERT INTO app_settings (standup_columns) VALUES (?)",
+    [JSON.stringify(normalized)],
+  );
+  return normalized;
+}
 
 function sanitizeStandupDays(days: Array<z.infer<typeof StandupDayBody>>) {
   return days
@@ -33,10 +178,16 @@ function sanitizeStandupDays(days: Array<z.infer<typeof StandupDayBody>>) {
       entries:
         day.entries.length > 0
           ? day.entries.map((entry) => ({
-              project: entry.project.trim(),
-              working: entry.working.trim(),
+              project: entry.project.replace(/\r\n/g, "\n"),
+              working: entry.working.replace(/\r\n/g, "\n"),
+              extraValues: Object.fromEntries(
+                Object.entries(entry.extraValues ?? {}).map(([key, value]) => [
+                  key,
+                  value.replace(/\r\n/g, "\n"),
+                ]),
+              ),
             }))
-          : [{ project: "", working: "" }],
+          : [{ project: "", working: "", extraValues: {} }],
     }));
 }
 
@@ -57,6 +208,7 @@ async function replaceEmployeeStandupSheet(
       sortOrder: index,
       project: entry.project,
       working: entry.working,
+      extraValues: entry.extraValues,
     })),
   );
 
@@ -74,6 +226,7 @@ function serializeStandupDays(
       id: number;
       project: string;
       working: string;
+      extraValues: Record<string, string>;
       sortOrder: number;
     }>
   >();
@@ -84,6 +237,8 @@ function serializeStandupDays(
       id: row.id,
       project: row.project,
       working: row.working,
+      extraValues:
+        (row as typeof row & { extraValues?: Record<string, string> }).extraValues ?? {},
       sortOrder: row.sortOrder,
     });
     grouped.set(row.standupDate, entries);
@@ -96,6 +251,7 @@ function serializeStandupDays(
 }
 
 async function getEmployeeSheet(employeeId: number) {
+  const columns = await getStandupColumns();
   const rows = await db
     .select({
       entry: standupEntriesTable,
@@ -131,6 +287,7 @@ async function getEmployeeSheet(employeeId: number) {
       department: first.employeeDepartment,
       avatarUrl: first.employeeAvatarUrl,
     },
+    columns,
     days: serializeStandupDays(
       rows
         .map((row) => row.entry)
@@ -172,6 +329,9 @@ router.put("/standups/me", requireAuth(["employee", "hr"]), async (req, res) => 
     return;
   }
 
+  if (parsed.data.columns) {
+    await saveStandupColumns(parsed.data.columns);
+  }
   await replaceEmployeeStandupSheet(user.employeeId, parsed.data.days);
 
   const sheet = await getEmployeeSheet(user.employeeId);
@@ -221,6 +381,9 @@ router.put(
     }
 
     await replaceEmployeeStandupSheet(employeeId, parsed.data.days);
+    if (parsed.data.columns) {
+      await saveStandupColumns(parsed.data.columns);
+    }
 
     const sheet = await getEmployeeSheet(employeeId);
     res.json(sheet);

@@ -120,6 +120,11 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
     "`work_mode` ENUM('onsite','remote_work') NULL AFTER `status`",
   );
   await ensureColumn(
+    "app_settings",
+    "standup_columns",
+    "`standup_columns` JSON NULL AFTER `public_holidays`",
+  );
+  await ensureColumn(
     "employees",
     "medical_daily_limit",
     "`medical_daily_limit` DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER `medical_enabled`",
@@ -332,5 +337,10 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
       CONSTRAINT \`standup_entries_employee_id_employees_id_fk\`
         FOREIGN KEY (\`employee_id\`) REFERENCES \`employees\`(\`id\`) ON DELETE CASCADE
     )`,
+  );
+  await ensureColumn(
+    "standup_entries",
+    "extra_values",
+    "`extra_values` JSON NOT NULL DEFAULT ('{}') AFTER `working`",
   );
 }

@@ -1,11 +1,14 @@
 import {
   date,
   int,
+  json,
   mysqlTable,
   text,
   timestamp,
 } from "drizzle-orm/mysql-core";
 import { employeesTable } from "./employees";
+
+export type StandupExtraValues = Record<string, string>;
 
 export const standupEntriesTable = mysqlTable("standup_entries", {
   id: int("id").autoincrement().primaryKey(),
@@ -16,6 +19,10 @@ export const standupEntriesTable = mysqlTable("standup_entries", {
   sortOrder: int("sort_order").notNull().default(0),
   project: text("project").notNull(),
   working: text("working").notNull(),
+  extraValues: json("extra_values")
+    .$type<StandupExtraValues>()
+    .notNull()
+    .default({}),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")
     .notNull()

@@ -75,6 +75,8 @@
     "zod": "^3.25.76"
   },
   "dependencies": {
+    "ag-grid-community": "^36.0.0",
+    "ag-grid-react": "^36.0.0",
     "jspdf": "^4.2.1"
   }
 }

@@ -207,7 +207,7 @@ export function AppShell({
         {/* Sidebar (desktop) */}
         <aside
           className={cn(
-            "hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:flex-col lg:border-r lg:border-border lg:bg-sidebar lg:transition-[width] lg:duration-200",
+            "hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex-col lg:border-r lg:border-border lg:bg-sidebar lg:transition-[width] lg:duration-200",
             desktopOpen ? "lg:w-60" : "lg:w-16",
           )}
         >
@@ -271,7 +271,12 @@ export function AppShell({
         )}
 
         {/* Main */}
-        <main className={cn("min-w-0 flex-1 overflow-x-hidden", desktopOpen && "lg:pl-60")}>
+        <main
+          className={cn(
+            "min-w-0 flex-1 overflow-x-hidden lg:pl-16",
+            desktopOpen && "lg:pl-60",
+          )}
+        >
           <div className="sticky top-0 z-20 hidden border-b border-border bg-card/95 px-6 py-3 backdrop-blur lg:block">
             <div className="mx-auto flex w-full max-w-7xl items-center justify-end gap-2">
               <NotificationButton userRole={user.role} />

@@ -14,6 +14,13 @@ export type PublicHoliday = {
   country?: "us" | "pk" | "other";
 };
 
+export type StandupColumnSetting = {
+  key: string;
+  label: string;
+  width?: number;
+  kind?: "system" | "custom";
+};
+
 export const appSettingsTable = mysqlTable("app_settings", {
   id: int("id").autoincrement().primaryKey(),
   companyName: varchar("company_name", { length: 255 }).notNull().default("HiQain"),
@@ -44,6 +51,10 @@ export const appSettingsTable = mysqlTable("app_settings", {
     .default([0, 6]),
   publicHolidays: json("public_holidays")
     .$type<PublicHoliday[]>()
+    .notNull()
+    .default([]),
+  standupColumns: json("standup_columns")
+    .$type<StandupColumnSetting[]>()
     .notNull()
     .default([]),
   proRatedQuotas: boolean("pro_rated_quotas").notNull().default(true),
