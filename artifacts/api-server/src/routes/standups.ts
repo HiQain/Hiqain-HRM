@@ -325,7 +325,14 @@ router.put("/standups/me", requireAuth(["employee", "hr"]), async (req, res) => 
 
   const parsed = UpdateStandupBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid standup payload" });
+    res.status(400).json({
+      message: "Invalid standup payload",
+      issues: parsed.error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        message: issue.message,
+        code: issue.code,
+      })),
+    });
     return;
   }
 
@@ -370,7 +377,14 @@ router.put(
 
     const parsed = UpdateStandupBody.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ message: "Invalid standup payload" });
+      res.status(400).json({
+        message: "Invalid standup payload",
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+          code: issue.code,
+        })),
+      });
       return;
     }
 

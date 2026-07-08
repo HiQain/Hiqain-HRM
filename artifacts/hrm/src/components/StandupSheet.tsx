@@ -408,6 +408,7 @@ function buildStandupPayload(days: StandupDayDraft[], columns: StandupColumn[]) 
     columns: normalizeStandupColumns(columns).map((column) => ({
       key: column.key,
       label: column.label,
+      width: column.width,
       kind: column.kind,
     })),
     days: days.map((day) => ({
