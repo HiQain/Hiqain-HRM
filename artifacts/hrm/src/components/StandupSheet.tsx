@@ -279,6 +279,27 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function normalizeStandupExtraValues(value: unknown): Record<string, string> {
+  const source =
+    typeof value === "string"
+      ? (() => {
+        try {
+          return JSON.parse(value) as unknown;
+        } catch {
+          return {};
+        }
+      })()
+      : value;
+
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(source).map(([key, entryValue]) => [key, String(entryValue ?? "")]),
+  );
+}
+
 function getDefaultStandupDate(days: StandupDayDraft[]) {
   if (days.length === 0) {
     return formatLocalDateInputValue(new Date());
@@ -368,7 +389,7 @@ function mapSheetToDraft(
               localId: currentDay?.entries[index]?.localId ?? buildLocalId(),
               project: entry.project,
               working: entry.working,
-              extraValues: entry.extraValues ?? {},
+              extraValues: normalizeStandupExtraValues(entry.extraValues),
             }))
             : [{ localId: buildLocalId(), ...EMPTY_DAY_ENTRY, extraValues: {} }],
       };
@@ -387,8 +408,27 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    throw new Error(payload?.message || "Request failed");
+    const payload = await response.json().catch(() => null) as
+      | {
+        message?: string;
+        issues?: Array<{ path?: string; message?: string }>;
+      }
+      | null;
+    const issuesText =
+      payload?.issues?.length
+        ? payload.issues
+          .map((issue) =>
+            issue.path
+              ? `${issue.path}: ${issue.message ?? "Invalid value"}`
+              : (issue.message ?? "Invalid value"),
+          )
+          .join(", ")
+        : "";
+    throw new Error(
+      issuesText
+        ? `${payload?.message || "Request failed"} (${issuesText})`
+        : (payload?.message || "Request failed"),
+    );
   }
 
   return response.json();
@@ -417,7 +457,7 @@ function buildStandupPayload(days: StandupDayDraft[], columns: StandupColumn[]) 
         id: entry.id,
         project: entry.project,
         working: entry.working,
-        extraValues: entry.extraValues,
+        extraValues: normalizeStandupExtraValues(entry.extraValues),
       })),
     })),
   };
@@ -449,7 +489,7 @@ function buildStandupComparableSignature(
             project: entry.project,
             working: entry.working,
             extraValues: Object.fromEntries(
-              Object.entries(entry.extraValues ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+              Object.entries(normalizeStandupExtraValues(entry.extraValues)).sort(([a], [b]) => a.localeCompare(b)),
             ),
           })),
         })),
@@ -467,7 +507,7 @@ function buildStandupComparableSignatureFromDraft(
       entries: day.entries.map((entry) => ({
         project: entry.project,
         working: entry.working,
-        extraValues: entry.extraValues,
+        extraValues: normalizeStandupExtraValues(entry.extraValues),
       })),
     })),
     columns,
@@ -483,7 +523,7 @@ function buildStandupComparableSignatureFromSheet(
       entries: day.entries.map((entry) => ({
         project: entry.project,
         working: entry.working,
-        extraValues: entry.extraValues ?? {},
+        extraValues: normalizeStandupExtraValues(entry.extraValues),
       })),
     })),
     sheet?.columns ?? DEFAULT_STANDUP_COLUMNS,

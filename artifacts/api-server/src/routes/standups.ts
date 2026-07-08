@@ -44,6 +44,27 @@ const UpdateStandupBody = z.object({
 type StandupColumn = z.infer<typeof StandupColumnBody>;
 let ensuredStandupColumnsStorage = false;
 
+function normalizeStandupExtraValues(value: unknown): Record<string, string> {
+  const source =
+    typeof value === "string"
+      ? (() => {
+        try {
+          return JSON.parse(value) as unknown;
+        } catch {
+          return {};
+        }
+      })()
+      : value;
+
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(source).map(([key, entryValue]) => [key, String(entryValue ?? "")]),
+  );
+}
+
 function normalizeStandupColumns(columns?: StandupColumn[] | null): StandupColumn[] {
   const seen = new Set<string>();
   const normalized: StandupColumn[] = [];
@@ -181,7 +202,7 @@ function sanitizeStandupDays(days: Array<z.infer<typeof StandupDayBody>>) {
               project: entry.project.replace(/\r\n/g, "\n"),
               working: entry.working.replace(/\r\n/g, "\n"),
               extraValues: Object.fromEntries(
-                Object.entries(entry.extraValues ?? {}).map(([key, value]) => [
+                Object.entries(normalizeStandupExtraValues(entry.extraValues)).map(([key, value]) => [
                   key,
                   value.replace(/\r\n/g, "\n"),
                 ]),
@@ -237,8 +258,9 @@ function serializeStandupDays(
       id: row.id,
       project: row.project,
       working: row.working,
-      extraValues:
-        (row as typeof row & { extraValues?: Record<string, string> }).extraValues ?? {},
+      extraValues: normalizeStandupExtraValues(
+        (row as typeof row & { extraValues?: unknown }).extraValues,
+      ),
       sortOrder: row.sortOrder,
     });
     grouped.set(row.standupDate, entries);
