@@ -24,7 +24,10 @@ import {
   shiftDateByDays,
   isOvernightShift,
 } from "../lib/attendance";
-import { disconnectAttendanceExtensionAfterCheckout } from "../lib/attendanceExtension";
+import {
+  disconnectAttendanceExtensionAfterCheckout,
+  isAttendanceExtensionConnected,
+} from "../lib/attendanceExtension";
 import { isPayrollOffDay, toHolidaySet } from "../lib/payroll";
 import { getSettings } from "./settings";
 import { inArray } from "drizzle-orm";
@@ -292,6 +295,18 @@ router.post(
       emp.positionType === "remote" ||
       remoteApproved.length > 0 ||
       isRemoteByIp(req);
+    if (isRemoteToday) {
+      const extensionConnected = await isAttendanceExtensionConnected(
+        user.employeeId,
+      );
+      if (!extensionConnected) {
+        res.status(403).json({
+          message:
+            "Remote employees must connect the browser extension before checking in. Download it from Settings and sign in from the extension popup first.",
+        });
+        return;
+      }
+    }
     const defaultWorkMode = resolveDefaultWorkMode(emp);
     const effectiveWorkMode: "onsite" | "remote_work" = isRemoteToday
       ? "remote_work"

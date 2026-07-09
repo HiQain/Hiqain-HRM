@@ -27,6 +27,14 @@ import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -51,6 +59,12 @@ export function EmployeeDashboard() {
   const checkOut = useCheckOut();
   const { data: extensionStatus } = useAttendanceExtensionStatus();
   const [now, setNow] = useState(() => Date.now());
+  const [showExtensionRequiredDialog, setShowExtensionRequiredDialog] =
+    useState(false);
+  const [extensionDialogMessage, setExtensionDialogMessage] = useState(
+    "To check in remotely, first download and connect the HRM browser extension. After installing it, sign in from the extension popup with your normal HRM account.",
+  );
+  const extensionDownloadUrl = `${import.meta.env.BASE_URL}hrm-browser-extension.zip`;
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: getGetEmployeeDashboardQueryKey() });
@@ -126,15 +140,36 @@ export function EmployeeDashboard() {
     return checkedInLate ? "late" : activeRecord.status;
   })();
 
-  const onCheckIn = () =>
+  const onCheckIn = () => {
+    if (employee.positionType === "remote" && !extensionStatus?.link?.connected) {
+      setExtensionDialogMessage(
+        "To check in remotely, first download and connect the HRM browser extension. After installing it, sign in from the extension popup with your normal HRM account.",
+      );
+      setShowExtensionRequiredDialog(true);
+      return;
+    }
+
     checkIn.mutate(undefined, {
       onSuccess: () => {
         toast.success("You're checked in");
         refresh();
       },
-      onError: (e: any) =>
-        toast.error(e?.message ?? "Could not check in"),
+      onError: (e: any) => {
+        const message = e?.message ?? "Could not check in";
+        if (
+          typeof message === "string" &&
+          message.toLowerCase().includes("browser extension")
+        ) {
+          setExtensionDialogMessage(
+            "To check in remotely, first download and connect the HRM browser extension. After installing it, sign in from the extension popup with your normal HRM account.",
+          );
+          setShowExtensionRequiredDialog(true);
+          return;
+        }
+        toast.error(message);
+      },
     });
+  };
   const onPause = () =>
     pauseAttendance.mutate(undefined, {
       onSuccess: () => {
@@ -171,6 +206,30 @@ export function EmployeeDashboard() {
 
   return (
     <div className="space-y-7">
+      <AlertDialog
+        open={showExtensionRequiredDialog}
+        onOpenChange={setShowExtensionRequiredDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Browser extension required</AlertDialogTitle>
+            <AlertDialogDescription>
+              {extensionDialogMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-end">
+            <Button asChild variant="outline">
+              <a href={extensionDownloadUrl} download="hrm-browser-extension.zip">
+                Download extension
+              </a>
+            </Button>
+            <Button onClick={() => setShowExtensionRequiredDialog(false)}>
+              OK
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <PageHeader
         title={`Hi, ${employee.name.split(" ")[0]}`}
         description={formatDateLong(new Date())}

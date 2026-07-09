@@ -176,6 +176,11 @@ export async function getAttendanceExtensionStatus(employeeId: number) {
   };
 }
 
+export async function isAttendanceExtensionConnected(employeeId: number) {
+  const link = await getLinkByEmployeeId(employeeId);
+  return link?.status === "connected" && !!link.accessTokenHash;
+}
+
 export async function getAdminAttendanceExtensionStatuses() {
   const employees = await db
     .select({

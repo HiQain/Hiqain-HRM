@@ -250,11 +250,7 @@ export function normalizeAttendanceStatus(
     };
   }
 
-  if (
-    record.status === "remote_work" ||
-    record.workMode === "remote_work" ||
-    record.notes?.includes(ATTENDANCE_REMOTE_WORK_MODE_TAG)
-  ) {
+  if (record.status === "remote_work") {
     return {
       status: "remote_work",
       isLate: false,
