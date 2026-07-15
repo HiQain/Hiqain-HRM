@@ -174,6 +174,15 @@ function getNextEmployeeCode(
   return buildEmployeeCode(Math.max(maxSequence, rows.length) + 1);
 }
 
+function getInitialQuotaTouched(editingEmployee?: { id?: number | string } | null) {
+  const preserveSavedQuotas = Boolean(editingEmployee);
+  return {
+    casual: preserveSavedQuotas,
+    sick: preserveSavedQuotas,
+    annual: preserveSavedQuotas,
+  };
+}
+
 function normalizeKidsNames(
   value: unknown,
   count: number,
@@ -709,11 +718,9 @@ function NewEmployeeSheet({
     [editingEmployee, generatedEmployeeCode, settings],
   );
   const [form, setForm] = useState(defaultForm);
-  const [quotaTouched, setQuotaTouched] = useState({
-    casual: false,
-    sick: false,
-    annual: false,
-  });
+  const [quotaTouched, setQuotaTouched] = useState(() =>
+    getInitialQuotaTouched(editingEmployee),
+  );
   const [breakMinutesTouched, setBreakMinutesTouched] = useState(
     Boolean(editingEmployee?.breakMinutes != null),
   );
@@ -721,10 +728,10 @@ function NewEmployeeSheet({
   useEffect(() => {
     if (open) {
       setForm(defaultForm);
-      setQuotaTouched({ casual: false, sick: false, annual: false });
+      setQuotaTouched(getInitialQuotaTouched(editingEmployee));
       setBreakMinutesTouched(Boolean(editingEmployee?.breakMinutes != null));
     }
-  }, [defaultForm, editingEmployee?.breakMinutes, open]);
+  }, [defaultForm, editingEmployee, editingEmployee?.breakMinutes, open]);
 
   const joiningYear = useMemo(
     () => Number(form.joiningDate.slice(0, 4)) || new Date().getFullYear(),
