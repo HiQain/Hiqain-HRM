@@ -269,6 +269,15 @@ function buildBulkEmployeeValues(
   settings: Awaited<ReturnType<typeof getSettings>>,
   employeeCode: string,
 ) {
+  const importedBasicSalary = Number(data.basicSalary ?? 0);
+  const importedAllowances = Number(data.allowances ?? 0);
+  const resolvedCompensation =
+    importedAllowances > 0
+      ? {
+          basicSalary: importedBasicSalary,
+          allowances: importedAllowances,
+        }
+      : splitCompensationBySettings(importedBasicSalary, settings);
   const bankValues = getEmployeeBankValues(data as Record<string, unknown>);
   const joiningDateStr = data.joiningDate as unknown as string;
   const probationMonths =
@@ -299,8 +308,8 @@ function buildBulkEmployeeValues(
     gracePeriodMinutes:
       data.gracePeriodMinutes ?? settings.defaultGracePeriodMinutes,
     breakMinutes,
-    basicSalary: String(data.basicSalary),
-    allowances: String(data.allowances ?? 0),
+    basicSalary: String(resolvedCompensation.basicSalary),
+    allowances: String(resolvedCompensation.allowances),
     providentFundPercent:
       Number(settings.defaultProvidentFundPercent) > 0
         ? String(Number(settings.defaultProvidentFundPercent))
