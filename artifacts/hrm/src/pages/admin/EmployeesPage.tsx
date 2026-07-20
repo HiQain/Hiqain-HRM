@@ -8,6 +8,7 @@ import {
 } from "react";
 import { Link } from "wouter";
 import {
+  type Employee,
   useListEmployees,
   useCreateEmployee,
   useUpdateEmployee,
@@ -117,6 +118,93 @@ function splitTotalSalary(totalSalary: number) {
   const basicSalary = Math.round(safeTotal / 2);
   const allowances = safeTotal - basicSalary;
   return { basicSalary, allowances };
+}
+
+function escapeCsvValue(value: unknown) {
+  if (value == null) return "";
+  const text = String(value).replace(/"/g, '""');
+  return /[",\n]/.test(text) ? `"${text}"` : text;
+}
+
+const EMPLOYEE_EXPORT_COLUMNS: Array<{
+  header: string;
+  value: (employee: Employee) => unknown;
+}> = [
+  { header: "Employee Code", value: (employee) => employee.employeeCode },
+  { header: "Name", value: (employee) => employee.name },
+  { header: "Email", value: (employee) => employee.email },
+  { header: "Status", value: (employee) => (employee.isActive === false ? "Inactive" : "Active") },
+  { header: "Personal Email", value: (employee) => employee.personalEmail },
+  { header: "Phone", value: (employee) => employee.phone },
+  { header: "Department", value: (employee) => employee.department },
+  { header: "Position", value: (employee) => employee.position },
+  { header: "Position Type", value: (employee) => employee.positionType },
+  { header: "Joining Date", value: (employee) => employee.joiningDate },
+  { header: "Probation Months", value: (employee) => employee.probationMonths },
+  { header: "Probation End Date", value: (employee) => employee.probationEndDate },
+  { header: "Office Start Time", value: (employee) => employee.officeStartTime },
+  { header: "Office End Time", value: (employee) => employee.officeEndTime },
+  { header: "Grace Period Minutes", value: (employee) => employee.gracePeriodMinutes },
+  { header: "Break Minutes", value: (employee) => employee.breakMinutes },
+  { header: "Basic Salary", value: (employee) => employee.basicSalary },
+  { header: "Allowances", value: (employee) => employee.allowances },
+  { header: "Casual Leave Quota", value: (employee) => employee.casualLeaveQuota },
+  { header: "Sick Leave Quota", value: (employee) => employee.sickLeaveQuota },
+  { header: "Annual Leave Quota", value: (employee) => employee.annualLeaveQuota },
+  { header: "Date Of Birth", value: (employee) => employee.dateOfBirth },
+  { header: "Address", value: (employee) => employee.address },
+  { header: "CNIC", value: (employee) => employee.cnic },
+  { header: "Education", value: (employee) => employee.education },
+  { header: "Last Qualification", value: (employee) => employee.lastQualification },
+  { header: "Previous Company", value: (employee) => employee.previousCompany },
+  { header: "Last Pay", value: (employee) => employee.lastPay },
+  { header: "Benefits", value: (employee) => employee.benefits },
+  { header: "Notes", value: (employee) => employee.notes },
+  { header: "Immediate Family", value: (employee) => employee.immediateFamily },
+  { header: "Marital Status", value: (employee) => employee.maritalStatus },
+  { header: "Wife Name", value: (employee) => employee.wifeName },
+  { header: "Wife Date Of Birth", value: (employee) => employee.wifeDateOfBirth },
+  { header: "Kids Count", value: (employee) => employee.kidsCount },
+  { header: "Left Date", value: (employee) => employee.leftDate },
+  { header: "Emergency Contact Name", value: (employee) => employee.emergencyContactName },
+  { header: "Emergency Contact Number", value: (employee) => employee.emergencyContactNumber },
+  { header: "Emergency Contact Relation", value: (employee) => employee.emergencyContactRelation },
+  { header: "Emergency Contact", value: (employee) => employee.emergencyContact },
+  { header: "Primary Bank Account Title", value: (employee) => employee.primaryBankAccountTitle },
+  { header: "Primary Bank Account Number", value: (employee) => employee.primaryBankAccountNumber },
+  { header: "Primary Bank Name", value: (employee) => employee.primaryBankName },
+  { header: "Primary Bank IBAN", value: (employee) => employee.primaryBankIban },
+  { header: "Primary Bank Branch Code", value: (employee) => employee.primaryBankBranchCode },
+  { header: "Primary Bank Branch Location", value: (employee) => employee.primaryBankBranchLocation },
+  { header: "Secondary Bank Account Title", value: (employee) => employee.secondaryBankAccountTitle },
+  { header: "Secondary Bank Account Number", value: (employee) => employee.secondaryBankAccountNumber },
+  { header: "Secondary Bank Name", value: (employee) => employee.secondaryBankName },
+  { header: "Secondary Bank IBAN", value: (employee) => employee.secondaryBankIban },
+  { header: "Secondary Bank Branch Code", value: (employee) => employee.secondaryBankBranchCode },
+  { header: "Secondary Bank Branch Location", value: (employee) => employee.secondaryBankBranchLocation },
+  { header: "Provident Fund Percent", value: (employee) => employee.providentFundPercent },
+];
+
+function downloadEmployeesCsv(employees: Employee[]) {
+  const headers = EMPLOYEE_EXPORT_COLUMNS.map((column) => column.header);
+  const rows = employees.map((employee) =>
+    EMPLOYEE_EXPORT_COLUMNS.map((column) => column.value(employee)),
+  );
+
+  const csv = [headers, ...rows]
+    .map((row) => row.map(escapeCsvValue).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const today = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `employees-${today}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function splitAllowanceBreakdown(allowances: number) {
@@ -250,6 +338,15 @@ export function EmployeesPage() {
 
   const qc = useQueryClient();
   const del = useDeleteEmployee();
+  const handleDownloadAll = () => {
+    if (!data?.length) {
+      toast.error("No employees available to export");
+      return;
+    }
+    downloadEmployeesCsv(data);
+    toast.success("Employee CSV downloaded");
+  };
+
   const handleDelete = () => {
     if (!confirmDelete) return;
     del.mutate(
@@ -273,6 +370,15 @@ export function EmployeesPage() {
         description="Manage your team profiles, roles, and compensation."
         actions={
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleDownloadAll}
+              className="gap-2"
+              disabled={!data?.length}
+            >
+              <Download className="h-4 w-4" />
+              Download all
+            </Button>
             <Button
               variant="outline"
               onClick={() => setBulkOpen(true)}
@@ -744,7 +850,8 @@ function NewEmployeeSheet({
   );
 
   useEffect(() => {
-    if (!open) return;
+    // Preserve saved leave quotas when editing an existing employee.
+    if (!open || editingEmployee) return;
     setForm((current) => ({
       ...current,
       casualLeaveQuota: quotaTouched.casual
@@ -773,6 +880,7 @@ function NewEmployeeSheet({
           ),
     }));
   }, [
+    editingEmployee,
     open,
     form.joiningDate,
     form.probationMonths,
