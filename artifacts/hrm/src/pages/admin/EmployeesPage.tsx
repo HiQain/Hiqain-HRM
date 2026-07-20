@@ -130,7 +130,6 @@ const EMPLOYEE_EXPORT_COLUMNS: Array<{
   header: string;
   value: (employee: Employee) => unknown;
 }> = [
-  { header: "Employee Code", value: (employee) => employee.employeeCode },
   { header: "Name", value: (employee) => employee.name },
   { header: "Email", value: (employee) => employee.email },
   { header: "Status", value: (employee) => (employee.isActive === false ? "Inactive" : "Active") },
