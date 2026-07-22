@@ -1,10 +1,15 @@
 import { Router, type IRouter } from "express";
-import { db, appSettingsTable, employeesTable, type AppSettings } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, appSettingsTable, employeesTable, pool, type AppSettings } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { UpdateSettingsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+const DEFAULT_LEAVE_QUOTAS = {
+  casual: 6,
+  sick: 6,
+  annual: 12,
+} as const;
 
 type GeneratedHoliday = {
   date: string;
@@ -350,7 +355,27 @@ export async function getSettings(): Promise<AppSettings> {
   const rows = await db.select().from(appSettingsTable).limit(1);
   const year = new Date().getFullYear();
   if (rows.length) {
-    const current = rows[0]!;
+    let current = rows[0]!;
+    const lastLeaveQuotaResetYear =
+      typeof (current as AppSettings & { lastLeaveQuotaResetYear?: unknown }).lastLeaveQuotaResetYear === "number"
+        ? Number(
+            (current as AppSettings & { lastLeaveQuotaResetYear?: unknown }).lastLeaveQuotaResetYear,
+          )
+        : 0;
+    if (lastLeaveQuotaResetYear !== year) {
+      await db.transaction(async (tx) => {
+        await tx.update(employeesTable).set({
+          casualLeaveQuota: current.defaultCasualLeaveQuota ?? DEFAULT_LEAVE_QUOTAS.casual,
+          sickLeaveQuota: current.defaultSickLeaveQuota ?? DEFAULT_LEAVE_QUOTAS.sick,
+          annualLeaveQuota: current.defaultAnnualLeaveQuota ?? DEFAULT_LEAVE_QUOTAS.annual,
+        });
+        await tx.execute(
+          sql`UPDATE app_settings SET last_leave_quota_reset_year = ${year}, updated_at = NOW() WHERE id = ${current.id}`,
+        );
+      });
+      const refreshedRows = await db.select().from(appSettingsTable).limit(1);
+      current = refreshedRows[0]!;
+    }
     const normalizedPublicHolidays = normalizeStoredPublicHolidays(
       current.publicHolidays,
       year,
@@ -378,10 +403,20 @@ export async function getSettings(): Promise<AppSettings> {
     return normalizeSettingsRecord(seededRows[0]!, year);
   }
   await db.insert(appSettingsTable).values({
+    defaultCasualLeaveQuota: DEFAULT_LEAVE_QUOTAS.casual,
+    defaultSickLeaveQuota: DEFAULT_LEAVE_QUOTAS.sick,
+    defaultAnnualLeaveQuota: DEFAULT_LEAVE_QUOTAS.annual,
     publicHolidays: buildDefaultPublicHolidays(year),
   });
   const nextRows = await db.select().from(appSettingsTable).limit(1);
-  return normalizeSettingsRecord(nextRows[0]!, year);
+  if (nextRows[0]?.id) {
+    await pool.execute(
+      "UPDATE app_settings SET last_leave_quota_reset_year = ?, updated_at = NOW() WHERE id = ?",
+      [year, nextRows[0].id],
+    );
+  }
+  const seededRows = await db.select().from(appSettingsTable).limit(1);
+  return normalizeSettingsRecord(seededRows[0]!, year);
 }
 
 router.get("/settings", requireAuth(), async (_req, res) => {

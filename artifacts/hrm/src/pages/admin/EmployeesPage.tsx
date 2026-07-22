@@ -2242,6 +2242,15 @@ function BulkUploadSheet({
       const joiningDate =
         (getCsvValue(r, "joiningDate", "joining_date", "dateOfJoining") ??
           new Date().toISOString().slice(0, 10)) as unknown as string;
+      const uploadedCasualLeaveQuota = num(
+        getCsvValue(r, "casualLeaveQuota", "casualLeave"),
+      );
+      const uploadedSickLeaveQuota = num(
+        getCsvValue(r, "sickLeaveQuota", "sickLeave"),
+      );
+      const uploadedAnnualLeaveQuota = num(
+        getCsvValue(r, "annualLeaveQuota", "annualLeave"),
+      );
 
       return {
         name: getCsvValue(r, "name") ?? "",
@@ -2276,27 +2285,9 @@ function BulkUploadSheet({
           inferBreakMinutes(officeStartTime, officeEndTime),
         basicSalary: num(getCsvValue(r, "basicSalary", "salary"), 0) ?? 0,
         allowances: num(getCsvValue(r, "allowances", "allowance"), 0) ?? 0,
-        casualLeaveQuota: computeProRatedQuota(
-          num(getCsvValue(r, "casualLeaveQuota", "casualLeave"), settings?.defaultCasualLeaveQuota ?? 6) ??
-            (settings?.defaultCasualLeaveQuota ?? 6),
-          joiningDate,
-          probationMonths,
-          settings?.proRatedQuotas,
-        ),
-        sickLeaveQuota: computeProRatedQuota(
-          num(getCsvValue(r, "sickLeaveQuota", "sickLeave"), settings?.defaultSickLeaveQuota ?? 6) ??
-            (settings?.defaultSickLeaveQuota ?? 6),
-          joiningDate,
-          probationMonths,
-          settings?.proRatedQuotas,
-        ),
-        annualLeaveQuota: computeProRatedQuota(
-          num(getCsvValue(r, "annualLeaveQuota", "annualLeave"), settings?.defaultAnnualLeaveQuota ?? 12) ??
-            (settings?.defaultAnnualLeaveQuota ?? 12),
-          joiningDate,
-          probationMonths,
-          settings?.proRatedQuotas,
-        ),
+        casualLeaveQuota: uploadedCasualLeaveQuota,
+        sickLeaveQuota: uploadedSickLeaveQuota,
+        annualLeaveQuota: uploadedAnnualLeaveQuota,
         dateOfBirth: getCsvValue(r, "dateOfBirth", "dob") as unknown as string | undefined,
         education: getCsvValue(r, "education"),
         address: getCsvValue(r, "address"),

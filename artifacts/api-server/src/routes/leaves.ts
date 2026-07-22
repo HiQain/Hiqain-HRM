@@ -15,6 +15,7 @@ import {
   officeStartForShiftDate,
 } from "../lib/attendance";
 import { notifyEmployeeUser, notifyRoles } from "../lib/notifications";
+import { getSettings } from "./settings";
 
 function leaveDayTimes(
   emp: typeof employeesTable.$inferSelect,
@@ -148,6 +149,7 @@ async function serialize(
 }
 
 router.get("/leaves", requireAuth(), async (req, res): Promise<void> => {
+  await getSettings();
   const user = getUser(req);
   const status = req.query.status as string | undefined;
   const selfOnly = req.query.self === "1";
@@ -184,6 +186,7 @@ router.get("/leaves", requireAuth(), async (req, res): Promise<void> => {
 });
 
 router.post("/leaves", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
+  await getSettings();
   const user = getUser(req);
   if (!user.employeeId) {
     res.status(400).json({ message: "No employee profile" });
@@ -532,6 +535,7 @@ router.post("/leaves/:id/reject", requireAuth(["admin", "hr"]), async (req, res)
 });
 
 router.get("/leaves/balance", requireAuth(["employee", "hr"]), async (req, res): Promise<void> => {
+  await getSettings();
   const user = getUser(req);
   if (!user.employeeId) {
     res.json({

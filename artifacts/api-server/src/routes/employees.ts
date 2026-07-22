@@ -288,6 +288,9 @@ function buildBulkEmployeeValues(
     normalizeOfficeTime(data.officeEndTime) ?? settings.defaultOfficeEndTime;
   const breakMinutes =
     (data as any).breakMinutes ?? inferBreakMinutes(officeStartTime, officeEndTime);
+  const hasUploadedCasualLeaveQuota = data.casualLeaveQuota !== undefined;
+  const hasUploadedSickLeaveQuota = data.sickLeaveQuota !== undefined;
+  const hasUploadedAnnualLeaveQuota = data.annualLeaveQuota !== undefined;
   const baseCasual =
     data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
   const baseSick = data.sickLeaveQuota ?? settings.defaultSickLeaveQuota;
@@ -314,13 +317,13 @@ function buildBulkEmployeeValues(
       Number(settings.defaultProvidentFundPercent) > 0
         ? String(Number(settings.defaultProvidentFundPercent))
         : null,
-    casualLeaveQuota: settings.proRatedQuotas
+    casualLeaveQuota: settings.proRatedQuotas && !hasUploadedCasualLeaveQuota
       ? proRatedQuota(baseCasual, joiningDateStr, probationMonths)
       : baseCasual,
-    sickLeaveQuota: settings.proRatedQuotas
+    sickLeaveQuota: settings.proRatedQuotas && !hasUploadedSickLeaveQuota
       ? proRatedQuota(baseSick, joiningDateStr, probationMonths)
       : baseSick,
-    annualLeaveQuota: settings.proRatedQuotas
+    annualLeaveQuota: settings.proRatedQuotas && !hasUploadedAnnualLeaveQuota
       ? proRatedQuota(baseAnnual, joiningDateStr, probationMonths)
       : baseAnnual,
     dateOfBirth: (data.dateOfBirth as unknown as string) ?? null,
@@ -479,16 +482,19 @@ router.post("/employees", requireAuth(["admin", "hr"]), async (req, res): Promis
     normalizeOfficeTime(data.officeEndTime) ?? settings.defaultOfficeEndTime;
   const breakMinutes =
     data.breakMinutes ?? inferBreakMinutes(officeStartTime, officeEndTime);
+  const hasManualCasualLeaveQuota = data.casualLeaveQuota !== undefined;
+  const hasManualSickLeaveQuota = data.sickLeaveQuota !== undefined;
+  const hasManualAnnualLeaveQuota = data.annualLeaveQuota !== undefined;
   const baseCasual = data.casualLeaveQuota ?? settings.defaultCasualLeaveQuota;
   const baseSick = data.sickLeaveQuota ?? settings.defaultSickLeaveQuota;
   const baseAnnual = data.annualLeaveQuota ?? settings.defaultAnnualLeaveQuota;
-  const casualLeaveQuota = settings.proRatedQuotas
+  const casualLeaveQuota = settings.proRatedQuotas && !hasManualCasualLeaveQuota
     ? proRatedQuota(baseCasual, joiningDateStr, probationMonths)
     : baseCasual;
-  const sickLeaveQuota = settings.proRatedQuotas
+  const sickLeaveQuota = settings.proRatedQuotas && !hasManualSickLeaveQuota
     ? proRatedQuota(baseSick, joiningDateStr, probationMonths)
     : baseSick;
-  const annualLeaveQuota = settings.proRatedQuotas
+  const annualLeaveQuota = settings.proRatedQuotas && !hasManualAnnualLeaveQuota
     ? proRatedQuota(baseAnnual, joiningDateStr, probationMonths)
     : baseAnnual;
 

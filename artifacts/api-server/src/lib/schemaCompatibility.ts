@@ -125,6 +125,11 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
     "`standup_columns` JSON NULL AFTER `public_holidays`",
   );
   await ensureColumn(
+    "app_settings",
+    "last_leave_quota_reset_year",
+    "`last_leave_quota_reset_year` INT NOT NULL DEFAULT 0 AFTER `pro_rated_quotas`",
+  );
+  await ensureColumn(
     "employees",
     "medical_daily_limit",
     "`medical_daily_limit` DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER `medical_enabled`",

@@ -58,6 +58,7 @@ export const appSettingsTable = mysqlTable("app_settings", {
     .notNull()
     .default([]),
   proRatedQuotas: boolean("pro_rated_quotas").notNull().default(true),
+  lastLeaveQuotaResetYear: int("last_leave_quota_reset_year").notNull().default(0),
   weeklyHours: int("weekly_hours").notNull().default(40),
   monthlyHours: int("monthly_hours").notNull().default(176),
   attendancePolicy: varchar("attendance_policy", { length: 2048 }).notNull().default(""),
