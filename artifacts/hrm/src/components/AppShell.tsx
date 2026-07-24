@@ -27,7 +27,6 @@ import {
   Settings as SettingsIcon,
   Bell,
   HeartPulse,
-  Activity,
   FileSpreadsheet,
 } from "lucide-react";
 import {
@@ -57,7 +56,6 @@ const ADMIN_NAV: NavItem[] = [
     href: "/admin/attendance-calendar",
     icon: CalendarDays,
   },
-  { label: "Extension Activity", href: "/admin/extension-activity", icon: Activity },
   { label: "Leave Requests", href: "/admin/leaves", icon: CalendarRange },
   { label: "Requests", href: "/admin/requests", icon: Inbox },
   { label: "Medical", href: "/admin/medical", icon: HeartPulse },
@@ -99,7 +97,6 @@ const HR_NAV: NavItem[] = [
   { label: "Team", href: "/admin/employees", icon: Users },
   { label: "Standup Users", href: "/admin/standup-users", icon: FileSpreadsheet },
   { label: "Team Attendance", href: "/admin/attendance", icon: CalendarDays },
-  { label: "Extension Activity", href: "/admin/extension-activity", icon: Activity },
   { label: "Team Requests", href: "/admin/requests", icon: Inbox },
   { label: "Team View", href: "/admin/view", icon: LayoutGrid },
   { label: "Settings", href: "/admin/settings", icon: SettingsIcon },

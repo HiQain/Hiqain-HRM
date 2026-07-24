@@ -11,23 +11,16 @@ import {
   CalendarDays,
   Clock,
   Coffee,
-  Download,
-  FileText,
   Wallet,
   ShieldCheck,
   ScrollText,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RichTextView } from "@/components/RichTextEditor";
 import { FilePreview } from "@/components/FilePreview";
 import { formatHMRange12, formatDateCalendar } from "@/lib/utils";
 import { buildScheduledHoursTargets } from "@/lib/attendanceHours";
-import {
-  useAttendanceExtensionStatus,
-  useDisconnectAttendanceExtension,
-} from "@/lib/attendanceExtension";
 import {
   filterHolidays,
   filterHolidaysByYear,
@@ -52,13 +45,9 @@ export function MySettingsPage() {
   const { data, isLoading } = useGetSettings({
     query: { queryKey: getGetSettingsQueryKey() },
   });
-  const { data: extensionStatus } = useAttendanceExtensionStatus();
-  const disconnectExtension = useDisconnectAttendanceExtension();
   const [holidayFilter, setHolidayFilter] = useState<HolidayFilter>("all");
   const currentHolidayYear = getCurrentHolidayYear();
-  const extensionDownloadUrl = `${import.meta.env.BASE_URL}hrm-browser-extension.zip`;
 
-  // Use employee's own office hours if available, else fall back to defaults.
   const startTime =
     employee?.officeStartTime ?? data?.defaultOfficeStartTime ?? "09:00";
   const endTime =
@@ -171,7 +160,8 @@ export function MySettingsPage() {
           />
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          These are the official hours assigned to you. Per-week and per-month totals exclude weekly off days and public holidays.
+          These are the official hours assigned to you. Per-week and per-month
+          totals exclude weekly off days and public holidays.
         </p>
       </Section>
 
@@ -222,121 +212,6 @@ export function MySettingsPage() {
         />
       </Section>
 
-      <Section title="Browser Extension" icon={FileText}>
-        <div className="space-y-4">
-            <div className="rounded-xl border border-border bg-muted/40 p-4">
-              <p className="text-sm font-semibold text-foreground">
-                Browser-connected attendance automation
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {`Install the browser extension, then connect it from the extension popup using your normal HRM email and password. Once connected, HRM can auto pause after ${
-                  extensionStatus?.thresholds.pauseMinutes ?? 15
-                } minutes idle.`}
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Stat
-                label="Connection status"
-                value={
-                  extensionStatus?.link?.connected
-                    ? "Connected"
-                    : extensionStatus?.link?.status === "pending"
-                      ? "Pending"
-                      : "Not connected"
-                }
-              />
-              <Stat
-                label="Device"
-                value={extensionStatus?.link?.deviceName || "—"}
-              />
-              <Stat
-                label="Last heartbeat"
-                value={formatOptionalDateTime(extensionStatus?.link?.lastHeartbeatAt)}
-              />
-              <Stat
-                label="Last state"
-                value={formatExtensionState(extensionStatus?.link?.lastState)}
-              />
-            </div>
-
-            {extensionStatus?.link?.connected ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <Stat
-                  label="Browser alive"
-                  value={
-                    extensionStatus.link.browserAlive == null
-                      ? "—"
-                      : extensionStatus.link.browserAlive
-                        ? "Yes"
-                        : "No"
-                  }
-                />
-                <Stat
-                  label="Network online"
-                  value={
-                    extensionStatus.link.networkOnline == null
-                      ? "—"
-                      : extensionStatus.link.networkOnline
-                        ? "Yes"
-                        : "No"
-                  }
-                />
-                <Stat
-                  label="Extension"
-                  value={extensionStatus.link.extensionVersion || "—"}
-                />
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-              <Button asChild>
-                <a
-                  href={extensionDownloadUrl}
-                  download="hrm-browser-extension.zip"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download extension
-                </a>
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => disconnectExtension.mutate()}
-                disabled={
-                  disconnectExtension.isPending ||
-                  !extensionStatus?.link?.connected
-                }
-              >
-                {disconnectExtension.isPending
-                  ? "Disconnecting..."
-                  : "Disconnect extension"}
-              </Button>
-            </div>
-
-            <div className="rounded-xl border border-border bg-background p-4 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">How to connect</p>
-              <p className="mt-2">
-                1. Download the extension zip, extract it, then load the extracted
-                folder in Chrome or Edge developer mode.
-              </p>
-              <p className="mt-1">
-                2. Open the extension popup and paste your HRM app URL. If you copy
-                a page like `/employee` or `/admin`, the extension will still use
-                the correct base URL automatically.
-              </p>
-              <p className="mt-1">
-                3. Sign in with the same HRM email and password you already use,
-                then check in as normal before starting work.
-              </p>
-              <p className="mt-1">
-                4. Keep the browser running while you work. If the browser is
-                closed entirely, HRM will fall back to stale-heartbeat auto
-                checkout.
-              </p>
-            </div>
-        </div>
-      </Section>
-
       <Section title="Company policy" icon={ScrollText}>
         <PolicyView
           html={data.companyPolicy}
@@ -379,26 +254,6 @@ export function MySettingsPage() {
   );
 }
 
-function formatOptionalDateTime(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : date.toLocaleString("en-US", {
-        dateStyle: "full",
-        timeStyle: "short",
-        timeZone: "Asia/Karachi",
-      });
-}
-
-function formatExtensionState(value?: string | null) {
-  if (!value) return "—";
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function HolidayList({
   items,
   highlighted,
@@ -431,7 +286,10 @@ function HolidayList({
       )}
 
       {Object.entries(grouped).map(([month, monthItems]) => (
-        <div key={month} className="overflow-hidden rounded-xl border border-border bg-card">
+        <div
+          key={month}
+          className="overflow-hidden rounded-xl border border-border bg-card"
+        >
           <div className="border-b border-border bg-muted/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {month}
           </div>
@@ -514,15 +372,8 @@ function PolicyView({
   emptyMessage: string;
 }) {
   if (fileUrl) {
-    return (
-      <FilePreview
-        url={fileUrl}
-        name={fileName}
-        label="Policy document"
-      />
-    );
+    return <FilePreview url={fileUrl} name={fileName} label="Policy document" />;
   }
-  // Strip HTML tags for emptiness check
   const plain = html?.replace(/<[^>]*>/g, "").trim();
   if (plain) {
     return (

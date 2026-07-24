@@ -18,8 +18,21 @@ import {
   selectActiveAttendanceRecord,
   shiftDateByDays,
 } from "../lib/attendance";
+import { getSettings } from "./settings";
+import { toHolidaySet } from "../lib/payroll";
 
 const router: IRouter = Router();
+
+function monthIsoRange(date: Date) {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+  return {
+    year,
+    month,
+    start: `${year}-${String(month).padStart(2, "0")}-01`,
+    end: ymd(new Date(Date.UTC(year, month, 0))),
+  };
+}
 
 router.get(
   "/dashboard/admin",
@@ -267,10 +280,7 @@ router.get(
     };
 
     // Month stats
-    const y = now.getUTCFullYear();
-    const m = now.getUTCMonth() + 1;
-    const start = `${y}-${String(m).padStart(2, "0")}-01`;
-    const end = ymd(new Date(Date.UTC(y, m, 0)));
+    const { start, end } = monthIsoRange(now);
     const monthRows = await db
       .select()
       .from(attendanceTable)
@@ -281,23 +291,79 @@ router.get(
           lte(attendanceTable.date, end),
         ),
       );
-    let mPresent = 0,
-      mLate = 0,
-      mAbsent = 0,
-      mLeave = 0,
-      mHalf = 0,
-      mRemote = 0;
-    for (const r of monthRows) {
-      const normalized = normalizeAttendanceStatus(r, e);
-      if (normalized.status === "present") mPresent += 1;
-      else if (normalized.status === "late") mLate += 1;
-      else if (normalized.status === "on_leave") mLeave += 1;
-      else if (normalized.status === "half_day") mHalf += 1;
-      else if (normalized.status === "remote_work") mRemote += 1;
-      else mAbsent += 1;
+
+    const approvedMonthLeaves = await db
+      .select()
+      .from(leaveRequestsTable)
+      .where(
+        and(
+          eq(leaveRequestsTable.employeeId, user.employeeId),
+          eq(leaveRequestsTable.status, "approved"),
+          lte(leaveRequestsTable.startDate, end),
+          gte(leaveRequestsTable.endDate, start),
+        ),
+      );
+
+    const leaveDates = new Set<string>();
+    for (const leave of approvedMonthLeaves) {
+      const leaveStart = new Date(`${leave.startDate}T00:00:00Z`).getTime();
+      const leaveEnd = new Date(`${leave.endDate}T00:00:00Z`).getTime();
+      for (let time = leaveStart; time <= leaveEnd; time += 86_400_000) {
+        const date = ymd(new Date(time));
+        if (date >= start && date <= end) leaveDates.add(date);
+      }
+    }
+
+    const recordMap = new Map(monthRows.map((row) => [row.date, row]));
+    const settings = await getSettings();
+    const holidaySet = toHolidaySet(settings);
+    const weeklyOffDays = new Set(settings.weeklyOffDays ?? [0, 6]);
+    const today = attendanceTodayYmd(now);
+    const joinedOn = e.joiningDate;
+
+    let mPresent = 0;
+    let mLate = 0;
+    let mAbsent = 0;
+    let mLeave = 0;
+    let mHalf = 0;
+    let mRemote = 0;
+
+    const startDate = new Date(`${start}T00:00:00Z`);
+    const endDate = new Date(`${end}T00:00:00Z`);
+    for (
+      let cursor = startDate.getTime();
+      cursor <= endDate.getTime();
+      cursor += 86_400_000
+    ) {
+      const currentDate = new Date(cursor);
+      const dateIso = ymd(currentDate);
+
+      if (dateIso > today) continue;
+      if (dateIso < joinedOn) continue;
+      if (holidaySet.has(dateIso)) continue;
+      if (weeklyOffDays.has(currentDate.getUTCDay())) continue;
+
+      const record = recordMap.get(dateIso);
+      if (record) {
+        const normalized = normalizeAttendanceStatus(record, e);
+        if (normalized.status === "present") mPresent += 1;
+        else if (normalized.status === "late") mLate += 1;
+        else if (normalized.status === "on_leave") mLeave += 1;
+        else if (normalized.status === "half_day") mHalf += 1;
+        else if (normalized.status === "remote_work") mRemote += 1;
+        else mAbsent += 1;
+        continue;
+      }
+
+      if (leaveDates.has(dateIso)) {
+        mLeave += 1;
+      } else {
+        mAbsent += 1;
+      }
     }
 
     // Leave balance
+    const y = now.getUTCFullYear();
     const yearStart = `${y}-01-01`;
     const yearEnd = `${y}-12-31`;
     const leaves = await db

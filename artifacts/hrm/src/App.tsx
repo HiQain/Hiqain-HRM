@@ -14,7 +14,6 @@ import { EmployeesPage } from "@/pages/admin/EmployeesPage";
 import { EmployeeDetailPage } from "@/pages/admin/EmployeeDetailPage";
 import { AdminAttendancePage } from "@/pages/admin/AttendancePage";
 import { AdminAttendanceCalendarPage } from "@/pages/admin/AttendanceCalendarPage";
-import { AdminExtensionActivityPage } from "@/pages/admin/AdminExtensionActivityPage";
 import { AdminLeavesPage } from "@/pages/admin/LeavesPage";
 import { AdminRequestsPage } from "@/pages/admin/RequestsPage";
 import { AdminPayslipsPage } from "@/pages/admin/PayslipsPage";
@@ -109,7 +108,6 @@ function AuthGate() {
           <Route path="/admin/employees" component={EmployeesPage} />
           <Route path="/admin/employees/:id" component={EmployeeDetailPage} />
           <Route path="/admin/attendance" component={AdminAttendancePage} />
-          <Route path="/admin/extension-activity" component={AdminExtensionActivityPage} />
           <Route
             path="/admin/attendance-calendar"
             component={AdminAttendanceCalendarPage}
@@ -138,7 +136,6 @@ function AuthGate() {
           <Route path="/admin/employees" component={EmployeesPage} />
           <Route path="/admin/employees/:id" component={EmployeeDetailPage} />
           <Route path="/admin/attendance" component={AdminAttendancePage} />
-          <Route path="/admin/extension-activity" component={AdminExtensionActivityPage} />
           <Route
             path="/admin/attendance-calendar"
             component={AdminAttendanceCalendarPage}

@@ -27,20 +27,8 @@ import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import {
-  attendanceExtensionStatusQueryKey,
-  useAttendanceExtensionStatus,
-} from "@/lib/attendanceExtension";
 import { computeScheduledShiftMinutes } from "@/lib/attendanceHours";
 import {
   formatDate,
@@ -57,19 +45,11 @@ export function EmployeeDashboard() {
   const pauseAttendance = usePauseAttendance();
   const resumeAttendance = useResumeAttendance();
   const checkOut = useCheckOut();
-  const { data: extensionStatus } = useAttendanceExtensionStatus();
   const [now, setNow] = useState(() => Date.now());
-  const [showExtensionRequiredDialog, setShowExtensionRequiredDialog] =
-    useState(false);
-  const [extensionDialogMessage, setExtensionDialogMessage] = useState(
-    "To check in remotely, first download and connect the HRM browser extension. After installing it, sign in from the extension popup with your normal HRM account.",
-  );
-  const extensionDownloadUrl = `${import.meta.env.BASE_URL}hrm-browser-extension.zip`;
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: getGetEmployeeDashboardQueryKey() });
     qc.invalidateQueries({ queryKey: getGetTodayAttendanceQueryKey() });
-    qc.invalidateQueries({ queryKey: attendanceExtensionStatusQueryKey });
   };
 
   useEffect(() => {
@@ -140,36 +120,15 @@ export function EmployeeDashboard() {
     return checkedInLate ? "late" : activeRecord.status;
   })();
 
-  const onCheckIn = () => {
-    if (employee.positionType === "remote" && !extensionStatus?.link?.connected) {
-      setExtensionDialogMessage(
-        "To check in remotely, first download and connect the HRM browser extension. After installing it, sign in from the extension popup with your normal HRM account.",
-      );
-      setShowExtensionRequiredDialog(true);
-      return;
-    }
-
+  const onCheckIn = () =>
     checkIn.mutate(undefined, {
       onSuccess: () => {
         toast.success("You're checked in");
         refresh();
       },
-      onError: (e: any) => {
-        const message = e?.message ?? "Could not check in";
-        if (
-          typeof message === "string" &&
-          message.toLowerCase().includes("browser extension")
-        ) {
-          setExtensionDialogMessage(
-            "To check in remotely, first download and connect the HRM browser extension. After installing it, sign in from the extension popup with your normal HRM account.",
-          );
-          setShowExtensionRequiredDialog(true);
-          return;
-        }
-        toast.error(message);
-      },
+      onError: (e: any) =>
+        toast.error(e?.message ?? "Could not check in"),
     });
-  };
   const onPause = () =>
     pauseAttendance.mutate(undefined, {
       onSuccess: () => {
@@ -198,38 +157,8 @@ export function EmployeeDashboard() {
         toast.error(e?.message ?? "Could not check out"),
     });
 
-  const extensionLink = extensionStatus?.link ?? null;
-  const showExtensionSetupCard =
-    !!activeRecord?.checkInTime &&
-    !activeRecord?.checkOutTime &&
-    !extensionLink?.connected;
-
   return (
     <div className="space-y-7">
-      <AlertDialog
-        open={showExtensionRequiredDialog}
-        onOpenChange={setShowExtensionRequiredDialog}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Browser extension required</AlertDialogTitle>
-            <AlertDialogDescription>
-              {extensionDialogMessage}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="sm:justify-end">
-            <Button asChild variant="outline">
-              <a href={extensionDownloadUrl} download="hrm-browser-extension.zip">
-                Download extension
-              </a>
-            </Button>
-            <Button onClick={() => setShowExtensionRequiredDialog(false)}>
-              OK
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <PageHeader
         title={`Hi, ${employee.name.split(" ")[0]}`}
         description={formatDateLong(new Date())}
@@ -402,35 +331,6 @@ export function EmployeeDashboard() {
               <span className="text-muted-foreground">{workedProgress}%</span>
             </div>
             <Progress value={workedProgress} className="h-2.5" />
-          </div>
-        </div>
-      ) : null}
-
-      {showExtensionSetupCard ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
-                Browser Extension
-              </p>
-              <h3 className="mt-1 text-xl font-semibold">
-                Connect this browser to keep idle attendance automation on
-              </h3>
-              <p className="mt-1 text-sm text-amber-900/80">
-                HRM can auto-pause after 15 minutes idle once this browser is linked.
-              </p>
-              <p className="mt-3 text-sm text-amber-900/70">
-                Open the extension popup and sign in with the same HRM email and password you already use here.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
-              <Link href="/employee/settings">
-                <Button className="w-full sm:w-auto lg:w-full">
-                  Open settings
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
           </div>
         </div>
       ) : null}
