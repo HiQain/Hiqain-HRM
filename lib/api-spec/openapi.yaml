@@ -2380,10 +2380,13 @@ components:
 
     BulkCreateEmployeesResponse:
       type: object
-      required: [created, failed, errors]
+      required: [created, failed, createdEmails, errors]
       properties:
         created: { type: integer }
         failed: { type: integer }
+        createdEmails:
+          type: array
+          items: { type: string, format: email }
         errors:
           type: array
           items:

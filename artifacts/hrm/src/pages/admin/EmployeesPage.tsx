@@ -2309,10 +2309,15 @@ function BulkUploadSheet({
       { data: { members } },
       {
         onSuccess: (res) => {
+          const createdEmailSet = new Set(
+            (res.createdEmails ?? []).map((email) => email.toLowerCase()),
+          );
           setResult({
             created: res.created,
             errors: res.errors,
-            generatedPasswords,
+            generatedPasswords: generatedPasswords.filter((item) =>
+              createdEmailSet.has(item.email.toLowerCase()),
+            ),
           });
           if (res.created > 0) {
             toast.success(`Imported ${res.created} employee(s)`);

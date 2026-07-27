@@ -613,6 +613,7 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
   const bulkActor = getUser(req);
   let created = 0;
   let failed = 0;
+  const createdEmails: string[] = [];
   const errors: Array<{ row: number; email: string | null; message: string }> = [];
 
   for (let i = 0; i < members.length; i++) {
@@ -637,7 +638,6 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
         requestedRole === "admin" && bulkActor.role !== "admin"
           ? "employee"
           : requestedRole;
-      const passwordHash = await hashPassword(data.password);
       await db.transaction(async (tx: any) => {
         const existingUsers = await tx
           .select()
@@ -651,13 +651,12 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
           await tx
             .update(usersTable)
             .set({
-              passwordHash,
               role: safeRole,
               isActive: (data as any).isActive ?? true,
-              mustChangePassword: true,
             })
             .where(eq(usersTable.id, existingUser.id));
         } else {
+          const passwordHash = await hashPassword(data.password);
           const insertedUser = await tx
             .insert(usersTable)
             .values({
@@ -669,6 +668,7 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
             })
             .$returningId();
           userId = insertedUser[0]?.id;
+          createdEmails.push(email);
         }
 
         if (!userId) {
@@ -707,7 +707,7 @@ router.post("/employees/bulk", requireAuth(["admin", "hr"]), async (req, res): P
     }
   }
 
-  res.json({ created, failed, errors });
+  res.json({ created, failed, createdEmails, errors });
 });
 
 router.get("/users/mentionable", requireAuth(), async (_req, res) => {

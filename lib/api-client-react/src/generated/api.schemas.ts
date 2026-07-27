@@ -1015,6 +1015,7 @@ export type BulkCreateEmployeesResponseErrorsItem = {
 export interface BulkCreateEmployeesResponse {
   created: number;
   failed: number;
+  createdEmails: string[];
   errors: BulkCreateEmployeesResponseErrorsItem[];
 }
 

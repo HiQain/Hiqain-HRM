@@ -356,6 +356,7 @@ export const BulkCreateEmployeesBody = zod.object({
 export const BulkCreateEmployeesResponse = zod.object({
   "created": zod.number(),
   "failed": zod.number(),
+  "createdEmails": zod.array(zod.string().email()),
   "errors": zod.array(zod.object({
   "row": zod.number(),
   "email": zod.string().nullish(),
