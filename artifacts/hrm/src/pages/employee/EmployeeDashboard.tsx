@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { computeScheduledShiftMinutes } from "@/lib/attendanceHours";
+import { formatCheckoutDisplay } from "@/lib/attendanceDisplay";
 import {
   formatDate,
   formatDateLong,
@@ -206,7 +207,11 @@ export function EmployeeDashboard() {
                 <div>
                   <p className="opacity-70">Check-out</p>
                   <p className="mt-0.5 font-semibold">
-                    {formatTime(todayAttendance.record.checkOutTime)}
+                    {formatCheckoutDisplay({
+                      checkInTime: todayAttendance.record.checkInTime,
+                      checkOutTime: todayAttendance.record.checkOutTime,
+                      notes: todayAttendance.record.notes,
+                    })}
                   </p>
                 </div>
                 <div>

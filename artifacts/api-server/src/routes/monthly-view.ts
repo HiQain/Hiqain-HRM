@@ -9,7 +9,11 @@ import {
   salaryEventsTable,
 } from "@workspace/db";
 import { and, asc, eq, gte, lte } from "drizzle-orm";
-import { normalizeAttendanceStatus } from "../lib/attendance";
+import {
+  deriveAttendanceNotes,
+  normalizeAttendanceStatus,
+  resolveAttendanceRecordTiming,
+} from "../lib/attendance";
 import { addMonths, parseDate, ymd } from "../lib/dates";
 import { computePakistanMonthlySalaryTax } from "../lib/payroll";
 import { requireAuth } from "../lib/auth";
@@ -344,6 +348,9 @@ router.get(
         const leaveType = leaveMap.get(day.date) ?? null;
         const record = recordMap.get(day.date);
         const normalized = record ? normalizeAttendanceStatus(record, employee) : null;
+        const effective = record
+          ? resolveAttendanceRecordTiming(record, employee)
+          : null;
         let status = normalized?.status ?? record?.status ?? null;
 
         if (!status && day.isOffDay) status = "off";
@@ -361,11 +368,13 @@ router.get(
           status,
           label: statusCellLabel(status, leaveType),
           checkInTime: record?.checkInTime?.toISOString() ?? null,
-          checkOutTime: record?.checkOutTime?.toISOString() ?? null,
+          checkOutTime: effective?.checkOutTime?.toISOString() ?? null,
           workedMinutes:
-            status === "absent" ? 0 : (record?.workedMinutes ?? null),
+            status === "absent"
+              ? 0
+              : (effective?.workedMinutes ?? record?.workedMinutes ?? null),
           excused: record?.excused ?? false,
-          notes: record?.notes ?? null,
+          notes: record ? deriveAttendanceNotes(record, employee) : null,
           isOffDay: day.isOffDay,
         };
       });

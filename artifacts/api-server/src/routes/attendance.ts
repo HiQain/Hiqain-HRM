@@ -19,6 +19,7 @@ import {
   officeMinutes,
   officeEndForShiftDate,
   officeStartForShiftDate,
+  resolveAttendanceRecordTiming,
   resolveAttendanceShiftDate,
   selectActiveAttendanceRecord,
   shiftDateByDays,
@@ -151,24 +152,35 @@ function serializeRecord(
     | "positionType"
   >,
 ) {
+  const effective = employee ? resolveAttendanceRecordTiming(r, employee) : null;
   const normalized = employee ? normalizeAttendanceStatus(r, employee) : null;
   const serializedStatus = serializeAttendanceStatus(
     normalized?.status ?? r.status,
     normalized?.isLate ?? r.isLate,
   );
   const serializedWorkedMinutes =
-    normalized?.status === "absent" ? 0 : r.workedMinutes;
+    normalized?.status === "absent"
+      ? 0
+      : (effective?.workedMinutes ?? r.workedMinutes);
   return {
     id: r.id,
     employeeId: r.employeeId,
     employeeName,
     date: r.date,
     checkInTime: r.checkInTime ? r.checkInTime.toISOString() : null,
-    checkOutTime: r.checkOutTime ? r.checkOutTime.toISOString() : null,
+    checkOutTime: effective?.checkOutTime
+      ? effective.checkOutTime.toISOString()
+      : r.checkOutTime
+        ? r.checkOutTime.toISOString()
+        : null,
     workedMinutes: serializedWorkedMinutes,
-    pausedAt: r.pausedAt ? r.pausedAt.toISOString() : null,
-    pausedMinutes: r.pausedMinutes ?? 0,
-    isPaused: Boolean(r.pausedAt && !r.checkOutTime),
+    pausedAt: effective?.pausedAt
+      ? effective.pausedAt.toISOString()
+      : r.pausedAt
+        ? r.pausedAt.toISOString()
+        : null,
+    pausedMinutes: effective?.pausedMinutes ?? r.pausedMinutes ?? 0,
+    isPaused: Boolean((effective?.pausedAt ?? r.pausedAt) && !(effective?.checkOutTime ?? r.checkOutTime)),
     status: serializedStatus,
     workMode: resolveAttendanceWorkMode(r, employee),
     isLate: normalized?.isLate ?? r.isLate,

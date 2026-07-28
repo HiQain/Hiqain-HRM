@@ -38,6 +38,7 @@ import {
   buildScheduledHoursTargets,
   normalizeAttendanceWorkedMinutes,
 } from "@/lib/attendanceHours";
+import { formatCheckoutDisplay } from "@/lib/attendanceDisplay";
 
 const STATUS_OPTIONS = [
   { value: "present", label: "Present" },
@@ -397,6 +398,7 @@ function ListView({
           status: day.status,
           checkInTime: day.record?.checkInTime ?? null,
           checkOutTime: day.record?.checkOutTime ?? null,
+          notes: day.record?.notes ?? null,
           workedMinutes: normalizeAttendanceWorkedMinutes({
             status: day.status,
             workedMinutes: day.record ? resolveWorkedMinutes(day.record) : null,
@@ -449,7 +451,13 @@ function ListView({
                 <TableCell>{formatDate(r.date)}</TableCell>
                 <TableCell><StatusBadge status={r.status} /></TableCell>
                 <TableCell>{formatTime(r.checkInTime)}</TableCell>
-                <TableCell>{formatTime(r.checkOutTime)}</TableCell>
+                <TableCell>
+                  {formatCheckoutDisplay({
+                    checkInTime: r.checkInTime,
+                    checkOutTime: r.checkOutTime,
+                    notes: "notes" in r ? r.notes : null,
+                  })}
+                </TableCell>
                 <TableCell className="text-right">{formatDuration(r.workedMinutes)}</TableCell>
               </TableRow>
             ))

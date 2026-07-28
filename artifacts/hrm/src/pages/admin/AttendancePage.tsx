@@ -50,6 +50,10 @@ import {
   formatTime,
   ymdLocal,
 } from "@/lib/utils";
+import {
+  formatAttendanceReason,
+  formatCheckoutDisplay,
+} from "@/lib/attendanceDisplay";
 import { getApiUrl } from "@/lib/api";
 
 type StatusFilter = "all" | "absent" | "leave" | "late";
@@ -159,36 +163,25 @@ function resolveAttendanceDisplay(
       ? formatTime(row.checkInTime)
       : shouldBackfill
         ? formatHM12(officeStartTime)
-        : "—",
-    checkOut: row.checkOutTime
-      ? formatTime(row.checkOutTime)
-      : shouldBackfill
-        ? formatHM12(officeEndTime)
-        : "—",
+        : "-",
+    checkOut: shouldBackfill
+      ? formatHM12(officeEndTime)
+      : formatCheckoutDisplay({
+          checkInTime: row.checkInTime,
+          checkOutTime: row.checkOutTime,
+          notes: row.notes,
+        }),
     worked:
       row.workedMinutes && row.workedMinutes > 0
         ? formatDuration(row.workedMinutes)
         : shouldBackfill && fullShiftMinutes > 0
           ? formatDuration(fullShiftMinutes)
-          : "—",
+          : "-",
   };
 }
 
 function isLockedAttendanceStatus(status: string) {
   return ["weekend", "holiday", "future", "none"].includes(status);
-}
-
-function formatAttendanceReason(notes?: string | null) {
-  const cleaned = (notes ?? "")
-    .replace(/\[manual_attendance_override\]/g, "")
-    .replace(/\[attendance_work_mode:(?:onsite|remote_work)\]/g, "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-
-  return cleaned || "—";
 }
 
 export function AdminAttendancePage() {
@@ -649,3 +642,5 @@ function FilterChip({
     </button>
   );
 }
+
+

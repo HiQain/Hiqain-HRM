@@ -15,8 +15,14 @@ type AttendanceLike = {
 const ATTENDANCE_TIMEZONE_OFFSET_MINUTES = 5 * 60;
 const MANUAL_OVERRIDE_NOTE_PREFIX = "[manual_attendance_override]";
 const ATTENDANCE_REMOTE_WORK_MODE_TAG = "[attendance_work_mode:remote_work]";
-const MISSING_CHECKOUT_ABSENT_NOTE =
+const ATTENDANCE_MISSING_CHECKOUT_TAG = "[attendance_missing_checkout]";
+const ATTENDANCE_AUTO_CHECKOUT_TAG = "[attendance_auto_checkout]";
+const MISSING_CHECKOUT_NOTE = "Check-out missing.";
+const AUTO_CHECKOUT_NOTE =
+  "Auto checked out 6 hours after shift end because check-out was not recorded.";
+const LEGACY_MISSING_CHECKOUT_ABSENT_NOTE =
   "Absent auto-marked because check-out was not recorded before shift end.";
+const AUTO_CHECKOUT_DELAY_MINUTES = 6 * 60;
 
 function minutesFromHHMM(value: string): number {
   const { h, m } = parseHHMM(value);
@@ -122,7 +128,15 @@ export function attendanceCandidateShiftDates(
 }
 
 export function selectActiveAttendanceRecord<
-  T extends { date: string; checkInTime: Date | null; checkOutTime: Date | null },
+  T extends {
+    date: string;
+    checkInTime: Date | null;
+    checkOutTime: Date | null;
+    workedMinutes?: number | null;
+    notes?: string | null;
+    pausedAt?: Date | null;
+    pausedMinutes?: number | null;
+  },
 >(
   records: T[],
   emp: Pick<
@@ -136,10 +150,10 @@ export function selectActiveAttendanceRecord<
   }
 
   const openRecord = records.find(
-    (record) =>
-      !!record.checkInTime &&
-      !record.checkOutTime &&
-      !isMissingCheckoutAbsent(record, emp, now),
+    (record) => {
+      const effective = resolveAttendanceRecordTiming(record, emp, now);
+      return !!record.checkInTime && !effective.checkOutTime;
+    },
   );
   if (openRecord) {
     return openRecord;
@@ -178,7 +192,30 @@ export function officeEndForShiftDate(
   return end;
 }
 
-export function isMissingCheckoutAbsent(
+function stripCheckoutSystemNotes(notes?: string | null): string | null {
+  if (!notes) return null;
+  const stripped = notes
+    .replace(`${ATTENDANCE_MISSING_CHECKOUT_TAG} ${MISSING_CHECKOUT_NOTE}`, "")
+    .replace(`${ATTENDANCE_AUTO_CHECKOUT_TAG} ${AUTO_CHECKOUT_NOTE}`, "")
+    .replace(MISSING_CHECKOUT_NOTE, "")
+    .replace(AUTO_CHECKOUT_NOTE, "")
+    .replace(LEGACY_MISSING_CHECKOUT_ABSENT_NOTE, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+  return stripped.length > 0 ? stripped : null;
+}
+
+export function missingCheckoutGraceEndsAt(
+  emp: Pick<EmployeeRow, "officeStartTime" | "officeEndTime">,
+  shiftDate: string,
+): Date {
+  return new Date(
+    officeEndForShiftDate(emp, shiftDate).getTime() +
+      AUTO_CHECKOUT_DELAY_MINUTES * 60_000,
+  );
+}
+
+export function isAttendanceMissingCheckout(
   record: Pick<AttendanceLike, "date" | "checkInTime" | "checkOutTime" | "notes">,
   emp: Pick<
     EmployeeRow,
@@ -186,11 +223,76 @@ export function isMissingCheckoutAbsent(
   >,
   now: Date = new Date(),
 ) {
-  if (emp.positionType !== "onsite") return false;
-  if (record.notes?.includes(ATTENDANCE_REMOTE_WORK_MODE_TAG)) return false;
   if (!record.checkInTime || record.checkOutTime) return false;
   if (hasManualAttendanceOverride(record.notes)) return false;
   return now.getTime() > officeEndForShiftDate(emp, record.date).getTime();
+}
+
+export function resolveAttendanceRecordTiming(
+  record: {
+    date: string;
+    checkInTime: Date | null;
+    checkOutTime: Date | null;
+    workedMinutes?: number | null;
+    notes?: string | null;
+    pausedAt?: Date | null;
+    pausedMinutes?: number | null;
+  },
+  emp: Pick<EmployeeRow, "officeStartTime" | "officeEndTime" | "positionType">,
+  now: Date = new Date(),
+) {
+  const base = {
+    checkInTime: record.checkInTime,
+    checkOutTime: record.checkOutTime,
+    workedMinutes: record.workedMinutes ?? null,
+    pausedAt: record.pausedAt ?? null,
+    pausedMinutes: record.pausedMinutes ?? 0,
+    isMissingCheckout: false,
+    isAutoCheckoutApplied: false,
+  };
+
+  if (!record.checkInTime || record.checkOutTime) {
+    return base;
+  }
+
+  if (!isAttendanceMissingCheckout(record, emp, now)) {
+    return base;
+  }
+
+  const autoCheckoutAt = missingCheckoutGraceEndsAt(emp, record.date);
+  if (now.getTime() < autoCheckoutAt.getTime()) {
+    return {
+      ...base,
+      isMissingCheckout: true,
+    };
+  }
+
+  const activePauseMinutes = record.pausedAt
+    ? Math.max(
+        0,
+        Math.floor(
+          (autoCheckoutAt.getTime() - record.pausedAt.getTime()) / 60_000,
+        ),
+      )
+    : 0;
+  const workedMinutes = Math.max(
+    0,
+    Math.floor(
+      (autoCheckoutAt.getTime() - record.checkInTime.getTime()) / 60_000,
+    ) -
+      (record.pausedMinutes ?? 0) -
+      activePauseMinutes,
+  );
+
+  return {
+    checkInTime: record.checkInTime,
+    checkOutTime: autoCheckoutAt,
+    workedMinutes,
+    pausedAt: null,
+    pausedMinutes: (record.pausedMinutes ?? 0) + activePauseMinutes,
+    isMissingCheckout: false,
+    isAutoCheckoutApplied: true,
+  };
 }
 
 export function deriveAttendanceNotes(
@@ -201,15 +303,31 @@ export function deriveAttendanceNotes(
   >,
   now: Date = new Date(),
 ) {
-  if (!isMissingCheckoutAbsent(record, emp, now)) {
-    return record.notes ?? null;
+  const base = stripCheckoutSystemNotes(record.notes);
+  const resolved = resolveAttendanceRecordTiming(
+    {
+      ...record,
+      workedMinutes: null,
+      pausedAt: null,
+      pausedMinutes: 0,
+    },
+    emp,
+    now,
+  );
+
+  if (resolved.isAutoCheckoutApplied) {
+    return base?.trim()
+      ? `${base}\n${ATTENDANCE_AUTO_CHECKOUT_TAG} ${AUTO_CHECKOUT_NOTE}`
+      : `${ATTENDANCE_AUTO_CHECKOUT_TAG} ${AUTO_CHECKOUT_NOTE}`;
   }
-  if (record.notes?.includes(MISSING_CHECKOUT_ABSENT_NOTE)) {
-    return record.notes;
+
+  if (resolved.isMissingCheckout) {
+    return base?.trim()
+      ? `${base}\n${ATTENDANCE_MISSING_CHECKOUT_TAG} ${MISSING_CHECKOUT_NOTE}`
+      : `${ATTENDANCE_MISSING_CHECKOUT_TAG} ${MISSING_CHECKOUT_NOTE}`;
   }
-  return record.notes?.trim()
-    ? `${record.notes}\n${MISSING_CHECKOUT_ABSENT_NOTE}`
-    : MISSING_CHECKOUT_ABSENT_NOTE;
+
+  return base;
 }
 
 export function hasManualAttendanceOverride(notes?: string | null) {
@@ -264,29 +382,24 @@ export function normalizeAttendanceStatus(
     };
   }
 
+  const effective = resolveAttendanceRecordTiming(record, emp);
+
   const officeStart = officeStartForShiftDate(emp, record.date);
   const graceCutoff = new Date(
     officeStart.getTime() + emp.gracePeriodMinutes * 60_000,
   );
-  const inferredLate = record.checkInTime
-    ? record.checkInTime.getTime() > graceCutoff.getTime()
+  const inferredLate = effective.checkInTime
+    ? effective.checkInTime.getTime() > graceCutoff.getTime()
     : record.isLate || record.status === "late";
 
-  if (!record.checkInTime) {
+  if (!effective.checkInTime) {
     return {
       status: record.status,
       isLate: false,
     };
   }
 
-  if (isMissingCheckoutAbsent(record, emp)) {
-    return {
-      status: "absent",
-      isLate: false,
-    };
-  }
-
-  if (!record.checkOutTime || record.workedMinutes == null) {
+  if (!effective.checkOutTime || effective.workedMinutes == null) {
     return {
       status: inferredLate ? "late" : "present",
       isLate: inferredLate,
@@ -301,14 +414,14 @@ export function normalizeAttendanceStatus(
     };
   }
 
-  if (record.workedMinutes < fullDayMinutes / 4) {
+  if (effective.workedMinutes < fullDayMinutes / 4) {
     return {
       status: "absent",
       isLate: false,
     };
   }
 
-  if (record.workedMinutes < fullDayMinutes / 2) {
+  if (effective.workedMinutes < fullDayMinutes / 2) {
     return {
       status: "half_day",
       isLate: inferredLate,

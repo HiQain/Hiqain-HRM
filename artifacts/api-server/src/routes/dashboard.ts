@@ -14,7 +14,9 @@ import { parseDate, ymd } from "../lib/dates";
 import {
   attendanceTodayYmd,
   attendanceCandidateShiftDates,
+  deriveAttendanceNotes,
   normalizeAttendanceStatus,
+  resolveAttendanceRecordTiming,
   selectActiveAttendanceRecord,
   shiftDateByDays,
 } from "../lib/attendance";
@@ -247,15 +249,35 @@ router.get(
               activePauseMinutes,
           )
         : todayRec?.workedMinutes ?? null;
+    const effectiveTodayRec = todayRec
+      ? resolveAttendanceRecordTiming(
+          {
+            ...todayRec,
+            workedMinutes: liveWorkedMinutes,
+          },
+          e,
+          now,
+        )
+      : null;
     const normalizedTodayRec = todayRec
-      ? normalizeAttendanceStatus({ ...todayRec, workedMinutes: liveWorkedMinutes }, e)
+      ? normalizeAttendanceStatus(
+          {
+            ...todayRec,
+            checkOutTime: effectiveTodayRec?.checkOutTime ?? todayRec.checkOutTime,
+            workedMinutes: effectiveTodayRec?.workedMinutes ?? liveWorkedMinutes,
+          },
+          e,
+        )
       : null;
     const serializedWorkedMinutes =
-      normalizedTodayRec?.status === "absent" ? 0 : liveWorkedMinutes;
+      normalizedTodayRec?.status === "absent"
+        ? 0
+        : (effectiveTodayRec?.workedMinutes ?? liveWorkedMinutes);
     const todayAttendance = {
       hasCheckedIn: !!todayRec?.checkInTime,
-      hasCheckedOut: !!todayRec?.checkOutTime,
-      isPaused: !!todayRec?.pausedAt && !todayRec?.checkOutTime,
+      hasCheckedOut: !!(effectiveTodayRec?.checkOutTime ?? todayRec?.checkOutTime),
+      isPaused: !!(effectiveTodayRec?.pausedAt ?? todayRec?.pausedAt) &&
+        !(effectiveTodayRec?.checkOutTime ?? todayRec?.checkOutTime),
       record: todayRec
         ? {
             id: todayRec.id,
@@ -265,16 +287,23 @@ router.get(
             checkInTime: todayRec.checkInTime
               ? todayRec.checkInTime.toISOString()
               : null,
-            checkOutTime: todayRec.checkOutTime
-              ? todayRec.checkOutTime.toISOString()
-              : null,
+            checkOutTime: effectiveTodayRec?.checkOutTime
+              ? effectiveTodayRec.checkOutTime.toISOString()
+              : todayRec.checkOutTime
+                ? todayRec.checkOutTime.toISOString()
+                : null,
             workedMinutes: serializedWorkedMinutes,
-            pausedAt: todayRec.pausedAt ? todayRec.pausedAt.toISOString() : null,
-            pausedMinutes: todayRec.pausedMinutes ?? 0,
-            isPaused: !!todayRec.pausedAt && !todayRec.checkOutTime,
+            pausedAt: effectiveTodayRec?.pausedAt
+              ? effectiveTodayRec.pausedAt.toISOString()
+              : todayRec.pausedAt
+                ? todayRec.pausedAt.toISOString()
+                : null,
+            pausedMinutes: effectiveTodayRec?.pausedMinutes ?? todayRec.pausedMinutes ?? 0,
+            isPaused: !!(effectiveTodayRec?.pausedAt ?? todayRec.pausedAt) &&
+              !(effectiveTodayRec?.checkOutTime ?? todayRec.checkOutTime),
             status: normalizedTodayRec?.status ?? todayRec.status,
             isLate: normalizedTodayRec?.isLate ?? todayRec.isLate,
-            notes: todayRec.notes,
+            notes: deriveAttendanceNotes(todayRec, e, now),
           }
         : null,
     };

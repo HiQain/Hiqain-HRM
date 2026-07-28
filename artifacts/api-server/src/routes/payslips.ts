@@ -15,7 +15,11 @@ import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { notifyEmployeeUser } from "../lib/notifications";
 import { addMonths, parseDate } from "../lib/dates";
-import { normalizeAttendanceStatus, officeMinutes } from "../lib/attendance";
+import {
+  normalizeAttendanceStatus,
+  officeMinutes,
+  resolveAttendanceRecordTiming,
+} from "../lib/attendance";
 import { ymd } from "../lib/dates";
 import {
   computePakistanMonthlySalaryTax,
@@ -256,15 +260,16 @@ function resolveCreditedAttendanceMinutes(
   record: typeof attendanceTable.$inferSelect,
   employee: typeof employeesTable.$inferSelect,
 ) {
-  if ((record.workedMinutes ?? 0) > 0) {
+  const effective = resolveAttendanceRecordTiming(record, employee);
+  if ((effective.workedMinutes ?? 0) > 0) {
     if (employee.positionType === "onsite") {
       const remainingBreakDeduction = Math.max(
         0,
-        (employee.breakMinutes ?? 0) - (record.pausedMinutes ?? 0),
+        (employee.breakMinutes ?? 0) - (effective.pausedMinutes ?? 0),
       );
-      return Math.max(0, (record.workedMinutes ?? 0) - remainingBreakDeduction);
+      return Math.max(0, (effective.workedMinutes ?? 0) - remainingBreakDeduction);
     }
-    return record.workedMinutes ?? 0;
+    return effective.workedMinutes ?? 0;
   }
   const fullShiftMinutes = officeMinutes(employee);
   const normalized = normalizeAttendanceStatus(record, employee);
