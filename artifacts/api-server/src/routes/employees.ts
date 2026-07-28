@@ -8,6 +8,7 @@ import {
 import {
   db,
   employeesTable,
+  pool,
   usersTable,
   salaryEventsTable,
   designationChangesTable,
@@ -16,6 +17,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getUser, hashPassword, requireAuth } from "../lib/auth";
 import { addMonths, diffMonths, parseDate, ymd } from "../lib/dates";
 import { notifyEmployeeUser } from "../lib/notifications";
+import { logger } from "../lib/logger";
 import {
   applyPermanentIncrementToCompensation,
   inferPercentageBaseAmount,
@@ -24,6 +26,7 @@ import {
 import { getSettings } from "./settings";
 
 const router: IRouter = Router();
+const DEFAULT_EMPLOYEE_PASSWORD = "password";
 const PRIMARY_PAYROLL_BANK_NAME = "Bank Al Habib";
 
 function parseTimeToMinutes(value: string | null | undefined): number {
@@ -797,6 +800,72 @@ router.get("/employees/:id", requireAuth(), async (req, res) => {
     })),
   });
 });
+
+router.post(
+  "/employees/:id/reset-password",
+  requireAuth(["admin"]),
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ message: "Invalid employee id" });
+      return;
+    }
+
+    const rows = await db
+      .select({
+        employeeId: employeesTable.id,
+        userId: usersTable.id,
+      })
+      .from(employeesTable)
+      .innerJoin(usersTable, eq(usersTable.id, employeesTable.userId))
+      .where(eq(employeesTable.id, id))
+      .limit(1);
+    const row = rows[0];
+    if (!row) {
+      res.status(404).json({ message: "Employee not found" });
+      return;
+    }
+
+    const passwordHash = await hashPassword(DEFAULT_EMPLOYEE_PASSWORD);
+    await db
+      .update(usersTable)
+      .set({ passwordHash, mustChangePassword: true })
+      .where(eq(usersTable.id, row.userId));
+
+    const currentUserId = req.session.userId;
+    try {
+      if (currentUserId === row.userId) {
+        await pool.execute(
+          `DELETE FROM user_sessions
+           WHERE JSON_UNQUOTE(JSON_EXTRACT(CAST(sess AS JSON), '$.userId')) = ?
+             AND sid <> ?`,
+          [String(row.userId), req.sessionID],
+        );
+      } else {
+        await pool.execute(
+          `DELETE FROM user_sessions
+           WHERE JSON_UNQUOTE(JSON_EXTRACT(CAST(sess AS JSON), '$.userId')) = ?`,
+          [String(row.userId)],
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        { err: error, userId: row.userId },
+        "Could not clear sessions after admin password reset",
+      );
+    }
+
+    await notifyEmployeeUser(id, {
+      type: "password_reset",
+      title: "Password reset by admin",
+      message:
+        "Your HRM password has been reset. Use the temporary password and change it after signing in.",
+      href: "/change-password",
+    });
+
+    res.json({ success: true });
+  },
+);
 
 router.patch("/employees/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);

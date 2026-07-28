@@ -24,6 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Download,
   Eye,
+  KeyRound,
   Pencil,
   Plus,
   Search,
@@ -80,7 +81,7 @@ import {
 } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PasswordField } from "@/components/PasswordField";
-import { resolveAssetUrl } from "@/lib/api";
+import { getApiUrl, resolveAssetUrl } from "@/lib/api";
 import { createEmployeeCsvTemplateHref } from "@/lib/onboarding";
 
 function computePermanentDate(joiningDate: string, probationMonths: number) {
@@ -578,6 +579,8 @@ function NewEmployeeSheet({
   const create = useCreateEmployee();
   const update = useUpdateEmployee();
   const isEditing = Boolean(editingEmployee?.id);
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
+  const [resetPasswordPending, setResetPasswordPending] = useState(false);
   const generatedEmployeeCode = useMemo(
     () => getNextEmployeeCode(existingEmployees),
     [existingEmployees],
@@ -826,6 +829,13 @@ function NewEmployeeSheet({
     }
   }, [defaultForm, editingEmployee, editingEmployee?.breakMinutes, open]);
 
+  useEffect(() => {
+    if (!open) {
+      setResetPasswordOpen(false);
+      setResetPasswordPending(false);
+    }
+  }, [open]);
+
   const joiningYear = useMemo(
     () => Number(form.joiningDate.slice(0, 4)) || new Date().getFullYear(),
     [form.joiningDate],
@@ -1038,6 +1048,38 @@ function NewEmployeeSheet({
     );
   };
 
+  const handleResetPassword = async () => {
+    if (!editingEmployee?.id) return;
+
+    setResetPasswordPending(true);
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/employees/${editingEmployee.id}/reset-password`),
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | { message?: string }
+        | null;
+      if (!response.ok) {
+        throw new Error(payload?.message ?? "Could not reset password");
+      }
+
+      setResetPasswordOpen(false);
+      toast.success(
+        `Password reset to "${DEFAULT_EMPLOYEE_PASSWORD}" and the employee will be asked to change it on next sign-in.`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not reset password",
+      );
+    } finally {
+      setResetPasswordPending(false);
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-5xl">
@@ -1207,6 +1249,28 @@ function NewEmployeeSheet({
                     <p className="text-xs text-muted-foreground">
                       Set this to inactive when the employee is on long leave
                       or bed rest and should not access the system.
+                    </p>
+                  </div>
+                </Field>
+              )}
+              {isEditing && isAdmin && (
+                <Field label="Password reset">
+                  <div className="space-y-2 rounded-xl border border-dashed border-amber-300 bg-amber-50/70 p-3">
+                    <p className="text-sm text-muted-foreground">
+                      Reset this employee&apos;s password to the default temporary value.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-start border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                      onClick={() => setResetPasswordOpen(true)}
+                      disabled={resetPasswordPending}
+                    >
+                      <KeyRound className="size-4" />
+                      Reset password to "{DEFAULT_EMPLOYEE_PASSWORD}"
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      The employee will need to change it after the next sign-in.
                     </p>
                   </div>
                 </Field>
@@ -2020,6 +2084,33 @@ function NewEmployeeSheet({
             </Button>
           </SheetFooter>
         </form>
+        <AlertDialog
+          open={resetPasswordOpen}
+          onOpenChange={setResetPasswordOpen}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reset employee password?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will set {form.name || "this employee"}&apos;s password to{" "}
+                "{DEFAULT_EMPLOYEE_PASSWORD}" and require a password change
+                after the next sign-in.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={resetPasswordPending}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-amber-600 text-white hover:bg-amber-700"
+                onClick={handleResetPassword}
+                disabled={resetPasswordPending}
+              >
+                {resetPasswordPending ? "Resetting..." : "Reset password"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );
