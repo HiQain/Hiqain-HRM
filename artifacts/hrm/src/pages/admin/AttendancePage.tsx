@@ -53,6 +53,7 @@ import {
 import {
   formatAttendanceReason,
   formatCheckoutDisplay,
+  formatWorkedDisplay,
 } from "@/lib/attendanceDisplay";
 import { getApiUrl } from "@/lib/api";
 
@@ -172,11 +173,14 @@ function resolveAttendanceDisplay(
           notes: row.notes,
         }),
     worked:
-      row.workedMinutes && row.workedMinutes > 0
-        ? formatDuration(row.workedMinutes)
-        : shouldBackfill && fullShiftMinutes > 0
-          ? formatDuration(fullShiftMinutes)
-          : "-",
+      shouldBackfill && fullShiftMinutes > 0
+        ? formatDuration(fullShiftMinutes)
+        : formatWorkedDisplay({
+            checkInTime: row.checkInTime,
+            checkOutTime: row.checkOutTime,
+            workedMinutes: row.workedMinutes,
+            notes: row.notes,
+          }),
   };
 }
 

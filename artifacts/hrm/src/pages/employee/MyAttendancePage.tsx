@@ -38,7 +38,10 @@ import {
   buildScheduledHoursTargets,
   normalizeAttendanceWorkedMinutes,
 } from "@/lib/attendanceHours";
-import { formatCheckoutDisplay } from "@/lib/attendanceDisplay";
+import {
+  formatCheckoutDisplay,
+  formatWorkedDisplay,
+} from "@/lib/attendanceDisplay";
 
 const STATUS_OPTIONS = [
   { value: "present", label: "Present" },
@@ -458,7 +461,14 @@ function ListView({
                     notes: "notes" in r ? r.notes : null,
                   })}
                 </TableCell>
-                <TableCell className="text-right">{formatDuration(r.workedMinutes)}</TableCell>
+                <TableCell className="text-right">
+                  {formatWorkedDisplay({
+                    checkInTime: r.checkInTime,
+                    checkOutTime: r.checkOutTime,
+                    workedMinutes: r.workedMinutes,
+                    notes: "notes" in r ? r.notes : null,
+                  })}
+                </TableCell>
               </TableRow>
             ))
           )}

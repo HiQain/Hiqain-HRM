@@ -1,4 +1,4 @@
-import { formatTime } from "@/lib/utils";
+import { formatDuration, formatTime } from "@/lib/utils";
 
 const MISSING_CHECKOUT_TAG = "[attendance_missing_checkout]";
 const AUTO_CHECKOUT_TAG = "[attendance_auto_checkout]";
@@ -6,6 +6,24 @@ const AUTO_CHECKOUT_TAG = "[attendance_auto_checkout]";
 export function isMissingCheckout(notes?: string | null) {
   const value = notes ?? "";
   return value.includes(MISSING_CHECKOUT_TAG) || value.includes(AUTO_CHECKOUT_TAG);
+}
+
+export function formatWorkedDisplay({
+  checkInTime,
+  checkOutTime,
+  workedMinutes,
+  notes,
+  fallback = "-",
+}: {
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  workedMinutes?: number | null;
+  notes?: string | null;
+  fallback?: string;
+}) {
+  if (checkInTime && !checkOutTime && isMissingCheckout(notes)) return "Missing";
+  if (workedMinutes && workedMinutes > 0) return formatDuration(workedMinutes);
+  return fallback;
 }
 
 export function formatCheckoutDisplay({
