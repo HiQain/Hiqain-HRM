@@ -215,8 +215,6 @@ export function AppShell({
               isActive={isActive}
               onNavigate={() => {}}
               onLogout={handleLogout}
-              theme={theme}
-              onToggleTheme={toggle}
               onCollapseDesktop={toggleDesktop}
             />
           ) : (
@@ -225,8 +223,6 @@ export function AppShell({
               nav={nav}
               isActive={isActive}
               onLogout={handleLogout}
-              theme={theme}
-              onToggleTheme={toggle}
               onExpand={toggleDesktop}
             />
           )}
@@ -260,8 +256,6 @@ export function AppShell({
                 onNavigate={closeMobileMenu}
                 onLogout={handleLogout}
                 hideHeader
-                theme={theme}
-                onToggleTheme={toggle}
               />
             </aside>
           </div>
@@ -276,6 +270,15 @@ export function AppShell({
         >
           <div className="sticky top-0 z-20 hidden border-b border-border bg-card/95 px-6 py-3 backdrop-blur lg:block">
             <div className="mx-auto flex w-full max-w-7xl items-center justify-end gap-2">
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background text-foreground transition hover:bg-muted"
+                onClick={toggle}
+                aria-label="Toggle theme"
+                title="Toggle theme"
+              >
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
               <NotificationButton userRole={user.role} />
             </div>
           </div>
@@ -294,8 +297,6 @@ const SidebarRail = memo(function SidebarRail({
   nav,
   isActive,
   onLogout,
-  theme,
-  onToggleTheme,
   onExpand,
 }: {
   user: {
@@ -307,8 +308,6 @@ const SidebarRail = memo(function SidebarRail({
   nav: NavItem[];
   isActive: (href: string) => boolean;
   onLogout: () => void;
-  theme: string;
-  onToggleTheme: () => void;
   onExpand: () => void;
 }) {
   return (
@@ -373,14 +372,6 @@ const SidebarRail = memo(function SidebarRail({
       </nav>
 
       <div className="w-full border-t border-border p-1.5 flex flex-col items-center gap-0.5">
-        <button
-          onClick={onToggleTheme}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
-          aria-label="Toggle dark mode"
-          title="Toggle dark mode"
-        >
-          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </button>
         <button
           onClick={onLogout}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
@@ -528,8 +519,6 @@ const SidebarInner = memo(function SidebarInner({
   onNavigate,
   onLogout,
   hideHeader,
-  theme,
-  onToggleTheme,
   onCollapseDesktop,
 }: {
   user: {
@@ -543,8 +532,6 @@ const SidebarInner = memo(function SidebarInner({
   onNavigate: () => void;
   onLogout: () => void;
   hideHeader?: boolean;
-  theme: string;
-  onToggleTheme: () => void;
   onCollapseDesktop?: () => void;
 }) {
   return (
@@ -614,14 +601,6 @@ const SidebarInner = memo(function SidebarInner({
               {user.email}
             </p>
           </div>
-          <button
-            onClick={onToggleTheme}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
-            aria-label="Toggle dark mode"
-            title="Toggle dark mode"
-          >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
           <button
             onClick={onLogout}
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
