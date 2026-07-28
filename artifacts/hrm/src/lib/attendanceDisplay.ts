@@ -4,7 +4,8 @@ const MISSING_CHECKOUT_TAG = "[attendance_missing_checkout]";
 const AUTO_CHECKOUT_TAG = "[attendance_auto_checkout]";
 
 export function isMissingCheckout(notes?: string | null) {
-  return (notes ?? "").includes(MISSING_CHECKOUT_TAG);
+  const value = notes ?? "";
+  return value.includes(MISSING_CHECKOUT_TAG) || value.includes(AUTO_CHECKOUT_TAG);
 }
 
 export function formatCheckoutDisplay({

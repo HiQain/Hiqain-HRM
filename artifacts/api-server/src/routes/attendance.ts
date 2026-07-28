@@ -168,11 +168,7 @@ function serializeRecord(
     employeeName,
     date: r.date,
     checkInTime: r.checkInTime ? r.checkInTime.toISOString() : null,
-    checkOutTime: effective?.checkOutTime
-      ? effective.checkOutTime.toISOString()
-      : r.checkOutTime
-        ? r.checkOutTime.toISOString()
-        : null,
+    checkOutTime: r.checkOutTime ? r.checkOutTime.toISOString() : null,
     workedMinutes: serializedWorkedMinutes,
     pausedAt: effective?.pausedAt
       ? effective.pausedAt.toISOString()
