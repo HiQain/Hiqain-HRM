@@ -22,7 +22,6 @@ const AUTO_CHECKOUT_NOTE =
   "Auto checked out 6 hours after shift end because check-out was not recorded.";
 const LEGACY_MISSING_CHECKOUT_ABSENT_NOTE =
   "Absent auto-marked because check-out was not recorded before shift end.";
-const AUTO_CHECKOUT_DELAY_MINUTES = 6 * 60;
 
 function minutesFromHHMM(value: string): number {
   const { h, m } = parseHHMM(value);
@@ -205,16 +204,6 @@ function stripCheckoutSystemNotes(notes?: string | null): string | null {
   return stripped.length > 0 ? stripped : null;
 }
 
-export function missingCheckoutGraceEndsAt(
-  emp: Pick<EmployeeRow, "officeStartTime" | "officeEndTime">,
-  shiftDate: string,
-): Date {
-  return new Date(
-    officeEndForShiftDate(emp, shiftDate).getTime() +
-      AUTO_CHECKOUT_DELAY_MINUTES * 60_000,
-  );
-}
-
 export function isAttendanceMissingCheckout(
   record: Pick<AttendanceLike, "date" | "checkInTime" | "checkOutTime" | "notes">,
   emp: Pick<
@@ -259,39 +248,9 @@ export function resolveAttendanceRecordTiming(
     return base;
   }
 
-  const autoCheckoutAt = missingCheckoutGraceEndsAt(emp, record.date);
-  if (now.getTime() < autoCheckoutAt.getTime()) {
-    return {
-      ...base,
-      isMissingCheckout: true,
-    };
-  }
-
-  const activePauseMinutes = record.pausedAt
-    ? Math.max(
-        0,
-        Math.floor(
-          (autoCheckoutAt.getTime() - record.pausedAt.getTime()) / 60_000,
-        ),
-      )
-    : 0;
-  const workedMinutes = Math.max(
-    0,
-    Math.floor(
-      (autoCheckoutAt.getTime() - record.checkInTime.getTime()) / 60_000,
-    ) -
-      (record.pausedMinutes ?? 0) -
-      activePauseMinutes,
-  );
-
   return {
-    checkInTime: record.checkInTime,
-    checkOutTime: autoCheckoutAt,
-    workedMinutes,
-    pausedAt: null,
-    pausedMinutes: (record.pausedMinutes ?? 0) + activePauseMinutes,
-    isMissingCheckout: false,
-    isAutoCheckoutApplied: true,
+    ...base,
+    isMissingCheckout: true,
   };
 }
 
@@ -314,12 +273,6 @@ export function deriveAttendanceNotes(
     emp,
     now,
   );
-
-  if (resolved.isAutoCheckoutApplied) {
-    return base?.trim()
-      ? `${base}\n${ATTENDANCE_AUTO_CHECKOUT_TAG} ${AUTO_CHECKOUT_NOTE}`
-      : `${ATTENDANCE_AUTO_CHECKOUT_TAG} ${AUTO_CHECKOUT_NOTE}`;
-  }
 
   if (resolved.isMissingCheckout) {
     return base?.trim()
