@@ -269,17 +269,34 @@ export function AppShell({
           )}
         >
           <div className="sticky top-0 z-20 hidden border-b border-border bg-card/95 px-6 py-3 backdrop-blur lg:block">
-            <div className="mx-auto flex w-full max-w-7xl items-center justify-end gap-2">
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background text-foreground transition hover:bg-muted"
-                onClick={toggle}
-                aria-label="Toggle theme"
-                title="Toggle theme"
-              >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
-              <NotificationButton userRole={user.role} />
+            <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <EmployeeAvatar
+                  name={displayUser.name}
+                  url={displayUser.avatarUrl ?? null}
+                  size="sm"
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {displayUser.name}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {displayUser.email}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background text-foreground transition hover:bg-muted"
+                  onClick={toggle}
+                  aria-label="Toggle theme"
+                  title="Toggle theme"
+                >
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </button>
+                <NotificationButton userRole={user.role} />
+              </div>
             </div>
           </div>
           <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
@@ -380,9 +397,6 @@ const SidebarRail = memo(function SidebarRail({
         >
           <LogOut className="h-4 w-4" />
         </button>
-        <div className="pt-1" title={`${user.name} (${user.email})`}>
-          <EmployeeAvatar name={user.name} url={user.avatarUrl ?? null} size="sm" />
-        </div>
       </div>
     </div>
   );
@@ -593,23 +607,16 @@ const SidebarInner = memo(function SidebarInner({
         </div>
       </nav>
       <div className="border-t border-border p-2.5">
-        <div className="flex items-center gap-2 rounded-md p-1.5">
-          <EmployeeAvatar name={user.name} url={user.avatarUrl ?? null} size="sm" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{user.name}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {user.email}
-            </p>
-          </div>
-          <button
-            onClick={onLogout}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
+          aria-label="Logout"
+          title="Logout"
+        >
+          <LogOut className="h-4 w-4" />
+          <span>Logout</span>
+        </button>
       </div>
     </div>
   );
