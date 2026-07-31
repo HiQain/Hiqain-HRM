@@ -426,20 +426,10 @@ router.delete("/leaves/:id", requireAuth(["employee", "hr"]), async (req, res): 
 });
 
 async function setStatus(id: number, status: "approved" | "rejected") {
-  const result = await db
+  await db
     .update(leaveRequestsTable)
     .set({ status, reviewedAt: new Date() })
     .where(eq(leaveRequestsTable.id, id));
-  const affectedRows =
-    typeof result === "object" &&
-    result !== null &&
-    "affectedRows" in result &&
-    typeof result.affectedRows === "number"
-      ? result.affectedRows
-      : 0;
-  if (affectedRows === 0) {
-    return null;
-  }
   const rows = await db
     .select()
     .from(leaveRequestsTable)
