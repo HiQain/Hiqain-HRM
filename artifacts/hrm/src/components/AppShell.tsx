@@ -64,7 +64,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: "Payslips", href: "/admin/payslips", icon: Receipt },
   { label: "Standup Users", href: "/admin/standup-users", icon: FileSpreadsheet },
   { label: "News Feed", href: "/admin/feed", icon: PartyPopper },
-  { label: "Settings", href: "/admin/settings", icon: SettingsIcon },
+  { label: "General", href: "/admin/settings", icon: SettingsIcon },
 ];
 
 const EMP_NAV: NavItem[] = [
@@ -79,7 +79,7 @@ const EMP_NAV: NavItem[] = [
   { label: "Payslips", href: "/employee/payslips", icon: Receipt },
   { label: "Standup Sheet", href: "/employee/standup-sheet", icon: FileSpreadsheet },
   { label: "News Feed", href: "/employee/feed", icon: PartyPopper },
-  { label: "Settings", href: "/employee/settings", icon: SettingsIcon },
+  { label: "General", href: "/employee/settings", icon: SettingsIcon },
 ];
 
 const HR_NAV: NavItem[] = [
@@ -99,7 +99,7 @@ const HR_NAV: NavItem[] = [
   { label: "Team Attendance", href: "/admin/attendance", icon: CalendarDays },
   { label: "Team Requests", href: "/admin/requests", icon: Inbox },
   { label: "Team View", href: "/admin/view", icon: LayoutGrid },
-  { label: "Settings", href: "/admin/settings", icon: SettingsIcon },
+  { label: "General", href: "/admin/settings", icon: SettingsIcon },
 ];
 
 export function AppShell({
