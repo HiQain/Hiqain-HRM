@@ -10,10 +10,12 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   useGetTodayAttendanceSummary,
   getGetTodayAttendanceSummaryQueryKey,
+  useGetMe,
   useListEmployees,
   useOverrideAttendance,
   type AttendanceOverrideRequestStatus,
@@ -33,6 +35,12 @@ import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { DateField } from "@/components/DateField";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -58,6 +66,7 @@ import {
 import { getApiUrl } from "@/lib/api";
 
 type StatusFilter = "all" | "absent" | "leave" | "late";
+type TimeDraft = { checkInTime: string; checkOutTime: string };
 
 function normalizeManualAttendanceStatus(
   status: string,
@@ -188,8 +197,24 @@ function isLockedAttendanceStatus(status: string) {
   return ["weekend", "holiday", "future", "none"].includes(status);
 }
 
+function toTimeInputValue(iso?: string | null) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Karachi",
+  }).formatToParts(date);
+  const hour = parts.find((part) => part.type === "hour")?.value ?? "00";
+  const minute = parts.find((part) => part.type === "minute")?.value ?? "00";
+  return `${hour}:${minute}`;
+}
+
 export function AdminAttendancePage() {
   const localToday = ymdLocal(new Date());
+  const { data: me } = useGetMe();
   const { data: employees } = useListEmployees();
   const [date, setDate] = useState<string | undefined>(undefined);
   const [todayAnchor, setTodayAnchor] = useState<string | null>(null);
@@ -216,16 +241,31 @@ export function AdminAttendancePage() {
   const qc = useQueryClient();
   const override = useOverrideAttendance();
   const [editingEmpId, setEditingEmpId] = useState<number | null>(null);
+  const [savingTimeEmpId, setSavingTimeEmpId] = useState<number | null>(null);
+  const [timeDrafts, setTimeDrafts] = useState<Record<string, TimeDraft>>({});
   const effectiveDate = date ?? data?.date ?? localToday;
   const operationalToday = todayAnchor ?? data?.date ?? localToday;
+  const isAdmin = me?.role === "admin";
+
+  useEffect(() => {
+    const nextDrafts: Record<string, TimeDraft> = {};
+    for (const record of data?.records ?? []) {
+      nextDrafts[`${record.employeeId}-${record.date}`] = {
+        checkInTime: toTimeInputValue(record.checkInTime),
+        checkOutTime: toTimeInputValue(record.checkOutTime),
+      };
+    }
+    setTimeDrafts(nextDrafts);
+  }, [data?.records]);
 
   const handleStatusChange = (
     employeeId: number,
+    recordDate: string,
     newStatus: AttendanceOverrideRequestStatus,
   ) => {
     setEditingEmpId(employeeId);
     override.mutate(
-      { data: { employeeId, date: effectiveDate, status: newStatus } },
+      { data: { employeeId, date: recordDate, status: newStatus } },
       {
         onSuccess: async () => {
           toast.success("Attendance updated");
@@ -274,6 +314,105 @@ export function AdminAttendancePage() {
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Could not update work mode");
         setEditingEmpId(null);
+      });
+  };
+
+  const handleTimeDraftChange = (
+    rowKey: string,
+    field: keyof TimeDraft,
+    value: string,
+  ) => {
+    setTimeDrafts((current) => ({
+      ...current,
+      [rowKey]: {
+        checkInTime: current[rowKey]?.checkInTime ?? "",
+        checkOutTime: current[rowKey]?.checkOutTime ?? "",
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleTimeSave = (
+    employeeId: number,
+    recordDate: string,
+    status: AttendanceOverrideRequestStatus,
+    rowKey: string,
+  ) => {
+    const draft = timeDrafts[rowKey] ?? { checkInTime: "", checkOutTime: "" };
+    setSavingTimeEmpId(employeeId);
+    fetch(getApiUrl("/api/attendance/override"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        employeeId,
+        date: recordDate,
+        status,
+        checkInTime: draft.checkInTime || null,
+        checkOutTime: draft.checkOutTime || null,
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.message || "Could not update attendance time");
+        }
+        toast.success("Attendance time updated");
+        await qc.invalidateQueries({
+          queryKey: getGetTodayAttendanceSummaryQueryKey(params),
+        });
+        setSavingTimeEmpId(null);
+      })
+      .catch((error) => {
+        toast.error(
+          error instanceof Error ? error.message : "Could not update attendance time",
+        );
+        setSavingTimeEmpId(null);
+      });
+  };
+
+  const handleTimeReset = (
+    employeeId: number,
+    recordDate: string,
+    rowKey: string,
+  ) => {
+    setSavingTimeEmpId(employeeId);
+    fetch(getApiUrl("/api/attendance/override"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        employeeId,
+        date: recordDate,
+        status: "absent",
+        checkInTime: null,
+        checkOutTime: null,
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.message || "Could not reset attendance time");
+        }
+        setTimeDrafts((current) => ({
+          ...current,
+          [rowKey]: { checkInTime: "", checkOutTime: "" },
+        }));
+        toast.success("Attendance reset");
+        await qc.invalidateQueries({
+          queryKey: getGetTodayAttendanceSummaryQueryKey(params),
+        });
+        setSavingTimeEmpId(null);
+      })
+      .catch((error) => {
+        toast.error(
+          error instanceof Error ? error.message : "Could not reset attendance time",
+        );
+        setSavingTimeEmpId(null);
       });
   };
 
@@ -508,9 +647,9 @@ export function AdminAttendancePage() {
               <TableHead>Employee</TableHead>
               <TableHead>Work mode</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-[180px]">Change status</TableHead>
-              <TableHead>Check-in</TableHead>
-              <TableHead>Check-out</TableHead>
+              <TableHead className="w-[126px]">Change status</TableHead>
+              <TableHead className="w-[122px]">Check-in</TableHead>
+              <TableHead className="w-[122px]">Check-out</TableHead>
               <TableHead>Reason</TableHead>
               <TableHead className="text-right">Worked</TableHead>
             </TableRow>
@@ -532,6 +671,7 @@ export function AdminAttendancePage() {
               filtered.map((r) => {
                 const isSaving =
                   editingEmpId === r.employeeId && override.isPending;
+                const isSavingTime = savingTimeEmpId === r.employeeId;
                 const meta = employeeMeta.get(r.employeeId);
                 const display = resolveAttendanceDisplay(
                   r,
@@ -549,12 +689,52 @@ export function AdminAttendancePage() {
                   meta?.positionType,
                 );
                 const isLockedStatus = isLockedAttendanceStatus(r.status);
+                const rowKey = `${r.employeeId}-${r.date}`;
+                const draft = timeDrafts[rowKey] ?? {
+                  checkInTime: toTimeInputValue(r.checkInTime),
+                  checkOutTime: toTimeInputValue(r.checkOutTime),
+                };
+                const hasTimeChanged =
+                  draft.checkInTime !== toTimeInputValue(r.checkInTime) ||
+                  draft.checkOutTime !== toTimeInputValue(r.checkOutTime);
+                const canResetTime =
+                  isAdmin &&
+                  !isLockedStatus &&
+                  (Boolean(r.checkInTime) || Boolean(r.checkOutTime));
+                const canEditTime =
+                  isAdmin &&
+                  !isLockedStatus;
                 return (
                   <TableRow key={`${r.employeeId}-${r.date}`}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <EmployeeAvatar name={r.employeeName} size="sm" />
                         <span className="font-medium">{r.employeeName}</span>
+                        {canResetTime && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-full text-muted-foreground"
+                                disabled={isSavingTime}
+                                aria-label={`Actions for ${r.employeeName}`}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleTimeReset(r.employeeId, r.date, rowKey)
+                                }
+                              >
+                                Reset time
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                         {r.excused && (
                           <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                             Excused
@@ -587,12 +767,13 @@ export function AdminAttendancePage() {
                           onValueChange={(v) =>
                             handleStatusChange(
                               r.employeeId,
+                              r.date,
                               v as AttendanceOverrideRequestStatus,
                             )
                           }
                           disabled={isSaving}
                         >
-                          <SelectTrigger className="h-8 w-[160px] text-xs">
+                          <SelectTrigger className="h-8 w-[104px] text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -605,9 +786,67 @@ export function AdminAttendancePage() {
                         </Select>
                       )}
                     </TableCell>
-                    <TableCell>{display.checkIn}</TableCell>
-                    <TableCell>{display.checkOut}</TableCell>
-                    <TableCell className="max-w-[280px] text-xs text-muted-foreground">
+                    <TableCell className="px-1.5">
+                      {canEditTime ? (
+                        <Input
+                          type="time"
+                          value={draft.checkInTime}
+                          placeholder="--:--"
+                          onChange={(e) =>
+                            handleTimeDraftChange(
+                              rowKey,
+                              "checkInTime",
+                              e.target.value,
+                            )
+                          }
+                          disabled={isSavingTime}
+                          className="h-8 w-[104px] min-w-0 px-2 pr-1 text-xs"
+                        />
+                      ) : (
+                        display.checkIn
+                      )}
+                    </TableCell>
+                    <TableCell className="px-1.5">
+                      {canEditTime ? (
+                        <div className="space-y-2">
+                          <Input
+                            type="time"
+                            value={draft.checkOutTime}
+                            placeholder="--:--"
+                            onChange={(e) =>
+                              handleTimeDraftChange(
+                                rowKey,
+                                "checkOutTime",
+                                e.target.value,
+                              )
+                            }
+                            disabled={isSavingTime}
+                            className="h-8 w-[104px] min-w-0 px-2 pr-1 text-xs"
+                          />
+                          {hasTimeChanged && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7 px-2 text-[11px]"
+                              disabled={isSavingTime || isSaving}
+                              onClick={() =>
+                                handleTimeSave(
+                                  r.employeeId,
+                                  r.date,
+                                  attendanceStatus,
+                                  rowKey,
+                                )
+                              }
+                            >
+                              Save time
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        display.checkOut
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[360px] text-xs text-muted-foreground">
                       {formatAttendanceReason(r.notes)}
                     </TableCell>
                     <TableCell className="text-right">{display.worked}</TableCell>

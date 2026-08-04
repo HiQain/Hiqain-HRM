@@ -8,7 +8,7 @@ import {
 } from "@workspace/db";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
-import { ymd } from "../lib/dates";
+import { parseHHMM, ymd } from "../lib/dates";
 import {
   attendanceCandidateShiftDates,
   attendanceTodayYmd,
@@ -82,6 +82,109 @@ function resolveOverrideAttendanceFields(
     checkInTime: existing?.checkInTime ?? null,
     checkOutTime: existing?.checkOutTime ?? null,
     workedMinutes: existing?.workedMinutes ?? 0,
+  };
+}
+
+function hasOwnProperty(value: unknown, key: string) {
+  return typeof value === "object" && value !== null && key in value;
+}
+
+function parseAdminOverrideTime(
+  date: string,
+  value: unknown,
+): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^\d{2}:\d{2}$/.test(trimmed)) return undefined;
+  const { h, m } = parseHHMM(trimmed);
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1, h - 5, m));
+}
+
+function resolveManualOverrideAttendanceFields(
+  employee: Pick<
+    typeof employeesTable.$inferSelect,
+    | "officeStartTime"
+    | "officeEndTime"
+    | "gracePeriodMinutes"
+    | "breakMinutes"
+    | "positionType"
+  >,
+  date: string,
+  requestedStatus: string,
+  existing: Pick<typeof attendanceTable.$inferSelect, "pausedMinutes"> | undefined,
+  checkInTime: Date | null,
+  checkOutTime: Date | null,
+) {
+  if (!checkInTime) {
+    return {
+      status:
+        requestedStatus === "on_leave" ? "on_leave" : "absent",
+      isLate: false,
+      checkInTime: null,
+      checkOutTime: null,
+      workedMinutes: 0,
+    };
+  }
+
+  if (!checkOutTime) {
+    const lateCutoff = new Date(
+      officeStartForShiftDate(employee, date).getTime() +
+        employee.gracePeriodMinutes * 60_000,
+    );
+    const isLate = checkInTime.getTime() > lateCutoff.getTime();
+    return {
+      status: requestedStatus === "remote_work"
+        ? "remote_work"
+        : isLate
+          ? "late"
+          : "present",
+      isLate: requestedStatus === "remote_work" ? false : isLate,
+      checkInTime,
+      checkOutTime: null,
+      workedMinutes: null,
+    };
+  }
+
+  const pausedMinutes = Math.max(0, existing?.pausedMinutes ?? 0);
+  const workedMinutes = Math.max(
+    0,
+    Math.floor((checkOutTime.getTime() - checkInTime.getTime()) / 60_000) -
+      pausedMinutes,
+  );
+
+  if (requestedStatus === "remote_work") {
+    return {
+      status: "remote_work",
+      isLate: false,
+      checkInTime,
+      checkOutTime,
+      workedMinutes,
+    };
+  }
+
+  const normalized = normalizeAttendanceStatus(
+    {
+      date,
+      status: requestedStatus,
+      isLate: false,
+      checkInTime,
+      checkOutTime,
+      workedMinutes,
+      notes: null,
+    },
+    employee,
+  );
+
+  return {
+    status: normalized.status,
+    isLate: normalized.isLate,
+    checkInTime,
+    checkOutTime,
+    workedMinutes,
   };
 }
 
@@ -1077,6 +1180,7 @@ router.post(
   "/attendance/override",
   requireAuth(["admin", "hr"]),
   async (req, res): Promise<void> => {
+    const actor = getUser(req);
     const { employeeId, date, status, notes } = req.body ?? {};
     if (!employeeId || !date || !status) {
       res
@@ -1094,6 +1198,29 @@ router.post(
     ];
     if (!allowed.includes(status)) {
       res.status(400).json({ message: "Invalid status" });
+      return;
+    }
+
+    const rawCheckInTime = hasOwnProperty(req.body, "checkInTime")
+      ? req.body.checkInTime
+      : undefined;
+    const rawCheckOutTime = hasOwnProperty(req.body, "checkOutTime")
+      ? req.body.checkOutTime
+      : undefined;
+    const isEditingTimes =
+      rawCheckInTime !== undefined || rawCheckOutTime !== undefined;
+
+    if (isEditingTimes && actor.role !== "admin") {
+      res.status(403).json({ message: "Only admins can edit attendance times" });
+      return;
+    }
+
+    const parsedCheckInTime = parseAdminOverrideTime(date, rawCheckInTime);
+    const parsedCheckOutTime = parseAdminOverrideTime(date, rawCheckOutTime);
+
+    if ((rawCheckInTime !== undefined && parsedCheckInTime === undefined) ||
+      (rawCheckOutTime !== undefined && parsedCheckOutTime === undefined)) {
+      res.status(400).json({ message: "Check-in and check-out must use HH:mm format" });
       return;
     }
 
@@ -1122,17 +1249,45 @@ router.post(
     let record;
     if (existing.length) {
       const currentWorkModeOverride = extractWorkModeOverride(existing[0]!.notes);
-      const overrideFields = resolveOverrideAttendanceFields(
-        emp,
-        date,
-        status,
-        existing[0]!,
-      );
+      const overrideFields = isEditingTimes
+        ? (() => {
+            const nextCheckInTime = parsedCheckInTime ?? null;
+            let nextCheckOutTime = parsedCheckOutTime ?? null;
+            if (nextCheckOutTime && !nextCheckInTime) {
+              res.status(400).json({ message: "Check-in time is required before check-out" });
+              return null;
+            }
+            if (nextCheckInTime && nextCheckOutTime &&
+              isOvernightShift(emp) &&
+              nextCheckOutTime.getTime() <= nextCheckInTime.getTime()) {
+              nextCheckOutTime = new Date(nextCheckOutTime.getTime() + 24 * 60 * 60 * 1000);
+            }
+            if (nextCheckInTime && nextCheckOutTime &&
+              nextCheckOutTime.getTime() < nextCheckInTime.getTime()) {
+              res.status(400).json({ message: "Check-out time cannot be earlier than check-in time" });
+              return null;
+            }
+            return resolveManualOverrideAttendanceFields(
+              emp,
+              date,
+              status,
+              existing[0]!,
+              nextCheckInTime,
+              nextCheckOutTime,
+            );
+          })()
+        : resolveOverrideAttendanceFields(
+            emp,
+            date,
+            status,
+            existing[0]!,
+          );
+      if (!overrideFields) return;
       await db
         .update(attendanceTable)
         .set({
-          status,
-          isLate: status === "late",
+          status: overrideFields.status as typeof attendanceTable.$inferInsert.status,
+          isLate: overrideFields.isLate,
           checkInTime: overrideFields.checkInTime,
           checkOutTime: overrideFields.checkOutTime,
           workedMinutes: overrideFields.workedMinutes,
@@ -1149,14 +1304,42 @@ router.post(
         .limit(1);
       record = updatedRows[0]!;
     } else {
-      const overrideFields = resolveOverrideAttendanceFields(emp, date, status);
+      const overrideFields = isEditingTimes
+        ? (() => {
+            const nextCheckInTime = parsedCheckInTime ?? null;
+            let nextCheckOutTime = parsedCheckOutTime ?? null;
+            if (nextCheckOutTime && !nextCheckInTime) {
+              res.status(400).json({ message: "Check-in time is required before check-out" });
+              return null;
+            }
+            if (nextCheckInTime && nextCheckOutTime &&
+              isOvernightShift(emp) &&
+              nextCheckOutTime.getTime() <= nextCheckInTime.getTime()) {
+              nextCheckOutTime = new Date(nextCheckOutTime.getTime() + 24 * 60 * 60 * 1000);
+            }
+            if (nextCheckInTime && nextCheckOutTime &&
+              nextCheckOutTime.getTime() < nextCheckInTime.getTime()) {
+              res.status(400).json({ message: "Check-out time cannot be earlier than check-in time" });
+              return null;
+            }
+            return resolveManualOverrideAttendanceFields(
+              emp,
+              date,
+              status,
+              undefined,
+              nextCheckInTime,
+              nextCheckOutTime,
+            );
+          })()
+        : resolveOverrideAttendanceFields(emp, date, status);
+      if (!overrideFields) return;
       const inserted = await db
         .insert(attendanceTable)
         .values({
           employeeId: Number(employeeId),
           date,
-          status,
-          isLate: status === "late",
+          status: overrideFields.status as typeof attendanceTable.$inferInsert.status,
+          isLate: overrideFields.isLate,
           checkInTime: overrideFields.checkInTime,
           checkOutTime: overrideFields.checkOutTime,
           workedMinutes: overrideFields.workedMinutes,
