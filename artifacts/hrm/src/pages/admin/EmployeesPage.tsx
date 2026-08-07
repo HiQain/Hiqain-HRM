@@ -16,6 +16,7 @@ import {
   useBulkCreateEmployees,
   useGetMe,
   useGetSettings,
+  getGetEmployeeQueryOptions,
   getListEmployeesQueryKey,
   getGetAdminDashboardQueryKey,
   getGetSettingsQueryKey,
@@ -283,6 +284,7 @@ export function EmployeesPage() {
     id: number;
     name: string;
   } | null>(null);
+  const qc = useQueryClient();
 
   const departments = useMemo(() => {
     const set = new Set<string>();
@@ -307,6 +309,20 @@ export function EmployeesPage() {
     return rows;
   }, [data, search, department]);
 
+  const openEmployeeEditor = async (employee: Employee) => {
+    try {
+      const freshEmployee = await qc.fetchQuery({
+        ...getGetEmployeeQueryOptions(employee.id),
+        staleTime: 0,
+      });
+      setEditingEmployee(freshEmployee);
+    } catch {
+      setEditingEmployee(employee);
+      toast.error("Could not load the latest employee details");
+    }
+    setOpen(true);
+  };
+
   useEffect(() => {
     if (!data?.length) return;
     if (open) return;
@@ -320,11 +336,9 @@ export function EmployeesPage() {
     const employee = data.find((item) => item.id === employeeId);
     if (!employee) return;
     window.localStorage.removeItem("hrm-edit-employee-id");
-    setEditingEmployee(employee);
-    setOpen(true);
+    void openEmployeeEditor(employee);
   }, [data, open]);
 
-  const qc = useQueryClient();
   const del = useDeleteEmployee();
   const handleDownloadAll = () => {
     if (!data?.length) {
@@ -471,10 +485,7 @@ export function EmployeesPage() {
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => {
-                          setEditingEmployee(e);
-                          setOpen(true);
-                        }}
+                        onClick={() => void openEmployeeEditor(e)}
                       >
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit profile
@@ -814,6 +825,9 @@ function NewEmployeeSheet({
     [editingEmployee, generatedEmployeeCode, settings],
   );
   const [form, setForm] = useState(defaultForm);
+  const [breakMinutesInput, setBreakMinutesInput] = useState(() =>
+    String(defaultForm.breakMinutes),
+  );
   const [quotaTouched, setQuotaTouched] = useState(() =>
     getInitialQuotaTouched(editingEmployee),
   );
@@ -832,6 +846,7 @@ function NewEmployeeSheet({
     if (lastHydratedEmployeeIdRef.current === nextEmployeeId) return;
 
     setForm(defaultForm);
+    setBreakMinutesInput(String(defaultForm.breakMinutes));
     setQuotaTouched(getInitialQuotaTouched(editingEmployee));
     setBreakMinutesTouched(Boolean(editingEmployee?.breakMinutes != null));
     lastHydratedEmployeeIdRef.current = nextEmployeeId;
@@ -900,28 +915,23 @@ function NewEmployeeSheet({
   ]);
 
   useEffect(() => {
-    if (!open || breakMinutesTouched) return;
+    if (!open || isEditing || breakMinutesTouched) return;
     const suggestedBreakMinutes = inferBreakMinutes(
       form.officeStartTime,
       form.officeEndTime,
     );
-    setForm((current) =>
-      current.breakMinutes === suggestedBreakMinutes
-        ? current
-        : { ...current, breakMinutes: suggestedBreakMinutes },
-    );
+    setBreakMinutesInput(String(suggestedBreakMinutes));
   }, [
     breakMinutesTouched,
     form.officeEndTime,
     form.officeStartTime,
+    isEditing,
     open,
   ]);
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const submittedBreakMinutes = Number(
-      new FormData(e.currentTarget).get("breakMinutes"),
-    );
+    const submittedBreakMinutes = Number(breakMinutesInput);
 
     if (!Number.isFinite(submittedBreakMinutes) || submittedBreakMinutes < 0) {
       toast.error("Break time must be zero or more minutes");
@@ -1578,13 +1588,10 @@ function NewEmployeeSheet({
                   type="number"
                   min={0}
                   step={5}
-                  value={form.breakMinutes}
+                  value={breakMinutesInput}
                   onChange={(e) => {
                     setBreakMinutesTouched(true);
-                    setForm((current) => ({
-                      ...current,
-                      breakMinutes: Number(e.target.value),
-                    }));
+                    setBreakMinutesInput(e.target.value);
                   }}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
