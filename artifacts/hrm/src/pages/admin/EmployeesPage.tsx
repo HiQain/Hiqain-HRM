@@ -820,14 +820,22 @@ function NewEmployeeSheet({
   const [breakMinutesTouched, setBreakMinutesTouched] = useState(
     Boolean(editingEmployee?.breakMinutes != null),
   );
+  const lastHydratedEmployeeIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (open) {
-      setForm(defaultForm);
-      setQuotaTouched(getInitialQuotaTouched(editingEmployee));
-      setBreakMinutesTouched(Boolean(editingEmployee?.breakMinutes != null));
+    if (!open) {
+      lastHydratedEmployeeIdRef.current = null;
+      return;
     }
-  }, [defaultForm, editingEmployee, editingEmployee?.breakMinutes, open]);
+
+    const nextEmployeeId = editingEmployee?.id ?? null;
+    if (lastHydratedEmployeeIdRef.current === nextEmployeeId) return;
+
+    setForm(defaultForm);
+    setQuotaTouched(getInitialQuotaTouched(editingEmployee));
+    setBreakMinutesTouched(Boolean(editingEmployee?.breakMinutes != null));
+    lastHydratedEmployeeIdRef.current = nextEmployeeId;
+  }, [defaultForm, editingEmployee, open]);
 
   useEffect(() => {
     if (!open) {
@@ -909,8 +917,17 @@ function NewEmployeeSheet({
     open,
   ]);
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const submittedBreakMinutes = Number(
+      new FormData(e.currentTarget).get("breakMinutes"),
+    );
+
+    if (!Number.isFinite(submittedBreakMinutes) || submittedBreakMinutes < 0) {
+      toast.error("Break time must be zero or more minutes");
+      return;
+    }
+
     const payload = {
       name: form.name.trim(),
       personalEmail: form.personalEmail.trim() || undefined,
@@ -923,7 +940,7 @@ function NewEmployeeSheet({
       officeStartTime: form.officeStartTime,
       officeEndTime: form.officeEndTime,
       gracePeriodMinutes: Number(form.gracePeriodMinutes),
-      breakMinutes: Number(form.breakMinutes),
+      breakMinutes: submittedBreakMinutes,
       basicSalary: Number(form.basicSalary),
       allowances: Number(form.allowances) || 0,
       casualLeaveQuota: Number(form.casualLeaveQuota),
@@ -1006,7 +1023,22 @@ function NewEmployeeSheet({
       update.mutate(
         { id: editingEmployee.id, data: { ...payload, role: form.role } as any },
         {
-          onSuccess: () => {
+          onSuccess: (updatedEmployee) => {
+            if (updatedEmployee.breakMinutes !== submittedBreakMinutes) {
+              toast.error("Break time was not saved. Please try again.");
+              qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
+              return;
+            }
+
+            qc.setQueryData(
+              getListEmployeesQueryKey(),
+              (current: any[] | undefined) =>
+                current?.map((employee) =>
+                  employee.id === editingEmployee.id
+                    ? updatedEmployee
+                    : employee,
+                ) ?? current,
+            );
             toast.success(`${form.name} updated`);
             qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
             qc.invalidateQueries({ queryKey: getGetAdminDashboardQueryKey() });
@@ -1542,16 +1574,17 @@ function NewEmployeeSheet({
               <Field label="Break (min)" required>
                 <Input
                   required
+                  name="breakMinutes"
                   type="number"
                   min={0}
                   step={5}
                   value={form.breakMinutes}
                   onChange={(e) => {
                     setBreakMinutesTouched(true);
-                    setForm({
-                      ...form,
+                    setForm((current) => ({
+                      ...current,
                       breakMinutes: Number(e.target.value),
-                    });
+                    }));
                   }}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
