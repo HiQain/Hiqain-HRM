@@ -483,7 +483,6 @@ router.post(
     // Attendance thresholds:
     // - under 25% of the shift => absent
     // - under 50% of the shift => half-day
-    const fullDayMinutes = officeMinutes(emp);
     const normalized = normalizeAttendanceStatus(
       {
         date: rec.date,

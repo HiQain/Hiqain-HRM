@@ -29,8 +29,8 @@ export function AttendanceRuleHint({
 
   return (
     <p className={`text-xs text-muted-foreground ${className}`.trim()}>
-      Late after {formatHM12(cutoff)}. Full shift hours on checkout convert late to
-      present; under 25% worked time counts as absent.
+      Late after {formatHM12(cutoff)}. Completing the required hours (shift minus
+      grace) converts late to present; under 25% worked time counts as absent.
     </p>
   );
 }

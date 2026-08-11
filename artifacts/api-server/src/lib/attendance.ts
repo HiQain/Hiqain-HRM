@@ -413,6 +413,10 @@ export function normalizeAttendanceStatus(
       isLate: inferredLate,
     };
   }
+  const requiredFullDayMinutes = Math.max(
+    0,
+    fullDayMinutes - Math.max(0, emp.gracePeriodMinutes),
+  );
 
   if (effective.workedMinutes < fullDayMinutes / 4) {
     return {
@@ -429,9 +433,11 @@ export function normalizeAttendanceStatus(
   }
 
   if (inferredLate) {
+    const completedRequiredHours =
+      effective.workedMinutes >= requiredFullDayMinutes;
     return {
-      status: "late",
-      isLate: true,
+      status: completedRequiredHours ? "present" : "late",
+      isLate: !completedRequiredHours,
     };
   }
 
