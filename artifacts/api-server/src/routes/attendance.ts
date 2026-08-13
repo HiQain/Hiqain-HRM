@@ -6,7 +6,7 @@ import {
   leaveRequestsTable,
   remoteWorkRequestsTable,
 } from "@workspace/db";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, isNull, lte } from "drizzle-orm";
 import { getUser, requireAuth } from "../lib/auth";
 import { parseHHMM, ymd } from "../lib/dates";
 import {
@@ -25,6 +25,7 @@ import {
   shiftDateByDays,
   isOvernightShift,
 } from "../lib/attendance";
+import { persistAttendanceAutoCheckout } from "../lib/attendanceAutoCheckout";
 import { isPayrollOffDay, toHolidaySet } from "../lib/payroll";
 import { getSettings } from "./settings";
 import { inArray } from "drizzle-orm";
@@ -48,6 +49,8 @@ function resolveOverrideAttendanceFields(
 
   if (status === "absent") {
     return {
+      status: "absent",
+      isLate: false,
       checkInTime: null,
       checkOutTime: null,
       workedMinutes: 0,
@@ -271,7 +274,11 @@ function serializeRecord(
     employeeName,
     date: r.date,
     checkInTime: r.checkInTime ? r.checkInTime.toISOString() : null,
-    checkOutTime: r.checkOutTime ? r.checkOutTime.toISOString() : null,
+    checkOutTime: effective?.checkOutTime
+      ? effective.checkOutTime.toISOString()
+      : r.checkOutTime
+        ? r.checkOutTime.toISOString()
+        : null,
     workedMinutes: serializedWorkedMinutes,
     pausedAt: effective?.pausedAt
       ? effective.pausedAt.toISOString()
@@ -470,6 +477,19 @@ router.post(
       res.status(400).json({ message: "You haven't checked in for this shift" });
       return;
     }
+    if (await persistAttendanceAutoCheckout(rec, emp, now)) {
+      const autoCheckedOutRows = await db
+        .select()
+        .from(attendanceTable)
+        .where(eq(attendanceTable.id, rec.id))
+        .limit(1);
+      res.json(serializeRecord(autoCheckedOutRows[0]!, emp.name, emp));
+      return;
+    }
+    if (rec.checkOutTime) {
+      res.status(400).json({ message: "You have already checked out" });
+      return;
+    }
     const activePauseMinutes = rec.pausedAt
       ? Math.max(0, Math.floor((now.getTime() - rec.pausedAt.getTime()) / 60000))
       : 0;
@@ -495,7 +515,7 @@ router.post(
       emp,
     );
 
-    await db
+    const checkoutResult = await db
       .update(attendanceTable)
       .set({
         checkOutTime: now,
@@ -505,12 +525,21 @@ router.post(
         isLate: normalized.isLate,
         notes: clearManualAttendanceOverride(rec.notes),
       })
-      .where(eq(attendanceTable.id, rec.id));
+      .where(
+        and(
+          eq(attendanceTable.id, rec.id),
+          isNull(attendanceTable.checkOutTime),
+        ),
+      );
     const updatedRows = await db
       .select()
       .from(attendanceTable)
       .where(eq(attendanceTable.id, rec.id))
       .limit(1);
+    if (checkoutResult[0].affectedRows === 0) {
+      res.json(serializeRecord(updatedRows[0]!, emp.name, emp));
+      return;
+    }
     res.json(serializeRecord(updatedRows[0]!, emp.name, emp));
   },
 );
@@ -558,10 +587,11 @@ router.get(
       return;
     }
     const r = activeRecord;
+    const effective = resolveAttendanceRecordTiming(r, emp, now);
     res.json({
       hasCheckedIn: !!r.checkInTime,
-      hasCheckedOut: !!r.checkOutTime,
-      isPaused: !!r.pausedAt && !r.checkOutTime,
+      hasCheckedOut: !!effective.checkOutTime,
+      isPaused: !!effective.pausedAt && !effective.checkOutTime,
       record: serializeRecord(r, emp.name, emp),
     });
   },
@@ -631,6 +661,10 @@ router.post(
       res.status(400).json({ message: "You need to check in first" });
       return;
     }
+    if (await persistAttendanceAutoCheckout(rec, emp, now)) {
+      res.status(400).json({ message: "You have already checked out" });
+      return;
+    }
     if (rec.checkOutTime) {
       res.status(400).json({ message: "You have already checked out" });
       return;
@@ -685,6 +719,10 @@ router.post(
 
     if (!rec?.checkInTime) {
       res.status(400).json({ message: "You need to check in first" });
+      return;
+    }
+    if (await persistAttendanceAutoCheckout(rec, emp, now)) {
+      res.status(400).json({ message: "You have already checked out" });
       return;
     }
     if (rec.checkOutTime) {

@@ -6,6 +6,10 @@ type ColumnRow = RowDataPacket & {
   column_name: string;
 };
 
+type IndexRow = RowDataPacket & {
+  index_name: string;
+};
+
 async function getCurrentDatabase(): Promise<string> {
   const [rows] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS db");
   const dbName = rows[0]?.["db"];
@@ -48,6 +52,40 @@ async function ensureColumn(
       logger.info(
         { tableName, columnName },
         "Legacy column already existed during compatibility check",
+      );
+      return;
+    }
+    throw error;
+  }
+}
+
+async function ensureIndex(
+  tableName: string,
+  indexName: string,
+  definitionSql: string,
+) {
+  const dbName = await getCurrentDatabase();
+  const [rows] = await pool.execute<IndexRow[]>(
+    `SELECT DISTINCT index_name
+     FROM information_schema.statistics
+     WHERE table_schema = ?
+       AND table_name = ?
+       AND index_name = ?`,
+    [dbName, tableName, indexName],
+  );
+  if (rows.length > 0) return;
+
+  try {
+    await pool.query(
+      `ALTER TABLE \`${tableName}\` ADD INDEX ${definitionSql}`,
+    );
+    logger.info({ tableName, indexName }, "Added missing legacy index");
+  } catch (error) {
+    const code = (error as { code?: string } | undefined)?.code;
+    if (code === "ER_DUP_KEYNAME") {
+      logger.info(
+        { tableName, indexName },
+        "Legacy index already existed during compatibility check",
       );
       return;
     }
@@ -118,6 +156,11 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
     "attendance",
     "work_mode",
     "`work_mode` ENUM('onsite','remote_work') NULL AFTER `status`",
+  );
+  await ensureIndex(
+    "attendance",
+    "attendance_open_checkout_idx",
+    "`attendance_open_checkout_idx` (`check_out_time`, `check_in_time`)",
   );
   await ensureColumn(
     "app_settings",

@@ -19,9 +19,10 @@ function loadWorkspaceEnv() {
 
 loadWorkspaceEnv();
 
-const [{ default: app }, { logger }] = await Promise.all([
+const [{ default: app }, { logger }, { startAttendanceAutoCheckoutJob }] = await Promise.all([
   import("./app"),
   import("./lib/logger"),
+  import("./lib/attendanceAutoCheckout"),
 ]);
 
 const rawPort = process.env["PORT"];
@@ -45,4 +46,5 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  startAttendanceAutoCheckoutJob();
 });

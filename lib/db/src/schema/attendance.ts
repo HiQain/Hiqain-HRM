@@ -2,6 +2,7 @@ import {
   boolean,
   date,
   int,
+  index,
   mysqlEnum,
   mysqlTable,
   timestamp,
@@ -43,6 +44,10 @@ export const attendanceTable = mysqlTable(
     uniqEmpDate: uniqueIndex("attendance_emp_date_unique").on(
       t.employeeId,
       t.date,
+    ),
+    openCheckout: index("attendance_open_checkout_idx").on(
+      t.checkOutTime,
+      t.checkInTime,
     ),
   }),
 );

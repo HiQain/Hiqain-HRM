@@ -224,8 +224,18 @@ export function isAttendanceMissingCheckout(
   now: Date = new Date(),
 ) {
   if (!record.checkInTime || record.checkOutTime) return false;
-  if (hasManualAttendanceOverride(record.notes)) return false;
   return now.getTime() > officeEndForShiftDate(emp, record.date).getTime();
+}
+
+export function hasAttendanceAutoCheckout(notes?: string | null) {
+  return typeof notes === "string" && notes.includes(ATTENDANCE_AUTO_CHECKOUT_TAG);
+}
+
+export function markAttendanceAutoCheckout(notes?: string | null) {
+  const base = stripCheckoutSystemNotes(notes);
+  return base?.trim()
+    ? `${base}\n${ATTENDANCE_AUTO_CHECKOUT_TAG} ${AUTO_CHECKOUT_NOTE}`
+    : `${ATTENDANCE_AUTO_CHECKOUT_TAG} ${AUTO_CHECKOUT_NOTE}`;
 }
 
 export function resolveAttendanceRecordTiming(
@@ -303,6 +313,10 @@ export function deriveAttendanceNotes(
   >,
   now: Date = new Date(),
 ) {
+  if (record.checkOutTime && hasAttendanceAutoCheckout(record.notes)) {
+    return record.notes?.trim() || null;
+  }
+
   const base = stripCheckoutSystemNotes(record.notes);
   const resolved = resolveAttendanceRecordTiming(
     {
@@ -316,9 +330,7 @@ export function deriveAttendanceNotes(
   );
 
   if (resolved.isAutoCheckoutApplied) {
-    return base?.trim()
-      ? `${base}\n${ATTENDANCE_AUTO_CHECKOUT_TAG} ${AUTO_CHECKOUT_NOTE}`
-      : `${ATTENDANCE_AUTO_CHECKOUT_TAG} ${AUTO_CHECKOUT_NOTE}`;
+    return markAttendanceAutoCheckout(base);
   }
 
   if (resolved.isMissingCheckout) {
