@@ -21,7 +21,7 @@ export function formatWorkedDisplay({
   notes?: string | null;
   fallback?: string;
 }) {
-  if (checkInTime && !checkOutTime && isMissingCheckout(notes)) return "Missing";
+  if (checkInTime && isMissingCheckout(notes)) return "Missing";
   if (workedMinutes && workedMinutes > 0) return formatDuration(workedMinutes);
   return fallback;
 }
@@ -37,8 +37,8 @@ export function formatCheckoutDisplay({
   notes?: string | null;
   fallback?: string;
 }) {
-  if (checkOutTime) return formatTime(checkOutTime);
   if (checkInTime && isMissingCheckout(notes)) return "Missing";
+  if (checkOutTime) return formatTime(checkOutTime);
   return fallback;
 }
 

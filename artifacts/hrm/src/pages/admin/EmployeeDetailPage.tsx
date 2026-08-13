@@ -104,7 +104,6 @@ import {
   cn,
   formatCurrency,
   formatDate,
-  formatDuration,
   formatMonth,
   formatTime,
   ymdLocal,
@@ -114,7 +113,10 @@ import {
   buildScheduledHoursTargets,
   normalizeAttendanceWorkedMinutes,
 } from "@/lib/attendanceHours";
-import { formatCheckoutDisplay } from "@/lib/attendanceDisplay";
+import {
+  formatCheckoutDisplay,
+  formatWorkedDisplay,
+} from "@/lib/attendanceDisplay";
 import { inferPercentageBaseAmount } from "@/lib/salary";
 import { buildProvidentFundSummary } from "@/lib/providentFund";
 
@@ -1780,7 +1782,14 @@ function AttendanceTab({
                       notes: "notes" in r ? r.notes : null,
                     })}
                   </TableCell>
-                  <TableCell className="text-right">{formatDuration(r.workedMinutes)}</TableCell>
+                  <TableCell className="text-right">
+                    {formatWorkedDisplay({
+                      checkInTime: r.checkInTime,
+                      checkOutTime: r.checkOutTime,
+                      workedMinutes: r.workedMinutes,
+                      notes: "notes" in r ? r.notes : null,
+                    })}
+                  </TableCell>
                 </TableRow>
               ))
             )}
