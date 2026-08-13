@@ -15,6 +15,7 @@ import {
   attendanceTodayYmd,
   attendanceCandidateShiftDates,
   deriveAttendanceNotes,
+  hasAttendanceAutoCheckout,
   normalizeAttendanceStatus,
   resolveAttendanceRecordTiming,
   selectActiveAttendanceRecord,
@@ -259,6 +260,9 @@ router.get(
           now,
         )
       : null;
+    const wasAutoCheckedOut =
+      hasAttendanceAutoCheckout(todayRec?.notes) ||
+      Boolean(effectiveTodayRec?.isAutoCheckoutApplied);
     const normalizedTodayRec = todayRec
       ? normalizeAttendanceStatus(
           {
@@ -287,11 +291,13 @@ router.get(
             checkInTime: todayRec.checkInTime
               ? todayRec.checkInTime.toISOString()
               : null,
-            checkOutTime: effectiveTodayRec?.checkOutTime
-              ? effectiveTodayRec.checkOutTime.toISOString()
-              : todayRec.checkOutTime
-                ? todayRec.checkOutTime.toISOString()
-                : null,
+            checkOutTime: wasAutoCheckedOut
+              ? null
+              : effectiveTodayRec?.checkOutTime
+                ? effectiveTodayRec.checkOutTime.toISOString()
+                : todayRec.checkOutTime
+                  ? todayRec.checkOutTime.toISOString()
+                  : null,
             workedMinutes: serializedWorkedMinutes,
             pausedAt: effectiveTodayRec?.pausedAt
               ? effectiveTodayRec.pausedAt.toISOString()

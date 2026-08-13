@@ -16,7 +16,7 @@ const ATTENDANCE_TIMEZONE_OFFSET_MINUTES = 5 * 60;
 const MANUAL_OVERRIDE_NOTE_PREFIX = "[manual_attendance_override]";
 const ATTENDANCE_REMOTE_WORK_MODE_TAG = "[attendance_work_mode:remote_work]";
 const ATTENDANCE_MISSING_CHECKOUT_TAG = "[attendance_missing_checkout]";
-const ATTENDANCE_AUTO_CHECKOUT_TAG = "[attendance_auto_checkout]";
+export const ATTENDANCE_AUTO_CHECKOUT_TAG = "[attendance_auto_checkout]";
 const MISSING_CHECKOUT_NOTE = "Check-out missing.";
 const AUTO_CHECKOUT_NOTE =
   "Auto checked out 6 hours after shift end because check-out was not recorded.";
@@ -203,6 +203,10 @@ function stripCheckoutSystemNotes(notes?: string | null): string | null {
     .replace(/\n{2,}/g, "\n")
     .trim();
   return stripped.length > 0 ? stripped : null;
+}
+
+export function clearAttendanceCheckoutSystemNotes(notes?: string | null) {
+  return stripCheckoutSystemNotes(notes);
 }
 
 export function missingCheckoutGraceEndsAt(

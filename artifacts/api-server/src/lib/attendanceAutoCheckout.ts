@@ -1,6 +1,8 @@
 import { attendanceTable, db, employeesTable } from "@workspace/db";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, like, notLike, or } from "drizzle-orm";
 import {
+  ATTENDANCE_AUTO_CHECKOUT_TAG,
+  hasAttendanceAutoCheckout,
   markAttendanceAutoCheckout,
   normalizeAttendanceStatus,
   resolveAttendanceRecordTiming,
@@ -14,6 +16,8 @@ export async function persistAttendanceAutoCheckout(
   employee: typeof employeesTable.$inferSelect,
   now: Date = new Date(),
 ): Promise<boolean> {
+  if (hasAttendanceAutoCheckout(attendance.notes)) return true;
+
   const resolved = resolveAttendanceRecordTiming(attendance, employee, now);
   if (!resolved.isAutoCheckoutApplied || !resolved.checkOutTime) return false;
 
@@ -31,7 +35,7 @@ export async function persistAttendanceAutoCheckout(
   const result = await db
     .update(attendanceTable)
     .set({
-      checkOutTime: resolved.checkOutTime,
+      checkOutTime: null,
       workedMinutes: resolved.workedMinutes,
       pausedAt: null,
       pausedMinutes: resolved.pausedMinutes,
@@ -43,10 +47,25 @@ export async function persistAttendanceAutoCheckout(
       and(
         eq(attendanceTable.id, attendance.id),
         isNull(attendanceTable.checkOutTime),
+        or(
+          isNull(attendanceTable.notes),
+          notLike(
+            attendanceTable.notes,
+            `%${ATTENDANCE_AUTO_CHECKOUT_TAG}%`,
+          ),
+        ),
       ),
     );
 
-  return result[0].affectedRows > 0;
+  if (result[0].affectedRows > 0) return true;
+
+  const currentRows = await db
+    .select({ notes: attendanceTable.notes })
+    .from(attendanceTable)
+    .where(eq(attendanceTable.id, attendance.id))
+    .limit(1);
+
+  return hasAttendanceAutoCheckout(currentRows[0]?.notes);
 }
 
 /**
@@ -71,6 +90,13 @@ export async function reconcileOverdueAttendance(
       and(
         isNotNull(attendanceTable.checkInTime),
         isNull(attendanceTable.checkOutTime),
+        or(
+          isNull(attendanceTable.notes),
+          notLike(
+            attendanceTable.notes,
+            `%${ATTENDANCE_AUTO_CHECKOUT_TAG}%`,
+          ),
+        ),
       ),
     );
 
@@ -85,19 +111,41 @@ export async function reconcileOverdueAttendance(
   return updatedCount;
 }
 
+export async function clearPersistedAutoCheckoutTimes(): Promise<number> {
+  const result = await db
+    .update(attendanceTable)
+    .set({ checkOutTime: null })
+    .where(
+      and(
+        isNotNull(attendanceTable.checkOutTime),
+        like(
+          attendanceTable.notes,
+          `%${ATTENDANCE_AUTO_CHECKOUT_TAG}%`,
+        ),
+      ),
+    );
+
+  return result[0].affectedRows;
+}
+
 export function startAttendanceAutoCheckoutJob(
   intervalMs: number = DEFAULT_SWEEP_INTERVAL_MS,
 ) {
   let isRunning = false;
+  let legacyTimesCleared = false;
 
   const runSweep = async () => {
     if (isRunning) return;
     isRunning = true;
     try {
+      const clearedCheckoutCount = legacyTimesCleared
+        ? 0
+        : await clearPersistedAutoCheckoutTimes();
+      legacyTimesCleared = true;
       const updatedCount = await reconcileOverdueAttendance();
-      if (updatedCount > 0) {
+      if (clearedCheckoutCount > 0 || updatedCount > 0) {
         logger.info(
-          { updatedCount },
+          { clearedCheckoutCount, updatedCount },
           "Persisted overdue attendance auto-checkouts",
         );
       }

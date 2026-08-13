@@ -12,8 +12,10 @@ import { parseHHMM, ymd } from "../lib/dates";
 import {
   attendanceCandidateShiftDates,
   attendanceTodayYmd,
+  clearAttendanceCheckoutSystemNotes,
   clearManualAttendanceOverride,
   deriveAttendanceNotes,
+  hasAttendanceAutoCheckout,
   markManualAttendanceOverride,
   normalizeAttendanceStatus,
   officeMinutes,
@@ -259,6 +261,9 @@ function serializeRecord(
   >,
 ) {
   const effective = employee ? resolveAttendanceRecordTiming(r, employee) : null;
+  const wasAutoCheckedOut =
+    hasAttendanceAutoCheckout(r.notes) ||
+    Boolean(effective?.isAutoCheckoutApplied);
   const normalized = employee ? normalizeAttendanceStatus(r, employee) : null;
   const serializedStatus = serializeAttendanceStatus(
     normalized?.status ?? r.status,
@@ -274,11 +279,13 @@ function serializeRecord(
     employeeName,
     date: r.date,
     checkInTime: r.checkInTime ? r.checkInTime.toISOString() : null,
-    checkOutTime: effective?.checkOutTime
-      ? effective.checkOutTime.toISOString()
-      : r.checkOutTime
-        ? r.checkOutTime.toISOString()
-        : null,
+    checkOutTime: wasAutoCheckedOut
+      ? null
+      : effective?.checkOutTime
+        ? effective.checkOutTime.toISOString()
+        : r.checkOutTime
+          ? r.checkOutTime.toISOString()
+          : null,
     workedMinutes: serializedWorkedMinutes,
     pausedAt: effective?.pausedAt
       ? effective.pausedAt.toISOString()
@@ -1320,6 +1327,10 @@ router.post(
             existing[0]!,
           );
       if (!overrideFields) return;
+      const overrideNotes =
+        isEditingTimes && overrideFields.checkOutTime
+          ? clearAttendanceCheckoutSystemNotes(notes ?? existing[0]!.notes)
+          : (notes ?? existing[0]!.notes);
       await db
         .update(attendanceTable)
         .set({
@@ -1329,7 +1340,7 @@ router.post(
           checkOutTime: overrideFields.checkOutTime,
           workedMinutes: overrideFields.workedMinutes,
           notes: setWorkModeOverrideNote(
-            markManualAttendanceOverride(notes ?? existing[0]!.notes),
+            markManualAttendanceOverride(overrideNotes),
             currentWorkModeOverride,
           ),
         })

@@ -11,6 +11,7 @@ import {
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import {
   deriveAttendanceNotes,
+  hasAttendanceAutoCheckout,
   normalizeAttendanceStatus,
   resolveAttendanceRecordTiming,
 } from "../lib/attendance";
@@ -368,7 +369,11 @@ router.get(
           status,
           label: statusCellLabel(status, leaveType),
           checkInTime: record?.checkInTime?.toISOString() ?? null,
-          checkOutTime: effective?.checkOutTime?.toISOString() ?? null,
+          checkOutTime:
+            hasAttendanceAutoCheckout(record?.notes) ||
+            effective?.isAutoCheckoutApplied
+            ? null
+            : (effective?.checkOutTime?.toISOString() ?? null),
           workedMinutes:
             status === "absent"
               ? 0
