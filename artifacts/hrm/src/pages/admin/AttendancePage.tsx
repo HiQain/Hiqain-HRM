@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  type MouseEventHandler,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -68,6 +73,13 @@ import { getApiUrl } from "@/lib/api";
 type StatusFilter = "all" | "absent" | "leave" | "late";
 type TimeDraft = { checkInTime: string; checkOutTime: string };
 
+const openTimePicker: MouseEventHandler<HTMLInputElement> = (event) => {
+  const input = event.currentTarget;
+  if (!input.disabled) {
+    input.showPicker?.();
+  }
+};
+
 function normalizeManualAttendanceStatus(
   status: string,
   isLate?: boolean,
@@ -113,13 +125,7 @@ function WorkModeToggle({
       )}
       aria-label={`Work mode: ${mode === "onsite" ? "Onsite" : "Remote Work"}. Click to switch to ${nextMode === "onsite" ? "Onsite" : "Remote Work"}.`}
     >
-      <span
-        className={cn(
-          "inline-block h-1.5 w-1.5 rounded-full",
-          mode === "onsite" ? "bg-slate-500" : "bg-teal-500",
-        )}
-      />
-      {mode === "onsite" ? "Onsite" : "Remote Work"}
+      {mode === "onsite" ? "Onsite" : "Remote"}
     </button>
   );
 }
@@ -756,7 +762,7 @@ export function AdminAttendancePage() {
                       />
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={attendanceStatus} />
+                      <StatusBadge status={attendanceStatus} showDot={false} />
                     </TableCell>
                     <TableCell>
                       {isLockedStatus ? (
@@ -799,8 +805,9 @@ export function AdminAttendancePage() {
                               e.target.value,
                             )
                           }
+                          onClick={openTimePicker}
                           disabled={isSavingTime}
-                          className="h-8 w-[104px] min-w-0 px-2 pr-1 text-xs"
+                          className="attendance-time-input h-8 w-[104px] min-w-0 cursor-pointer px-2 text-xs"
                         />
                       ) : (
                         display.checkIn
@@ -820,8 +827,9 @@ export function AdminAttendancePage() {
                                 e.target.value,
                               )
                             }
+                            onClick={openTimePicker}
                             disabled={isSavingTime}
-                            className="h-8 w-[104px] min-w-0 px-2 pr-1 text-xs"
+                            className="attendance-time-input h-8 w-[104px] min-w-0 cursor-pointer px-2 text-xs"
                           />
                           {hasTimeChanged && (
                             <Button

@@ -348,7 +348,7 @@ export function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Global Settings"
+        title="General"
         description="Defaults applied to new employees and company-wide rules. Changes take effect for everyone immediately on save."
       />
 

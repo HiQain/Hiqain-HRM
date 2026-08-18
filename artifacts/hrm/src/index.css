@@ -177,3 +177,8 @@
 .rte-content.prose :where(p):first-child { margin-top: 0; }
 .rte-content.prose :where(p):last-child { margin-bottom: 0; }
 .rte-content.prose :where(ul, ol) { margin-top: 0.25rem; margin-bottom: 0.25rem; }
+
+/* The attendance time picker opens from the full input, so its icon is redundant. */
+.attendance-time-input::-webkit-calendar-picker-indicator {
+  display: none;
+}

@@ -133,7 +133,7 @@ export function MySettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Settings"
+        title="General"
         description="Policies and company-wide rules set by your HR team."
       />
 

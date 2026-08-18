@@ -136,13 +136,7 @@ function WorkModeToggle({
           : "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100",
       )}
     >
-      <span
-        className={cn(
-          "inline-block h-1.5 w-1.5 rounded-full",
-          mode === "onsite" ? "bg-slate-500" : "bg-teal-500",
-        )}
-      />
-      {mode === "onsite" ? "Onsite" : "Remote Work"}
+      {mode === "onsite" ? "Onsite" : "Remote"}
     </button>
   );
 }
@@ -672,7 +666,7 @@ function ListView({
                         />
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={attendanceStatus} />
+                        <StatusBadge status={attendanceStatus} showDot={false} />
                       </TableCell>
                       <TableCell>
                         {isLockedStatus ? (

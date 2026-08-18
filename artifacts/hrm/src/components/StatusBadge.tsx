@@ -67,9 +67,11 @@ const DOTS: Record<Status, string> = {
 export const StatusBadge = memo(function StatusBadge({
   status,
   className,
+  showDot = true,
 }: {
   status: Status | string;
   className?: string;
+  showDot?: boolean;
 }) {
   const s = (status as Status) ?? "pending";
   return (
@@ -80,12 +82,14 @@ export const StatusBadge = memo(function StatusBadge({
         className,
       )}
     >
-      <span
-        className={cn(
-          "inline-block h-1.5 w-1.5 rounded-full",
-          DOTS[s] ?? DOTS.pending,
-        )}
-      />
+      {showDot ? (
+        <span
+          className={cn(
+            "inline-block h-1.5 w-1.5 rounded-full",
+            DOTS[s] ?? DOTS.pending,
+          )}
+        />
+      ) : null}
       {LABELS[s] ?? status}
     </span>
   );
