@@ -1208,7 +1208,20 @@ export const GetMonthlyAdminViewResponse = zod.object({
   "netSalary": zod.number(),
   "generatedAt": zod.coerce.date().nullish()
 }))
+}),
+  "columnPreferences": zod.object({
+  "attendance": zod.array(zod.string().min(1).max(64)).max(64),
+  "salary": zod.array(zod.string().min(1).max(64)).max(32)
 })
+})
+
+
+/**
+ * @summary Save the current user's monthly-view hidden columns
+ */
+export const UpdateMonthlyViewColumnPreferencesBody = zod.object({
+  "attendance": zod.array(zod.string().min(1).max(64)).max(64),
+  "salary": zod.array(zod.string().min(1).max(64)).max(32)
 })
 
 

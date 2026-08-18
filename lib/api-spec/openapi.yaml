@@ -559,6 +559,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/MonthlyAdminViewResponse"
 
+  /views/monthly/column-preferences:
+    put:
+      operationId: updateMonthlyViewColumnPreferences
+      tags: [reports]
+      summary: Save the current user's monthly-view hidden columns
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MonthlyViewColumnPreferences"
+      responses:
+        "200":
+          description: Saved monthly-view column preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyViewColumnPreferences"
+
   /remote-work:
     get:
       operationId: listRemoteWorkRequests
@@ -2875,7 +2894,7 @@ components:
         generatedAt: { type: string, nullable: true, format: date-time }
     MonthlyAdminViewResponse:
       type: object
-      required: [month, year, days, attendance, salary]
+      required: [month, year, days, attendance, salary, columnPreferences]
       properties:
         month: { type: integer }
         year: { type: integer }
@@ -2900,6 +2919,22 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/MonthlySalaryRow"
+        columnPreferences:
+          $ref: "#/components/schemas/MonthlyViewColumnPreferences"
+    MonthlyViewColumnPreferences:
+      type: object
+      required: [attendance, salary]
+      properties:
+        attendance:
+          type: array
+          maxItems: 64
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 64 }
+        salary:
+          type: array
+          maxItems: 32
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 64 }
     NewsPost:
       type: object
       required: [id, authorId, authorName, title, body, createdAt]

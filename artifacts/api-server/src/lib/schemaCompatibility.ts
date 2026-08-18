@@ -19,9 +19,7 @@ async function getCurrentDatabase(): Promise<string> {
   return dbName;
 }
 
-async function getExistingColumns(
-  tableName: string,
-): Promise<Set<string>> {
+async function getExistingColumns(tableName: string): Promise<Set<string>> {
   const dbName = await getCurrentDatabase();
   const [rows] = await pool.execute<ColumnRow[]>(
     `SELECT column_name
@@ -76,9 +74,7 @@ async function ensureIndex(
   if (rows.length > 0) return;
 
   try {
-    await pool.query(
-      `ALTER TABLE \`${tableName}\` ADD INDEX ${definitionSql}`,
-    );
+    await pool.query(`ALTER TABLE \`${tableName}\` ADD INDEX ${definitionSql}`);
     logger.info({ tableName, indexName }, "Added missing legacy index");
   } catch (error) {
     const code = (error as { code?: string } | undefined)?.code;
@@ -93,15 +89,15 @@ async function ensureIndex(
   }
 }
 
-async function ensureTable(
-  tableName: string,
-  createSql: string,
-) {
+async function ensureTable(tableName: string, createSql: string) {
   try {
     await pool.query(createSql);
     logger.info({ tableName }, "Ensured compatibility table");
   } catch (error) {
-    logger.error({ err: error, tableName }, "Could not ensure compatibility table");
+    logger.error(
+      { err: error, tableName },
+      "Could not ensure compatibility table",
+    );
     throw error;
   }
 }
@@ -111,6 +107,11 @@ export async function ensureLegacySchemaCompatibility(): Promise<void> {
     "users",
     "is_active",
     "`is_active` TINYINT(1) NOT NULL DEFAULT 1 AFTER `role`",
+  );
+  await ensureColumn(
+    "users",
+    "monthly_view_column_preferences",
+    '`monthly_view_column_preferences` JSON NOT NULL DEFAULT (\'{"attendance":[],"salary":[]}\') AFTER `must_change_password`',
   );
   await ensureColumn(
     "employees",

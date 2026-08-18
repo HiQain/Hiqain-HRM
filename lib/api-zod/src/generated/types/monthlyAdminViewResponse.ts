@@ -7,6 +7,7 @@
  */
 import type { MonthlyAdminViewResponseAttendance } from './monthlyAdminViewResponseAttendance';
 import type { MonthlyAdminViewResponseSalary } from './monthlyAdminViewResponseSalary';
+import type { MonthlyViewColumnPreferences } from './monthlyViewColumnPreferences';
 import type { MonthlyViewDay } from './monthlyViewDay';
 
 export interface MonthlyAdminViewResponse {
@@ -15,4 +16,5 @@ export interface MonthlyAdminViewResponse {
   days: MonthlyViewDay[];
   attendance: MonthlyAdminViewResponseAttendance;
   salary: MonthlyAdminViewResponseSalary;
+  columnPreferences: MonthlyViewColumnPreferences;
 }

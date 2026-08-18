@@ -100,6 +100,7 @@ export * from './monthlyAttendanceRowEmploymentStatus';
 export * from './monthlySalaryRow';
 export * from './monthlySalaryRowEmploymentStatus';
 export * from './monthlySalaryRowPayrollStatus';
+export * from './monthlyViewColumnPreferences';
 export * from './monthlyViewDay';
 export * from './newsPost';
 export * from './payslip';

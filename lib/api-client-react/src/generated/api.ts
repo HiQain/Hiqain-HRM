@@ -71,6 +71,7 @@ import type {
   LoginRequest,
   MentionableMember,
   MonthlyAdminViewResponse,
+  MonthlyViewColumnPreferences,
   NewsPost,
   Payslip,
   RemoteWorkRequest,
@@ -2291,6 +2292,30 @@ export function useGetMonthlyAdminView<TData = Awaited<ReturnType<typeof getMont
 
 
 
+
+
+
+export const getUpdateMonthlyViewColumnPreferencesUrl = () => {
+  return `/api/views/monthly/column-preferences`
+}
+
+/**
+ * @summary Save the current user's monthly-view hidden columns
+ */
+export const updateMonthlyViewColumnPreferences = async (
+  monthlyViewColumnPreferences: MonthlyViewColumnPreferences,
+  options?: RequestInit,
+): Promise<MonthlyViewColumnPreferences> => {
+  return customFetch<MonthlyViewColumnPreferences>(
+    getUpdateMonthlyViewColumnPreferencesUrl(),
+    {
+      ...options,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(monthlyViewColumnPreferences),
+    },
+  )
+}
 
 
 

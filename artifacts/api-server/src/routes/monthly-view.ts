@@ -7,7 +7,10 @@ import {
   payslipsTable,
   salaryComponentsTable,
   salaryEventsTable,
+  usersTable,
+  type MonthlyViewColumnPreferences,
 } from "@workspace/db";
+import { UpdateMonthlyViewColumnPreferencesBody } from "@workspace/api-zod";
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import {
   deriveAttendanceNotes,
@@ -17,11 +20,51 @@ import {
 } from "../lib/attendance";
 import { addMonths, parseDate, ymd } from "../lib/dates";
 import { computePakistanMonthlySalaryTax } from "../lib/payroll";
-import { requireAuth } from "../lib/auth";
+import { getUser, requireAuth } from "../lib/auth";
 import { resolveCompensationForDate } from "../lib/salary";
 import { getSettings } from "./settings";
 
 const router: IRouter = Router();
+
+const EMPTY_COLUMN_PREFERENCES: MonthlyViewColumnPreferences = {
+  attendance: [],
+  salary: [],
+};
+
+function normalizeColumnPreferenceList(
+  value: unknown,
+  maxItems: number,
+): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(
+    new Set(
+      value.filter(
+        (item): item is string =>
+          typeof item === "string" && item.length > 0 && item.length <= 64,
+      ),
+    ),
+  ).slice(0, maxItems);
+}
+
+function normalizeColumnPreferences(
+  value: unknown,
+): MonthlyViewColumnPreferences {
+  if (typeof value === "string") {
+    try {
+      return normalizeColumnPreferences(JSON.parse(value));
+    } catch {
+      return EMPTY_COLUMN_PREFERENCES;
+    }
+  }
+
+  if (!value || typeof value !== "object") return EMPTY_COLUMN_PREFERENCES;
+  const preferences = value as Record<string, unknown>;
+  return {
+    attendance: normalizeColumnPreferenceList(preferences.attendance, 64),
+    salary: normalizeColumnPreferenceList(preferences.salary, 32),
+  };
+}
 
 function subtractDay(d: Date): Date {
   const next = new Date(d.getTime());
@@ -50,7 +93,9 @@ function isManualTaxComponent(label: string) {
   return /\btax\b/i.test(label);
 }
 
-function isComponentTaxable(component: typeof salaryComponentsTable.$inferSelect) {
+function isComponentTaxable(
+  component: typeof salaryComponentsTable.$inferSelect,
+) {
   return component.isTaxable === 1;
 }
 
@@ -131,7 +176,10 @@ function computePayrollTaxFromPayslip(
     if (isComponentTaxable(component)) taxableRecurringComponentTotal += amount;
   }
 
-  const additionalBonus = Math.max(0, roundAmount(Number(payslip.bonus) - commissionTotal));
+  const additionalBonus = Math.max(
+    0,
+    roundAmount(Number(payslip.bonus) - commissionTotal),
+  );
   return roundAmount(
     computePakistanMonthlySalaryTax(
       basicSalary +
@@ -186,6 +234,7 @@ router.get(
   "/views/monthly",
   requireAuth(["admin", "hr"]),
   async (req, res): Promise<void> => {
+    const actor = getUser(req);
     const month = Number(req.query["month"]);
     const year = Number(req.query["year"]);
     if (
@@ -196,7 +245,9 @@ router.get(
       year < 2000 ||
       year > 2100
     ) {
-      res.status(400).json({ message: "month and year query params are required" });
+      res
+        .status(400)
+        .json({ message: "month and year query params are required" });
       return;
     }
 
@@ -222,33 +273,51 @@ router.get(
     });
     const totalOffDays = days.filter((day) => day.isOffDay).length;
 
-    const [employees, attendance, leaves, payslips, components, incrementEvents] =
-      await Promise.all([
-        db.select().from(employeesTable).orderBy(asc(employeesTable.joiningDate)),
-        db
-          .select()
-          .from(attendanceTable)
-          .where(and(gte(attendanceTable.date, start), lte(attendanceTable.date, end))),
-        db
-          .select()
-          .from(leaveRequestsTable)
-          .where(
-            and(
-              eq(leaveRequestsTable.status, "approved"),
-              lte(leaveRequestsTable.startDate, end),
-              gte(leaveRequestsTable.endDate, start),
-            ),
+    const [
+      employees,
+      attendance,
+      leaves,
+      payslips,
+      components,
+      incrementEvents,
+      userPreferenceRows,
+    ] = await Promise.all([
+      db.select().from(employeesTable).orderBy(asc(employeesTable.joiningDate)),
+      db
+        .select()
+        .from(attendanceTable)
+        .where(
+          and(gte(attendanceTable.date, start), lte(attendanceTable.date, end)),
+        ),
+      db
+        .select()
+        .from(leaveRequestsTable)
+        .where(
+          and(
+            eq(leaveRequestsTable.status, "approved"),
+            lte(leaveRequestsTable.startDate, end),
+            gte(leaveRequestsTable.endDate, start),
           ),
-        db
-          .select()
-          .from(payslipsTable)
-          .where(and(eq(payslipsTable.month, month), eq(payslipsTable.year, year))),
-        db.select().from(salaryComponentsTable),
-        db
-          .select()
-          .from(salaryEventsTable)
-          .where(eq(salaryEventsTable.type, "increment")),
-      ]);
+        ),
+      db
+        .select()
+        .from(payslipsTable)
+        .where(
+          and(eq(payslipsTable.month, month), eq(payslipsTable.year, year)),
+        ),
+      db.select().from(salaryComponentsTable),
+      db
+        .select()
+        .from(salaryEventsTable)
+        .where(eq(salaryEventsTable.type, "increment")),
+      db
+        .select({
+          columnPreferences: usersTable.monthlyViewColumnPreferences,
+        })
+        .from(usersTable)
+        .where(eq(usersTable.id, actor.id))
+        .limit(1),
+    ]);
 
     const attendanceByEmployee = new Map<
       number,
@@ -256,7 +325,8 @@ router.get(
     >();
     for (const record of attendance) {
       const employeeMap =
-        attendanceByEmployee.get(record.employeeId) ?? new Map<string, typeof attendanceTable.$inferSelect>();
+        attendanceByEmployee.get(record.employeeId) ??
+        new Map<string, typeof attendanceTable.$inferSelect>();
       employeeMap.set(record.date, record);
       attendanceByEmployee.set(record.employeeId, employeeMap);
     }
@@ -303,7 +373,9 @@ router.get(
       const joiningDate = employee.joiningDate;
       const leftDate = employee.leftDate;
       const probationEndDate = ymd(
-        subtractDay(addMonths(parseDate(joiningDate), employee.probationMonths)),
+        subtractDay(
+          addMonths(parseDate(joiningDate), employee.probationMonths),
+        ),
       );
       const recordMap = attendanceByEmployee.get(employee.id) ?? new Map();
       const leaveMap = leaveTypeByEmployeeDate.get(employee.id) ?? new Map();
@@ -348,7 +420,9 @@ router.get(
 
         const leaveType = leaveMap.get(day.date) ?? null;
         const record = recordMap.get(day.date);
-        const normalized = record ? normalizeAttendanceStatus(record, employee) : null;
+        const normalized = record
+          ? normalizeAttendanceStatus(record, employee)
+          : null;
         const effective = record
           ? resolveAttendanceRecordTiming(record, employee)
           : null;
@@ -372,8 +446,8 @@ router.get(
           checkOutTime:
             hasAttendanceAutoCheckout(record?.notes) ||
             effective?.isAutoCheckoutApplied
-            ? null
-            : (effective?.checkOutTime?.toISOString() ?? null),
+              ? null
+              : (effective?.checkOutTime?.toISOString() ?? null),
           workedMinutes:
             status === "absent"
               ? 0
@@ -417,7 +491,9 @@ router.get(
       const allowances = payslip
         ? Number(payslip.allowances)
         : Number(resolvedCompensation.allowances);
-      const grossSalary = roundAmount(basicSalary + allowances + Number(payslip?.bonus ?? 0));
+      const grossSalary = roundAmount(
+        basicSalary + allowances + Number(payslip?.bonus ?? 0),
+      );
       const payrollTax = payslip
         ? computePayrollTaxFromPayslip(payslip, employeeComponents)
         : computeProjectedPayrollTax(
@@ -466,7 +542,31 @@ router.get(
       salary: {
         rows: salaryRows,
       },
+      columnPreferences: normalizeColumnPreferences(
+        userPreferenceRows[0]?.columnPreferences,
+      ),
     });
+  },
+);
+
+router.put(
+  "/views/monthly/column-preferences",
+  requireAuth(["admin", "hr"]),
+  async (req, res): Promise<void> => {
+    const parsed = UpdateMonthlyViewColumnPreferencesBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ message: "Invalid column preferences" });
+      return;
+    }
+
+    const actor = getUser(req);
+    const columnPreferences = normalizeColumnPreferences(parsed.data);
+    await db
+      .update(usersTable)
+      .set({ monthlyViewColumnPreferences: columnPreferences })
+      .where(eq(usersTable.id, actor.id));
+
+    res.json(columnPreferences);
   },
 );
 

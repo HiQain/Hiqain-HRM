@@ -1430,12 +1430,18 @@ export type MonthlyAdminViewResponseSalary = {
   rows: MonthlySalaryRow[];
 };
 
+export interface MonthlyViewColumnPreferences {
+  attendance: string[];
+  salary: string[];
+}
+
 export interface MonthlyAdminViewResponse {
   month: number;
   year: number;
   days: MonthlyViewDay[];
   attendance: MonthlyAdminViewResponseAttendance;
   salary: MonthlyAdminViewResponseSalary;
+  columnPreferences: MonthlyViewColumnPreferences;
 }
 
 export interface NewsPost {

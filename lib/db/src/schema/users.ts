@@ -1,11 +1,17 @@
 import {
   boolean,
   int,
+  json,
   mysqlEnum,
   mysqlTable,
   timestamp,
   varchar,
 } from "drizzle-orm/mysql-core";
+
+export type MonthlyViewColumnPreferences = {
+  attendance: string[];
+  salary: string[];
+};
 
 export const usersTable = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -16,6 +22,10 @@ export const usersTable = mysqlTable("users", {
     .default("employee"),
   isActive: boolean("is_active").notNull().default(true),
   mustChangePassword: boolean("must_change_password").notNull().default(true),
+  monthlyViewColumnPreferences: json("monthly_view_column_preferences")
+    .$type<MonthlyViewColumnPreferences>()
+    .notNull()
+    .default({ attendance: [], salary: [] }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
