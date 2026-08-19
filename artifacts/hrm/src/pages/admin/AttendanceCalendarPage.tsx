@@ -130,7 +130,7 @@ function WorkModeToggle({
       disabled={disabled}
       onClick={() => onChange(nextMode)}
       className={cn(
-        "inline-flex min-w-[116px] items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         mode === "onsite"
           ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
           : "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100",
