@@ -571,8 +571,8 @@ export function AdminAttendancePage() {
 
       <div className="space-y-3 rounded-xl border border-border bg-card shadow-sm">
         <div className="flex flex-col gap-3 border-b border-border p-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
-          <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
-            <div className="relative w-full">
+          <div className="flex w-full flex-wrap items-center gap-3">
+            <div className="relative min-w-[220px] flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
@@ -585,7 +585,7 @@ export function AdminAttendancePage() {
               value={departmentFilter}
               onValueChange={setDepartmentFilter}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
               <SelectContent>
@@ -597,13 +597,32 @@ export function AdminAttendancePage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              type="button"
-              variant={sortByJoiningDate ? "default" : "outline"}
-              onClick={() => setSortByJoiningDate((current) => !current)}
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => setStatusFilter(v as StatusFilter)}
             >
-              Date of joining
-            </Button>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="absent">Absent</SelectItem>
+                <SelectItem value="leave">Leave</SelectItem>
+                <SelectItem value="late">Late</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={sortByJoiningDate ? "joining" : "default"}
+              onValueChange={(v) => setSortByJoiningDate(v === "joining")}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default order</SelectItem>
+                <SelectItem value="joining">Date of joining</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               type="button"
               variant="ghost"
@@ -617,34 +636,6 @@ export function AdminAttendancePage() {
             >
               Clear filters
             </Button>
-          </div>
-          <div className="flex flex-nowrap items-center gap-2 self-start overflow-x-auto 2xl:self-auto">
-            <FilterChip
-              label="All"
-              active={statusFilter === "all"}
-              onClick={() => setStatusFilter("all")}
-            />
-            <FilterChip
-              label="Absent"
-              active={statusFilter === "absent"}
-              onClick={() =>
-                setStatusFilter((s) => (s === "absent" ? "all" : "absent"))
-              }
-            />
-            <FilterChip
-              label="Leave"
-              active={statusFilter === "leave"}
-              onClick={() =>
-                setStatusFilter((s) => (s === "leave" ? "all" : "leave"))
-              }
-            />
-            <FilterChip
-              label="Late"
-              active={statusFilter === "late"}
-              onClick={() =>
-                setStatusFilter((s) => (s === "late" ? "all" : "late"))
-              }
-            />
           </div>
         </div>
         <Table>
@@ -869,29 +860,5 @@ export function AdminAttendancePage() {
   );
 }
 
-function FilterChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-        active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-background text-muted-foreground hover:bg-muted",
-      )}
-    >
-      {label}
-    </button>
-  );
-}
 
 

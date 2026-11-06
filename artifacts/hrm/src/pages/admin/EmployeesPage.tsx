@@ -2211,8 +2211,23 @@ export function NewEmployeeSheet({
 type CsvRow = Record<string, string>;
 
 function getCsvValue(row: CsvRow, ...keys: string[]): string | undefined {
+  // Fast path: exact header match.
   for (const key of keys) {
     const value = row[key];
+    if (value != null && value.trim() !== "") {
+      return value.trim();
+    }
+  }
+  // Fallback: tolerant match that ignores case, spaces, underscores and hyphens
+  // so headers like "Personal Email", "personal_email" or "PersonalEmail" all
+  // resolve to the same field.
+  const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
+  const normalizedRow = new Map<string, string>();
+  for (const [rowKey, rowValue] of Object.entries(row)) {
+    normalizedRow.set(normalize(rowKey), rowValue);
+  }
+  for (const key of keys) {
+    const value = normalizedRow.get(normalize(key));
     if (value != null && value.trim() !== "") {
       return value.trim();
     }
