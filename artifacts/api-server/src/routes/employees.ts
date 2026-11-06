@@ -1207,20 +1207,22 @@ router.get("/employees/:id/journey", requireAuth(), async (req, res): Promise<vo
       : null,
     amount: null,
   });
-  events.push({
-    date: row.employee.joiningDate,
-    type: "probation_start",
-    title: "Probation started",
-    description: `${row.employee.probationMonths} month probation period`,
-    amount: null,
-  });
-  events.push({
-    date: ymd(probationEnd),
-    type: "probation_end",
-    title: "Probation ended",
-    description: "Permanent full-time employee",
-    amount: null,
-  });
+  if (Number(row.employee.probationMonths) > 0) {
+    events.push({
+      date: row.employee.joiningDate,
+      type: "probation_start",
+      title: "Probation started",
+      description: `${row.employee.probationMonths} month probation period`,
+      amount: null,
+    });
+    events.push({
+      date: ymd(probationEnd),
+      type: "probation_end",
+      title: "Probation ended",
+      description: "Permanent full-time employee",
+      amount: null,
+    });
+  }
 
   // Left the company event
   if (row.employee.leftDate) {

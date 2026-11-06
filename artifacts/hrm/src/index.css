@@ -182,3 +182,24 @@
 .attendance-time-input::-webkit-calendar-picker-indicator {
   display: none;
 }
+
+/* Scrolling name marquee: only applied when the name overflows its container.
+   The track holds two copies of the text (with a gap), so translating it by
+   -50% produces a seamless continuous loop. */
+@keyframes marquee-name {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-name-track {
+  display: inline-flex;
+  width: max-content;
+  animation: marquee-name var(--marquee-duration, 8s) linear infinite;
+}
+.marquee-name-track:hover {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-name-track {
+    animation: none;
+  }
+}

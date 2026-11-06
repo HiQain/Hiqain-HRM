@@ -294,6 +294,18 @@ router.post("/payslips/generate", requireAuth(["admin", "hr"]), async (req, res)
     return;
   }
   const { employeeId, month, year, latePenaltyDays, bonus: bodyBonus, otherDeductions: bodyOther } = parsed.data;
+
+  // Payslips can only be generated for completed past months.
+  const now = new Date();
+  const currentPeriod = now.getFullYear() * 12 + now.getMonth(); // month is 0-indexed here
+  const requestedPeriod = year * 12 + (month - 1);
+  if (requestedPeriod >= currentPeriod) {
+    res.status(400).json({
+      message: "Payslips can only be generated for completed past months",
+    });
+    return;
+  }
+
   const settings = await getSettings();
 
   const empRows = await db

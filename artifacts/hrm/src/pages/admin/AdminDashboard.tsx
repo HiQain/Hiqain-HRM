@@ -37,7 +37,6 @@ export function AdminDashboard() {
     <div className="space-y-8">
       <PageHeader
         title="HR Dashboard"
-        description="A snapshot of your team today."
       />
       <AttendanceRuleHint />
 
@@ -56,7 +55,7 @@ export function AdminDashboard() {
             />
             <StatCard
               label="Present today"
-              value={data.presentToday}
+              value={data.presentToday + data.lateToday}
               icon={CheckCircle2}
               tone="success"
             />

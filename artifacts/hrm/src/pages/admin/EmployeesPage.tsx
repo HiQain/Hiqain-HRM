@@ -32,10 +32,12 @@ import {
   Trash2,
   MoreVertical,
   Upload,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
+import { ScrollingName } from "@/components/ScrollingName";
 import { DateField } from "@/components/DateField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,6 +93,23 @@ function computePermanentDate(joiningDate: string, probationMonths: number) {
   const permanentDate = new Date(joining);
   permanentDate.setMonth(permanentDate.getMonth() + probationMonths);
   return permanentDate;
+}
+
+function isPermanentEmployee(employee: {
+  probationEndDate?: string | null;
+  joiningDate?: string | null;
+  probationMonths?: number | null;
+}) {
+  const end = employee.probationEndDate
+    ? new Date(employee.probationEndDate)
+    : employee.joiningDate
+      ? computePermanentDate(
+          employee.joiningDate,
+          Number(employee.probationMonths ?? 0),
+        )
+      : null;
+  if (!end || Number.isNaN(end.getTime())) return false;
+  return end.getTime() <= Date.now();
 }
 
 function computeProRatedQuota(
@@ -453,12 +472,20 @@ export function EmployeesPage() {
                   <EmployeeAvatar name={e.name} url={e.avatarUrl ?? null} size="lg" />
                 </Link>
                 <div className="min-w-0 flex-1">
-                  <Link
-                    href={`/admin/employees/${e.id}`}
-                    className="block truncate text-base font-semibold hover:underline"
-                  >
-                    {e.name}
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/admin/employees/${e.id}`}
+                      className="min-w-0 flex-1 text-base font-semibold hover:underline"
+                    >
+                      <ScrollingName name={e.name} />
+                    </Link>
+                    {isPermanentEmployee(e) && (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                        <ShieldCheck className="h-3 w-3" />
+                        Permanent
+                      </span>
+                    )}
+                  </div>
                   <p className="truncate text-xs text-muted-foreground">
                     {e.position ?? "Team member"}
                   </p>
@@ -568,18 +595,27 @@ export function EmployeesPage() {
   );
 }
 
-function NewEmployeeSheet({
+export function NewEmployeeSheet({
   open,
   onOpenChange,
   departments,
   existingEmployees,
   editingEmployee,
+  chrome = "sheet",
+  formId,
+  onPendingChange,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   departments: string[];
   existingEmployees: Array<{ employeeCode?: string | null }>;
   editingEmployee: any | null;
+  /** "sheet" renders the slide-over drawer; "inline" renders just the form body. */
+  chrome?: "sheet" | "inline";
+  /** Lets an outside button submit the form via <button form={formId}>. */
+  formId?: string;
+  /** Reports create/update pending state so an external save button can disable. */
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const { data: me } = useGetMe();
   const { data: settings } = useGetSettings({
@@ -859,6 +895,10 @@ function NewEmployeeSheet({
     }
   }, [open]);
 
+  useEffect(() => {
+    onPendingChange?.(update.isPending || create.isPending);
+  }, [update.isPending, create.isPending, onPendingChange]);
+
   const joiningYear = useMemo(
     () => Number(form.joiningDate.slice(0, 4)) || new Date().getFullYear(),
     [form.joiningDate],
@@ -1122,18 +1162,19 @@ function NewEmployeeSheet({
     }
   };
 
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-5xl">
-        <SheetHeader>
-          <SheetTitle>{isEditing ? "Edit employee" : "Add employee"}</SheetTitle>
-          <SheetDescription>
-            {isEditing
-              ? "Update the employee profile in the same quick drawer without leaving the list."
-              : "A temporary password will be assigned and the employee will be prompted to change it at first sign-in."}
-          </SheetDescription>
-        </SheetHeader>
-        <form onSubmit={onSubmit} className="mt-6 space-y-6 px-1">
+  const content = (
+    <>
+        {chrome === "sheet" && (
+          <SheetHeader>
+            <SheetTitle>{isEditing ? "Edit employee" : "Add employee"}</SheetTitle>
+            <SheetDescription>
+              {isEditing
+                ? "Update the employee profile in the same quick drawer without leaving the list."
+                : "A temporary password will be assigned and the employee will be prompted to change it at first sign-in."}
+            </SheetDescription>
+          </SheetHeader>
+        )}
+        <form id={formId} onSubmit={onSubmit} className="mt-6 space-y-6 px-1">
           <div className="grid gap-3 lg:grid-cols-2">
             <div className="rounded-xl border border-border bg-muted/20 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -2102,27 +2143,29 @@ function NewEmployeeSheet({
           </Section>
           </div>
 
-          <SheetFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={create.isPending || update.isPending}
-            >
-              {isEditing
-                ? update.isPending
-                  ? "Saving..."
-                  : "Save changes"
-                : create.isPending
-                  ? "Adding..."
-                  : "Add employee"}
-            </Button>
-          </SheetFooter>
+          {chrome === "sheet" && (
+            <SheetFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={create.isPending || update.isPending}
+              >
+                {isEditing
+                  ? update.isPending
+                    ? "Saving..."
+                    : "Save changes"
+                  : create.isPending
+                    ? "Adding..."
+                    : "Add employee"}
+              </Button>
+            </SheetFooter>
+          )}
         </form>
         <AlertDialog
           open={resetPasswordOpen}
@@ -2151,7 +2194,16 @@ function NewEmployeeSheet({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </SheetContent>
+    </>
+  );
+
+  if (chrome === "inline") {
+    return <div className="px-1">{content}</div>;
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-5xl">{content}</SheetContent>
     </Sheet>
   );
 }
@@ -2383,9 +2435,17 @@ function BulkUploadSheet({
         getCsvValue(r, "annualLeaveQuota", "annualLeave"),
       );
 
+      const personalEmail = getCsvValue(
+        r,
+        "personalEmail",
+        "personal_email",
+        "personal email",
+      )?.trim();
+
       return {
         name: getCsvValue(r, "name") ?? "",
         email,
+        personalEmail: personalEmail ? personalEmail : undefined,
         password,
         isActive:
           parseCsvBoolean(getCsvValue(r, "isActive", "active", "status")) ?? true,

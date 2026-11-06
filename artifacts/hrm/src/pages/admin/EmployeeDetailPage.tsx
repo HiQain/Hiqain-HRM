@@ -3,6 +3,7 @@ import { Link, useParams } from "wouter";
 import {
   useGetEmployee,
   useGetEmployeeJourney,
+  useListEmployees,
   useGetMe,
   useUpdateEmployee,
   useCreateSalaryEvent,
@@ -61,6 +62,7 @@ import { JourneyTimeline } from "@/components/JourneyTimeline";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PayslipView } from "@/components/PayslipView";
 import { ProvidentFundLedgerCard } from "@/components/ProvidentFundLedgerCard";
+import { NewEmployeeSheet } from "@/pages/admin/EmployeesPage";
 import {
   Tabs,
   TabsContent,
@@ -134,11 +136,6 @@ function splitAllowanceBreakdown(allowances: number) {
   const homeRent = Math.round(safeAllowances / 2);
   const utilityBills = safeAllowances - homeRent;
   return { homeRent, utilityBills };
-}
-
-function openEmployeeEditor(employeeId: number) {
-  window.localStorage.setItem("hrm-edit-employee-id", String(employeeId));
-  window.location.href = "/admin/employees";
 }
 
 export function EmployeeDetailPage() {
@@ -288,6 +285,8 @@ function Badge({
   );
 }
 
+const PROFILE_EDIT_FORM_ID = "profile-employee-edit-form";
+
 function ProfileTab({ employee }: { employee: any }) {
   const totalSalary = Number(employee.basicSalary) + Number(employee.allowances);
   const allowanceBreakdown = useMemo(
@@ -295,26 +294,79 @@ function ProfileTab({ employee }: { employee: any }) {
     [employee.allowances],
   );
 
+  const qc = useQueryClient();
+  const { data: allEmployees } = useListEmployees();
+  const departments = useMemo(() => {
+    const set = new Set<string>();
+    (allEmployees ?? []).forEach((e) => e.department && set.add(e.department));
+    return Array.from(set).sort();
+  }, [allEmployees]);
+
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   return (
     <div className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold">Profile overview</p>
           <p className="text-sm text-muted-foreground">
-            This page is now view-only. Use the edit drawer to update details
-            or deactivate the user.
+            {editing
+              ? "Editing profile. Update any field below, then save your changes."
+              : "This page is view-only. Click Edit employee to change details or deactivate the user."}
           </p>
         </div>
-        <Button
-          type="button"
-          onClick={() => openEmployeeEditor(employee.id)}
-          className="gap-2"
-        >
-          <Pencil className="h-4 w-4" />
-          Edit employee
-        </Button>
+        {editing ? (
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditing(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form={PROFILE_EDIT_FORM_ID}
+              disabled={saving}
+              className="gap-2"
+            >
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="gap-2"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit employee
+          </Button>
+        )}
       </div>
 
+      {editing ? (
+        <NewEmployeeSheet
+          chrome="inline"
+          open
+          formId={PROFILE_EDIT_FORM_ID}
+          onPendingChange={setSaving}
+          departments={departments}
+          existingEmployees={allEmployees ?? []}
+          editingEmployee={employee}
+          onOpenChange={(v) => {
+            if (!v) {
+              setEditing(false);
+              qc.invalidateQueries({
+                queryKey: getGetEmployeeQueryKey(employee.id),
+              });
+            }
+          }}
+        />
+      ) : (
+        <>
       <ReadonlySection title="User details">
         <ReadonlyGrid>
           <ReadonlyField label="Employee code" value={employee.employeeCode} />
@@ -460,6 +512,8 @@ function ProfileTab({ employee }: { employee: any }) {
           <ReadonlyDocumentField label="Last 3 months payslip 3" url={employee.lastPayslipThreeUrl} name={employee.lastPayslipThreeName} />
         </div>
       </ReadonlySection>
+        </>
+      )}
     </div>
   );
 }

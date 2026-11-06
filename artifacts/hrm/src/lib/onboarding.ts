@@ -1,6 +1,7 @@
 const CSV_HEADERS = [
   "name",
   "email",
+  "personalEmail",
   "password",
   "role",
   "phone",

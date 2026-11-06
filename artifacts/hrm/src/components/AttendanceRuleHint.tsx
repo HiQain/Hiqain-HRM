@@ -10,12 +10,7 @@ export function AttendanceRuleHint({
   className?: string;
 }) {
   if (!officeStartTime || gracePeriodMinutes == null) {
-    return (
-      <p className={`text-xs text-muted-foreground ${className}`.trim()}>
-        Late status applies after each employee&apos;s office start time plus their
-        grace period.
-      </p>
-    );
+    return null;
   }
 
   const [hour, minute] = officeStartTime.split(":").map(Number);

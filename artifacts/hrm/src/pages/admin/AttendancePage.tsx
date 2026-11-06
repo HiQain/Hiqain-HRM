@@ -561,7 +561,7 @@ export function AdminAttendancePage() {
           ))
         ) : (
           <>
-            <StatCard label="Present" value={data.present} icon={CheckCircle2} tone="success" />
+            <StatCard label="Present" value={data.present + data.late} icon={CheckCircle2} tone="success" />
             <StatCard label="Late" value={data.late} icon={Clock} tone="warning" />
             <StatCard label="Absent" value={data.absent} icon={XCircle} tone="danger" />
             <StatCard label="On leave" value={data.onLeave} icon={Plane} tone="info" />
