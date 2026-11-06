@@ -14,7 +14,8 @@ type Status =
   | "none"
   | "pending"
   | "approved"
-  | "rejected";
+  | "rejected"
+  | "dismissed";
 
 const LABELS: Record<Status, string> = {
   present: "Present",
@@ -30,6 +31,7 @@ const LABELS: Record<Status, string> = {
   pending: "Pending",
   approved: "Approved",
   rejected: "Rejected",
+  dismissed: "Dismissed",
 };
 
 const STYLES: Record<Status, string> = {
@@ -46,6 +48,7 @@ const STYLES: Record<Status, string> = {
   pending: "bg-amber-50 text-amber-700 ring-amber-200",
   approved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   rejected: "bg-rose-50 text-rose-700 ring-rose-200",
+  dismissed: "bg-slate-50 text-slate-500 ring-slate-200",
 };
 
 const DOTS: Record<Status, string> = {
@@ -62,6 +65,7 @@ const DOTS: Record<Status, string> = {
   pending: "bg-amber-500",
   approved: "bg-emerald-500",
   rejected: "bg-rose-500",
+  dismissed: "bg-slate-400",
 };
 
 export const StatusBadge = memo(function StatusBadge({

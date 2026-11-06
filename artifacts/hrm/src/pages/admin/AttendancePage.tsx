@@ -35,7 +35,6 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { AttendanceRuleHint } from "@/components/AttendanceRuleHint";
 import { StatCard } from "@/components/StatCard";
-import { StatusBadge } from "@/components/StatusBadge";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { DateField } from "@/components/DateField";
 import { Input } from "@/components/ui/input";
@@ -512,7 +511,7 @@ export function AdminAttendancePage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Today's Attendance"
+        title="Daily Attendance"
         description={data ? formatDateLong(data.date) : "Loading..."}
       />
       <AttendanceRuleHint />
@@ -643,8 +642,7 @@ export function AdminAttendancePage() {
             <TableRow>
               <TableHead>Employee</TableHead>
               <TableHead>Work mode</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[126px]">Change status</TableHead>
+              <TableHead className="w-[126px]">Status</TableHead>
               <TableHead className="w-[122px]">Check-in</TableHead>
               <TableHead className="w-[122px]">Check-out</TableHead>
               <TableHead>Reason</TableHead>
@@ -654,13 +652,13 @@ export function AdminAttendancePage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   Loading attendance...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   No matching employees.
                 </TableCell>
               </TableRow>
@@ -751,9 +749,6 @@ export function AdminAttendancePage() {
                           )
                         }
                       />
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={attendanceStatus} showDot={false} />
                     </TableCell>
                     <TableCell>
                       {isLockedStatus ? (

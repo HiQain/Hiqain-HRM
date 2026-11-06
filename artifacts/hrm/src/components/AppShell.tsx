@@ -27,7 +27,6 @@ import {
   Settings as SettingsIcon,
   Bell,
   HeartPulse,
-  FileSpreadsheet,
 } from "lucide-react";
 import {
   useLogout,
@@ -50,7 +49,7 @@ type NavItem = { label: string; href: string; icon: typeof LayoutDashboard };
 const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Employees", href: "/admin/employees", icon: Users },
-  { label: "Today's Attendance", href: "/admin/attendance", icon: CalendarCheck },
+  { label: "Daily Attendance", href: "/admin/attendance", icon: CalendarCheck },
   {
     label: "Attendance Calendar",
     href: "/admin/attendance-calendar",
@@ -62,7 +61,6 @@ const ADMIN_NAV: NavItem[] = [
   { label: "Salary", href: "/admin/salary", icon: Wallet },
   { label: "View", href: "/admin/view", icon: LayoutGrid },
   { label: "Payslips", href: "/admin/payslips", icon: Receipt },
-  { label: "Standup Users", href: "/admin/standup-users", icon: FileSpreadsheet },
   { label: "News Feed", href: "/admin/feed", icon: PartyPopper },
   { label: "General", href: "/admin/settings", icon: SettingsIcon },
 ];
@@ -77,7 +75,6 @@ const EMP_NAV: NavItem[] = [
   { label: "Salary", href: "/employee/salary", icon: Wallet },
   { label: "Provident Fund", href: "/employee/provident-fund", icon: PiggyBank },
   { label: "Payslips", href: "/employee/payslips", icon: Receipt },
-  { label: "Standup Sheet", href: "/employee/standup-sheet", icon: FileSpreadsheet },
   { label: "News Feed", href: "/employee/feed", icon: PartyPopper },
   { label: "General", href: "/employee/settings", icon: SettingsIcon },
 ];
@@ -92,10 +89,8 @@ const HR_NAV: NavItem[] = [
   { label: "Salary", href: "/employee/salary", icon: Wallet },
   { label: "Provident Fund", href: "/employee/provident-fund", icon: PiggyBank },
   { label: "Payslips", href: "/employee/payslips", icon: Receipt },
-  { label: "Standup Sheet", href: "/employee/standup-sheet", icon: FileSpreadsheet },
   { label: "Feed", href: "/employee/feed", icon: PartyPopper },
   { label: "Team", href: "/admin/employees", icon: Users },
-  { label: "Standup Users", href: "/admin/standup-users", icon: FileSpreadsheet },
   { label: "Team Attendance", href: "/admin/attendance", icon: CalendarDays },
   { label: "Team Requests", href: "/admin/requests", icon: Inbox },
   { label: "Team View", href: "/admin/view", icon: LayoutGrid },
@@ -299,7 +294,7 @@ export function AppShell({
               </div>
             </div>
           </div>
-          <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
+          <div className="mx-auto w-full min-w-0 overflow-x-hidden px-2 py-6 sm:px-4 sm:py-8">
             <NotificationSync userRole={user.role} />
             {children}
           </div>

@@ -480,9 +480,12 @@ export function EmployeesPage() {
                       <ScrollingName name={e.name} />
                     </Link>
                     {isPermanentEmployee(e) && (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                        <ShieldCheck className="h-3 w-3" />
-                        Permanent
+                      <span
+                        title="Permanent"
+                        aria-label="Permanent"
+                        className="inline-flex shrink-0 items-center justify-center rounded-full bg-emerald-50 p-1 text-emerald-700"
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
                       </span>
                     )}
                   </div>
@@ -1378,10 +1381,10 @@ export function NewEmployeeSheet({
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select marital status" />
+                    <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unset">Select marital status</SelectItem>
+                    <SelectItem value="unset">Select</SelectItem>
                     <SelectItem value="Single">Single</SelectItem>
                     <SelectItem value="Married">Married</SelectItem>
                     <SelectItem value="Divorced">Divorced</SelectItem>

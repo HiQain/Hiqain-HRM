@@ -138,6 +138,39 @@ function splitAllowanceBreakdown(allowances: number) {
   return { homeRent, utilityBills };
 }
 
+function computeTenure(joiningDate: string) {
+  const start = new Date(`${joiningDate}T00:00:00`);
+  const now = new Date();
+  if (Number.isNaN(start.getTime())) {
+    return { years: 0, months: 0, days: 0 };
+  }
+
+  let years = now.getFullYear() - start.getFullYear();
+  let months = now.getMonth() - start.getMonth();
+  let days = now.getDate() - start.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    // Number of days in the month before the current one.
+    const daysInPrevMonth = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      0,
+    ).getDate();
+    days += daysInPrevMonth;
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  return {
+    years: Math.max(0, years),
+    months: Math.max(0, months),
+    days: Math.max(0, days),
+  };
+}
+
 export function EmployeeDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
@@ -161,6 +194,8 @@ export function EmployeeDetailPage() {
 
   const probationActive =
     new Date(employee.probationEndDate) > new Date();
+
+  const tenure = computeTenure(employee.joiningDate);
 
   return (
     <div className="space-y-6">
@@ -202,8 +237,7 @@ export function EmployeeDetailPage() {
               Joined {formatDate(employee.joiningDate)}
             </Badge>
             <Badge icon={Calendar}>
-              {Math.floor(employee.workDurationMonths / 12)}y{" "}
-              {employee.workDurationMonths % 12}m at company
+              {tenure.years}y {tenure.months}m {tenure.days}d at company
             </Badge>
             <Badge icon={ShieldCheck} tone={probationActive ? "warning" : "success"}>
               {probationActive

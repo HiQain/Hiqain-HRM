@@ -604,7 +604,6 @@ function ListView({
               <TableHead>Date</TableHead>
               <TableHead>Work mode</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Change status</TableHead>
               <TableHead>Check-in</TableHead>
               <TableHead>Check-out</TableHead>
               <TableHead>Reason</TableHead>
@@ -614,19 +613,19 @@ function ListView({
           <TableBody>
             {!employeeId ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                   Select an employee to view attendance.
                 </TableCell>
               </TableRow>
             ) : isLoading || calendarLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                   No records for this month.
                 </TableCell>
               </TableRow>
@@ -666,9 +665,6 @@ function ListView({
                         />
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={attendanceStatus} showDot={false} />
-                      </TableCell>
-                      <TableCell>
                         {isLockedStatus ? (
                           <span className="text-sm text-muted-foreground">—</span>
                         ) : (
@@ -683,7 +679,7 @@ function ListView({
                             }
                             disabled={editingRowKey === `${r.date}-${r.id}` && override.isPending}
                           >
-                            <SelectTrigger className="h-8 w-[160px] text-xs">
+                            <SelectTrigger className="h-8 w-25 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -749,6 +745,21 @@ function CalendarView({
     return cells;
   }, [calendar]);
 
+  const summary = useMemo(() => {
+    const s = { present: 0, late: 0, absent: 0, on_leave: 0 };
+    for (const day of calendar?.days ?? []) {
+      const status = String(day.status);
+      if (["future", "weekend", "none"].includes(status)) continue;
+      if (status === "present") s.present += 1;
+      else if (status === "late") s.late += 1;
+      else if (status === "on_leave") s.on_leave += 1;
+      else if (status === "remote_work") s.present += 1;
+      else if (status === "half_day") s.present += 0.5;
+      else s.absent += 1;
+    }
+    return s;
+  }, [calendar]);
+
   const handleSubmitOverride = () => {
     if (!editing || !employeeId) return;
     override.mutate(
@@ -777,6 +788,23 @@ function CalendarView({
 
   return (
     <>
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Present"
+          value={summary.present + summary.late}
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <StatCard label="Late" value={summary.late} icon={Clock} tone="warning" />
+        <StatCard label="Absent" value={summary.absent} icon={XCircle} tone="danger" />
+        <StatCard
+          label="On leave"
+          value={summary.on_leave}
+          icon={Plane}
+          tone="info"
+        />
+      </div>
+
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <div className="mb-3 grid grid-cols-7 text-center text-xs font-semibold uppercase text-muted-foreground">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (

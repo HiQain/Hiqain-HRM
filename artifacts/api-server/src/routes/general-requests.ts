@@ -376,7 +376,12 @@ router.get("/requests", requireAuth(), async (req, res): Promise<void> => {
       eq(generalRequestsTable.type, type as any),
     );
   }
-  if (status === "pending" || status === "approved" || status === "rejected") {
+  if (
+    status === "pending" ||
+    status === "approved" ||
+    status === "rejected" ||
+    status === "dismissed"
+  ) {
     filters.push(eq(generalRequestsTable.status, status));
   }
   const where = filters.length === 1 ? filters[0] : and(...filters);
@@ -902,6 +907,41 @@ router.post(
       message: `Your ${row.type.replace(/_/g, " ")} request was rejected.`,
       href: "/employee/requests",
     });
+    res.json(await serialize(row, empRows[0]?.name ?? ""));
+  },
+);
+
+// Dismiss silently removes a request from the pending queue without notifying
+// the employee (unlike reject, which sends a notification).
+router.post(
+  "/requests/:id/dismiss",
+  requireAuth(["admin", "hr"]),
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    const updateResult = await db
+      .update(generalRequestsTable)
+      .set({ status: "dismissed", reviewedAt: new Date() })
+      .where(eq(generalRequestsTable.id, id));
+    if (!updateResult[0].affectedRows) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
+    const updatedRows = await db
+      .select()
+      .from(generalRequestsTable)
+      .where(eq(generalRequestsTable.id, id))
+      .limit(1);
+    const row = updatedRows[0];
+    if (!row) {
+      res.status(404).json({ message: "Request not found" });
+      return;
+    }
+    const empRows = await db
+      .select()
+      .from(employeesTable)
+      .where(eq(employeesTable.id, row.employeeId))
+      .limit(1);
+    // Intentionally no notifyEmployeeUser call: dismissal is silent.
     res.json(await serialize(row, empRows[0]?.name ?? ""));
   },
 );

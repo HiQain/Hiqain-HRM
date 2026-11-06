@@ -61,6 +61,8 @@ function resolveOverrideAttendanceFields(
 
   if (status === "half_day") {
     return {
+      status: "half_day",
+      isLate: false,
       checkInTime: existing?.checkInTime ?? shiftStart,
       checkOutTime: existing?.checkOutTime ?? shiftEnd,
       workedMinutes: Math.max(1, Math.round(fullShiftMinutes / 2)),
@@ -69,6 +71,8 @@ function resolveOverrideAttendanceFields(
 
   if (status === "late") {
     return {
+      status: "late",
+      isLate: true,
       checkInTime: existing?.checkInTime ?? lateStart,
       checkOutTime: existing?.checkOutTime ?? shiftEnd,
       workedMinutes: fullShiftMinutes,
@@ -77,6 +81,8 @@ function resolveOverrideAttendanceFields(
 
   if (status === "present" || status === "remote_work" || status === "on_leave") {
     return {
+      status,
+      isLate: false,
       checkInTime: existing?.checkInTime ?? shiftStart,
       checkOutTime: existing?.checkOutTime ?? shiftEnd,
       workedMinutes: fullShiftMinutes,
@@ -84,6 +90,8 @@ function resolveOverrideAttendanceFields(
   }
 
   return {
+    status,
+    isLate: false,
     checkInTime: existing?.checkInTime ?? null,
     checkOutTime: existing?.checkOutTime ?? null,
     workedMinutes: existing?.workedMinutes ?? 0,

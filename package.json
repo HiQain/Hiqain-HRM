@@ -11,6 +11,7 @@
     "dev": "dotenv -e .env -- concurrently -k -n api,hrm -c blue,green \"npm run dev --workspace=@workspace/api-server\" \"npm run dev --workspace=@workspace/hrm\"",
     "build": "dotenv -e .env -- npm run build --workspace=@workspace/api-server --workspace=@workspace/hrm",
     "start": "npm run start --workspace=@workspace/api-server",
+    "db:push": "dotenv -e .env -- npm run push --workspace=@workspace/db",
     "typecheck:libs": "tsc --build",
     "typecheck": "npm run typecheck:libs && npm run typecheck --workspace=@workspace/api-server --workspace=@workspace/hrm --workspace=@workspace/mockup-sandbox --workspace=@workspace/scripts"
   },

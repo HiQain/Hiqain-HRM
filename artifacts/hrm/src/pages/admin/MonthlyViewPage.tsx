@@ -325,7 +325,9 @@ function ColumnVisibilityMenu({
       <DropdownMenuContent align="end" className="w-72 p-0">
         <DropdownMenuSeparator className="m-0" />
         <div className="max-h-80 overflow-y-auto p-1.5">
-          {columns.map((column) => {
+          {columns
+            .filter((column) => !column.id.startsWith("day:"))
+            .map((column) => {
             const visible = !hiddenColumnIds.has(column.id);
 
             return (
@@ -662,9 +664,6 @@ export function AdminMonthlyViewPage() {
         <TabsContent value="attendance" className="mt-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="rounded-lg px-3 py-1 text-sm">
-                Whole month attendance grid
-              </Badge>
               {data?.attendance?.totalOffDays != null && (
                 <Badge
                   variant="secondary"

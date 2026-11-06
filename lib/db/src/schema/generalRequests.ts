@@ -41,7 +41,7 @@ export const generalRequestsTable = mysqlTable("general_requests", {
     .$type<number[]>()
     .notNull()
     .default([]),
-  status: mysqlEnum("status", ["pending", "approved", "rejected"])
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "dismissed"])
     .notNull()
     .default("pending"),
   installmentMonths: int("installment_months"),

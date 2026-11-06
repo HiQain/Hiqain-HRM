@@ -15,4 +15,3 @@ export * from "./loans";
 export * from "./inventory";
 export * from "./medicalClaims";
 export * from "./notifications";
-export * from "./standupEntries";

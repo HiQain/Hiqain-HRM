@@ -16,7 +16,7 @@ import {
   type GeneralRequestType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, PiggyBank, X } from "lucide-react";
+import { Ban, Check, PiggyBank, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { AdminInventoryRequestsSection } from "@/components/AdminInventoryRequestsSection";
@@ -51,6 +51,7 @@ import {
 import type { ListGeneralRequestsParams } from "@workspace/api-client-react";
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils";
 import { buildProvidentFundSummary } from "@/lib/providentFund";
+import { getApiUrl } from "@/lib/api";
 
 type FilterStatus = "all" | "pending" | "approved" | "rejected";
 type FilterType =
@@ -161,6 +162,29 @@ export function AdminRequestsPage() {
           toast.error(err instanceof Error ? err.message : "Could not reject"),
       },
     );
+  };
+
+  const [dismissingId, setDismissingId] = useState<number | null>(null);
+  const onDismiss = async (r: GeneralRequest) => {
+    setDismissingId(r.id);
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/requests/${r.id}/dismiss`),
+        { method: "POST", credentials: "include" },
+      );
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { message?: string }
+          | null;
+        throw new Error(payload?.message ?? "Could not dismiss request");
+      }
+      toast.success("Request dismissed");
+      invalidate(r);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not dismiss");
+    } finally {
+      setDismissingId(null);
+    }
   };
 
   return (
@@ -293,6 +317,16 @@ export function AdminRequestsPage() {
                           onClick={() => onReject(r)}
                         >
                           <X className="mr-1 h-3.5 w-3.5" /> Reject
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-slate-200 text-slate-600 hover:bg-slate-50"
+                          disabled={dismissingId === r.id}
+                          onClick={() => onDismiss(r)}
+                        >
+                          <Ban className="mr-1 h-3.5 w-3.5" />
+                          {dismissingId === r.id ? "Dismissing..." : "Dismiss"}
                         </Button>
                       </div>
                     ) : (

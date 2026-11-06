@@ -32,12 +32,9 @@ import { MyPayslipsPage } from "@/pages/employee/MyPayslipsPage";
 import { MySalaryPage } from "@/pages/employee/MySalaryPage";
 import { MyProvidentFundPage } from "@/pages/employee/MyProvidentFundPage";
 import { MySettingsPage } from "@/pages/employee/MySettingsPage";
-import { MyStandupSheetPage } from "@/pages/employee/MyStandupSheetPage";
 import { FeedPage } from "@/pages/FeedPage";
 import { CelebrationPopup } from "@/components/CelebrationPopup";
 import { NotificationsPage } from "@/pages/NotificationsPage";
-import { StandupUsersPage } from "@/pages/admin/StandupUsersPage";
-import { StandupUserDetailPage } from "@/pages/admin/StandupUserDetailPage";
 
 function FullScreenLoader() {
   return (
@@ -118,8 +115,6 @@ function AuthGate() {
           <Route path="/admin/salary" component={AdminSalaryPage} />
           <Route path="/admin/view" component={AdminMonthlyViewPage} />
           <Route path="/admin/medical" component={AdminMedicalPage} />
-          <Route path="/admin/standup-users" component={StandupUsersPage} />
-          <Route path="/admin/standup-users/:id" component={StandupUserDetailPage} />
           <Route path="/admin/inventory" component={RedirectAdminInventory} />
           <Route path="/admin/feed" component={FeedPage} />
           <Route path="/admin/notifications" component={NotificationsPage} />
@@ -146,8 +141,6 @@ function AuthGate() {
           <Route path="/admin/salary" component={AdminSalaryPage} />
           <Route path="/admin/view" component={AdminMonthlyViewPage} />
           <Route path="/admin/medical" component={AdminMedicalPage} />
-          <Route path="/admin/standup-users" component={StandupUsersPage} />
-          <Route path="/admin/standup-users/:id" component={StandupUserDetailPage} />
           <Route path="/admin/inventory" component={RedirectAdminInventory} />
           <Route path="/admin/feed" component={FeedPage} />
           <Route path="/admin/notifications" component={NotificationsPage} />
@@ -163,7 +156,6 @@ function AuthGate() {
           <Route path="/employee/salary" component={MySalaryPage} />
           <Route path="/employee/provident-fund" component={MyProvidentFundPage} />
           <Route path="/employee/settings" component={MySettingsPage} />
-          <Route path="/employee/standup-sheet" component={MyStandupSheetPage} />
           <Route path="/employee/feed" component={FeedPage} />
           <Route path="/employee/notifications" component={NotificationsPage} />
           <Route path="/change-password" component={ChangePasswordRoute} />
@@ -185,7 +177,6 @@ function AuthGate() {
           <Route path="/employee/salary" component={MySalaryPage} />
           <Route path="/employee/provident-fund" component={MyProvidentFundPage} />
           <Route path="/employee/settings" component={MySettingsPage} />
-          <Route path="/employee/standup-sheet" component={MyStandupSheetPage} />
           <Route path="/employee/feed" component={FeedPage} />
           <Route path="/employee/notifications" component={NotificationsPage} />
           <Route path="/change-password" component={ChangePasswordRoute} />
