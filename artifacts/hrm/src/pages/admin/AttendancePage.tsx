@@ -63,6 +63,7 @@ import {
   ymdLocal,
 } from "@/lib/utils";
 import {
+  attendanceStatusTriggerClass,
   formatAttendanceReason,
   formatCheckoutDisplay,
   formatWorkedDisplay,
@@ -765,7 +766,12 @@ export function AdminAttendancePage() {
                           }
                           disabled={isSaving}
                         >
-                          <SelectTrigger className="h-8 w-[104px] text-xs">
+                          <SelectTrigger
+                            className={cn(
+                              "h-8 w-[104px] text-xs font-medium",
+                              attendanceStatusTriggerClass(attendanceStatus),
+                            )}
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>

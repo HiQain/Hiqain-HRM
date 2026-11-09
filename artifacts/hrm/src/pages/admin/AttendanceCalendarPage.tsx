@@ -72,6 +72,7 @@ import {
   formatTime,
 } from "@/lib/utils";
 import {
+  attendanceStatusTriggerClass,
   formatAttendanceReason,
   formatCheckoutDisplay,
   formatWorkedDisplay,
@@ -679,7 +680,12 @@ function ListView({
                             }
                             disabled={editingRowKey === `${r.date}-${r.id}` && override.isPending}
                           >
-                            <SelectTrigger className="h-8 w-25 text-xs">
+                            <SelectTrigger
+                              className={cn(
+                                "h-8 w-25 text-xs font-medium",
+                                attendanceStatusTriggerClass(attendanceStatus),
+                              )}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
