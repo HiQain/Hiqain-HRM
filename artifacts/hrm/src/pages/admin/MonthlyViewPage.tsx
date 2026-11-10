@@ -6,7 +6,7 @@ import {
   useGetMonthlyAdminView,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Columns3, Download } from "lucide-react";
+import { CalendarDays, Columns3, Download, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -467,6 +467,7 @@ export function AdminMonthlyViewPage() {
     useState(false);
   const hiddenColumnsByTabRef = useRef(hiddenColumnsByTab);
   const [monthValue, setMonthValue] = useState(currentMonthValue);
+  const [searchQuery, setSearchQuery] = useState("");
   const [attendanceScrollDate, setAttendanceScrollDate] = useState<
     string | null
   >(null);
@@ -640,7 +641,28 @@ export function AdminMonthlyViewPage() {
               Salary
             </TabsTrigger>
           </TabsList>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search employee"
+                aria-label="Search employee by name"
+                className="h-10 rounded-xl pl-9 pr-9"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
             <ColumnVisibilityMenu
               columns={columnOptions}
               disabled={isLoading || !columnPreferencesHydrated}
@@ -662,21 +684,6 @@ export function AdminMonthlyViewPage() {
         </div>
 
         <TabsContent value="attendance" className="mt-5 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              {data?.attendance?.totalOffDays != null && (
-                <Badge
-                  variant="secondary"
-                  className="rounded-lg px-3 py-1 text-sm"
-                >
-                  Off days: {data.attendance.totalOffDays}
-                </Badge>
-              )}
-            </div>
-            <Button variant="outline" size="sm" onClick={onToday}>
-              Today
-            </Button>
-          </div>
 
           <AttendanceSheet
             data={data}
@@ -684,6 +691,7 @@ export function AdminMonthlyViewPage() {
             scrollContainerRef={attendanceScrollRef}
             today={today}
             hiddenColumnIds={effectiveHiddenColumnsByTab.attendance}
+            searchQuery={searchQuery}
           />
         </TabsContent>
 
@@ -692,6 +700,7 @@ export function AdminMonthlyViewPage() {
             data={data}
             isLoading={isLoading}
             hiddenColumnIds={effectiveHiddenColumnsByTab.salary}
+            searchQuery={searchQuery}
           />
         </TabsContent>
       </Tabs>
@@ -705,13 +714,21 @@ function AttendanceSheet({
   isLoading,
   scrollContainerRef,
   today,
+  searchQuery,
 }: {
   data: GetMonthlyAdminViewQueryResult | undefined;
   hiddenColumnIds: Set<string>;
   isLoading: boolean;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   today: string;
+  searchQuery: string;
 }) {
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const rows = (data?.attendance?.rows ?? []).filter(
+    (row) =>
+      !normalizedQuery ||
+      row.employeeName.toLowerCase().includes(normalizedQuery),
+  );
   const isColumnVisible = (columnId: string) => !hiddenColumnIds.has(columnId);
   const stickyLeft = {
     doj: 0,
@@ -869,17 +886,19 @@ function AttendanceSheet({
                     Loading monthly attendance view...
                   </td>
                 </tr>
-              ) : (data?.attendance?.rows ?? []).length === 0 ? (
+              ) : rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={visibleColumnCount}
                     className="border border-slate-200 px-4 py-12 text-center text-muted-foreground"
                   >
-                    No attendance data for this month.
+                    {normalizedQuery
+                      ? `No employees match "${searchQuery.trim()}".`
+                      : "No attendance data for this month."}
                   </td>
                 </tr>
               ) : (
-                (data?.attendance?.rows ?? []).map((row) => (
+                rows.map((row) => (
                   <tr
                     key={row.employeeId}
                     className={cn(
@@ -943,31 +962,51 @@ function AttendanceSheet({
                     </td>
                     <td
                       hidden={!isColumnVisible("annual")}
-                      className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800"
+                      className={cn(
+                        "border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800",
+                        row.annualLeaves > 0 &&
+                          "bg-sky-50 font-semibold text-sky-700",
+                      )}
                     >
                       {row.annualLeaves}
                     </td>
                     <td
                       hidden={!isColumnVisible("casual")}
-                      className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800"
+                      className={cn(
+                        "border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800",
+                        row.casualLeaves > 0 &&
+                          "bg-violet-50 font-semibold text-violet-700",
+                      )}
                     >
                       {row.casualLeaves}
                     </td>
                     <td
                       hidden={!isColumnVisible("sick")}
-                      className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800"
+                      className={cn(
+                        "border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800",
+                        row.sickLeaves > 0 &&
+                          "bg-amber-50 font-semibold text-amber-700",
+                      )}
                     >
                       {row.sickLeaves}
                     </td>
                     <td
                       hidden={!isColumnVisible("absent")}
-                      className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800"
+                      className={cn(
+                        "border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800",
+                        row.absentDays > 0 &&
+                          "bg-rose-50 font-semibold text-rose-700",
+                      )}
                     >
                       {row.absentDays}
                     </td>
                     <td
                       hidden={!isColumnVisible("late")}
-                      className="border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800"
+                      className={cn(
+                        "border border-slate-200 px-2 py-2.5 text-center text-sm text-slate-800",
+                        row.lateDays > 0 &&
+                          "bg-orange-50 font-semibold text-orange-700",
+                      )}
                     >
                       {row.lateDays}
                     </td>
@@ -1029,11 +1068,19 @@ function SalarySheet({
   data,
   hiddenColumnIds,
   isLoading,
+  searchQuery,
 }: {
   data: GetMonthlyAdminViewQueryResult | undefined;
   hiddenColumnIds: Set<string>;
   isLoading: boolean;
+  searchQuery: string;
 }) {
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const rows = (data?.salary?.rows ?? []).filter(
+    (row) =>
+      !normalizedQuery ||
+      row.employeeName.toLowerCase().includes(normalizedQuery),
+  );
   const isColumnVisible = (columnId: string) => !hiddenColumnIds.has(columnId);
   const stickyLeft = {
     doj: 0,
@@ -1200,17 +1247,19 @@ function SalarySheet({
                     Loading monthly salary view...
                   </td>
                 </tr>
-              ) : (data?.salary?.rows ?? []).length === 0 ? (
+              ) : rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={visibleColumnCount}
                     className="border border-slate-200 px-4 py-12 text-center text-muted-foreground"
                   >
-                    No salary data for this month.
+                    {normalizedQuery
+                      ? `No employees match "${searchQuery.trim()}".`
+                      : "No salary data for this month."}
                   </td>
                 </tr>
               ) : (
-                (data?.salary?.rows ?? []).map((row) => (
+                rows.map((row) => (
                   <tr
                     key={row.employeeId}
                     className={cn(

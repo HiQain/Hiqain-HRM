@@ -10,7 +10,7 @@ export const PageHeader = memo(function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           {title}

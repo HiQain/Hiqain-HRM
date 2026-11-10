@@ -294,7 +294,7 @@ export function AppShell({
               </div>
             </div>
           </div>
-          <div className="mx-auto w-full min-w-0 overflow-x-hidden px-2 py-6 sm:px-4 sm:py-8">
+          <div className="mx-auto w-full min-w-0 overflow-x-hidden px-2 py-4 sm:px-4 sm:py-4">
             <NotificationSync userRole={user.role} />
             {children}
           </div>
