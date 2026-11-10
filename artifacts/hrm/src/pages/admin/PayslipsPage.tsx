@@ -8,6 +8,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { FileDown, Wand2 } from "lucide-react";
 import { toast } from "sonner";
+import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,21 +91,12 @@ export function AdminPayslipsPage() {
       <div className="grid gap-3 rounded-xl border border-border bg-card p-5 shadow-sm sm:grid-cols-4">
         <div className="space-y-1.5 sm:col-span-2">
           <Label className="text-xs">Employee</Label>
-          <Select
-            value={empId ? String(empId) : ""}
-            onValueChange={(v) => setEmpId(Number(v))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select an employee..." />
-            </SelectTrigger>
-            <SelectContent>
-              {(employees ?? []).map((e) => (
-                <SelectItem key={e.id} value={String(e.id)}>
-                  {e.name} · {e.position ?? ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <EmployeeSearchSelect
+            employees={employees ?? []}
+            value={empId}
+            onChange={(id) => setEmpId(id)}
+            getMeta={(e) => e.position}
+          />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Month</Label>

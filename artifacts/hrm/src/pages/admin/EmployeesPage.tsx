@@ -45,7 +45,10 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -322,7 +325,11 @@ export function EmployeesPage() {
           (e.position ?? "").toLowerCase().includes(q),
       );
     }
-    if (department !== "all") {
+    if (department === "permanent") {
+      rows = rows.filter((e) => isPermanentEmployee(e));
+    } else if (department === "probation") {
+      rows = rows.filter((e) => !isPermanentEmployee(e));
+    } else if (department !== "all") {
       rows = rows.filter((e) => e.department === department);
     }
     return rows;
@@ -434,15 +441,21 @@ export function EmployeesPage() {
         </div>
         <Select value={department} onValueChange={setDepartment}>
           <SelectTrigger className="sm:w-56">
-            <SelectValue placeholder="All departments" />
+            <SelectValue placeholder="All" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All departments</SelectItem>
-            {departments.map((d) => (
-              <SelectItem key={d} value={d}>
-                {d}
-              </SelectItem>
-            ))}
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="permanent">Permanent</SelectItem>
+            <SelectItem value="probation">Probation</SelectItem>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel>Departments</SelectLabel>
+              {departments.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {d}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
       </div>
@@ -488,6 +501,44 @@ export function EmployeesPage() {
                         <ShieldCheck className="h-3.5 w-3.5" />
                       </span>
                     )}
+                    <div className="-my-1 -mr-2 shrink-0 opacity-70 group-hover:opacity-100">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin/employees/${e.id}`}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View profile
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => void openEmployeeEditor(e)}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit profile
+                          </DropdownMenuItem>
+                          {isAdmin && (
+                            <DropdownMenuItem
+                              className="text-rose-600 focus:text-rose-700"
+                              onClick={() =>
+                                setConfirmDelete({ id: e.id, name: e.name })
+                              }
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Remove
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
                     {e.position ?? "Team member"}
@@ -495,44 +546,6 @@ export function EmployeesPage() {
                   <p className="mt-1 truncate text-xs text-muted-foreground">
                     {e.email}
                   </p>
-                </div>
-                <div className="opacity-70 group-hover:opacity-100">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem asChild>
-                        <Link href={`/admin/employees/${e.id}`}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View profile
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => void openEmployeeEditor(e)}
-                      >
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Edit profile
-                      </DropdownMenuItem>
-                      {isAdmin && (
-                        <DropdownMenuItem
-                          className="text-rose-600 focus:text-rose-700"
-                          onClick={() =>
-                            setConfirmDelete({ id: e.id, name: e.name })
-                          }
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Remove
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3 text-xs">

@@ -412,8 +412,18 @@ function ProfileTab({ employee }: { employee: any }) {
             copyLabel="work email"
           />
           <ReadonlyField label="Account role" value={employee.role} />
-          <ReadonlyField label="Personal email" value={employee.personalEmail} />
-          <ReadonlyField label="Phone number" value={employee.phone} />
+          <ReadonlyField
+            label="Personal email"
+            value={employee.personalEmail}
+            copyValue={employee.personalEmail}
+            copyLabel="personal email"
+          />
+          <ReadonlyField
+            label="Phone number"
+            value={employee.phone}
+            copyValue={employee.phone}
+            copyLabel="phone number"
+          />
           <ReadonlyField label="Account status" value={employee.isActive === false ? "Inactive" : "Active"} />
           <ReadonlyField label="Position" value={employee.position} />
           <ReadonlyField label="Department" value={employee.department} />

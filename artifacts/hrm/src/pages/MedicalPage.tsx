@@ -3,15 +3,9 @@ import {
   useGetMe,
   useListEmployees,
 } from "@workspace/api-client-react";
+import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
 import { PageHeader } from "@/components/PageHeader";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useMedicalSummary } from "@/lib/medical";
 import { formatCurrency } from "@/lib/utils";
 import { useEffect, useState } from "react";
@@ -55,21 +49,13 @@ export function MedicalPage({ mode }: { mode: MedicalMode }) {
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="max-w-sm space-y-1.5">
             <Label>Select employee</Label>
-            <Select
-              value={selectedEmployeeId ? String(selectedEmployeeId) : ""}
-              onValueChange={(value) => setSelectedEmployeeId(Number(value))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Choose employee" />
-              </SelectTrigger>
-              <SelectContent>
-                {(employees ?? []).map((employee) => (
-                  <SelectItem key={employee.id} value={String(employee.id)}>
-                    {employee.name} ({employee.department || "No department"})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <EmployeeSearchSelect
+              employees={employees ?? []}
+              value={selectedEmployeeId}
+              onChange={setSelectedEmployeeId}
+              getMeta={(employee) => employee.department || "No department"}
+              placeholder="Choose employee"
+            />
           </div>
         </div>
       ) : null}
