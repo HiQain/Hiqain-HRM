@@ -102,8 +102,8 @@ function buildPayslipBreakdown(
 
   const earnings: PayslipBreakdownLine[] = [
     { label: "Basic Salary", amount: basicSalary },
-    { label: "Home Rent", amount: homeRent },
-    { label: "Utility Bills", amount: utilityBills },
+    { label: "Home Allowance", amount: homeRent },
+    { label: "Utility Allowance", amount: utilityBills },
   ];
 
   const deductions: PayslipBreakdownLine[] = [];
@@ -157,7 +157,7 @@ function buildPayslipBreakdown(
   }
 
   const additionalBonus = roundAmount(Number(payslip.bonus) - commissionTotal);
-  earnings.push({ label: "Additional Bonus", amount: additionalBonus });
+  earnings.push({ label: "Bonus", amount: additionalBonus });
 
   const effectiveProvidentFundPercent = resolveProvidentFundPercent(
     employee.providentFundPercent,

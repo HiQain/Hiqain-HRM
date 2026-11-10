@@ -44,14 +44,14 @@ function empCode(id: number, code?: string | null) {
 function getBreakdownRows(p: Payslip) {
   const fallbackEarnings: Array<{ label: string; amount: number }> = [
     { label: "Basic Salary", amount: p.basicSalary },
-    { label: "Home Rent", amount: Math.round((p.allowances / 2) * 100) / 100 },
+    { label: "Home Allowance", amount: Math.round((p.allowances / 2) * 100) / 100 },
     {
-      label: "Utility Bills",
+      label: "Utility Allowance",
       amount:
         Math.round((p.allowances - Math.round((p.allowances / 2) * 100) / 100) * 100) /
         100,
     },
-    { label: "Additional Bonus", amount: p.bonus },
+    { label: "Bonus", amount: p.bonus },
   ];
 
   const fallbackDeductions: Array<{ label: string; amount: number }> = [
@@ -303,9 +303,7 @@ export function PayslipView({ payslip }: { payslip: Payslip }) {
           <InfoCell label="MODE OF PAYMENT" value="Online" />
         </div>
 
-        <div className="grid grid-cols-4 divide-x divide-border border-b border-border bg-muted/10">
-          <InfoCell label="WORKING DAYS" value={String(payslip.totalWorkingDays)} />
-          <InfoCell label="PRESENT" value={String(payslip.presentDays)} />
+        <div className="grid grid-cols-2 divide-x divide-border border-b border-border bg-muted/10">
           <InfoCell label="ABSENT" value={String(payslip.absentDays)} />
           <InfoCell
             label="LATE -> ABSENCE"

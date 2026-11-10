@@ -144,7 +144,7 @@ export function getDefaultAllowanceBreakdown(defaultAllowances: number) {
   return [
     {
       id: -1,
-      label: "Home Rent",
+      label: "Home Allowance",
       kind: "allowance",
       valueType: "fixed",
       value: homeRent,
@@ -153,7 +153,7 @@ export function getDefaultAllowanceBreakdown(defaultAllowances: number) {
     },
     {
       id: -2,
-      label: "Utility Bills",
+      label: "Utility Allowance",
       kind: "allowance",
       valueType: "fixed",
       value: utilityBills,
